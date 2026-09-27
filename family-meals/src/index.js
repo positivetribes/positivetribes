@@ -98,5 +98,66 @@ if(url.pathname==="/api/summary"&&method==="GET"){const meals=await env.DB.prepa
 if(url.pathname==="/api/meals"&&method==="POST"){const b=await body(request),name=String(b.name||"").trim();if(!name)return json({error:"Meal name is required."},400);const x=await env.DB.prepare("INSERT INTO meals (name,notes,recipe_url,suggested_by) VALUES (?,?,?,?)").bind(name,String(b.notes||"").trim(),String(b.recipe_url||"").trim(),String(b.suggested_by||"").trim()).run();return json({ok:true,id:x.meta.last_row_id},201)}
 if(url.pathname==="/api/rate"&&method==="POST"){const b=await body(request),mealId=Number(b.meal_id),rating=Number(b.rating),member=String(b.member||"").trim();if(!mealId||!member||rating<1||rating>5)return json({error:"Meal, family member and 1–5 rating are required."},400);await env.DB.prepare("INSERT INTO ratings (meal_id,member,rating,comment) VALUES (?,?,?,?) ON CONFLICT(meal_id,member) DO UPDATE SET rating=excluded.rating,comment=excluded.comment,created_at=CURRENT_TIMESTAMP").bind(mealId,member,rating,String(b.comment||"").trim()).run();return json({ok:true})}
 if(url.pathname==="/api/vote"&&method==="POST"){const b=await body(request),mealId=Number(b.meal_id),member=String(b.member||"").trim();if(!mealId||!member)return json({error:"Meal and family member are required."},400);const x=await env.DB.prepare("SELECT id FROM meal_votes WHERE meal_id=? AND member=?").bind(mealId,member).first();if(x)await env.DB.prepare("DELETE FROM meal_votes WHERE id=?").bind(x.id).run();else await env.DB.prepare("INSERT INTO meal_votes (meal_id,member) VALUES (?,?)").bind(mealId,member).run();return json({ok:true,voted:!x})}
+if(url.pathname==="/api/meals"&&method==="PUT"){
+  const b=await body(request),
+    mealId=Number(b.id),
+    name=String(b.name||"").trim();
+
+  if(!mealId||!name)
+    return json({error:"Meal ID and name are required."},400);
+
+  const existing=await env.DB.prepare(
+    "SELECT id FROM meals WHERE id=?"
+  ).bind(mealId).first();
+
+  if(!existing)
+    return json({error:"Meal not found."},404);
+
+  await env.DB.prepare(
+    "UPDATE meals SET name=?, notes=?, recipe_url=? WHERE id=?"
+  ).bind(
+    name,
+    String(b.notes||"").trim(),
+    String(b.recipe_url||"").trim(),
+    mealId
+  ).run();
+
+  return json({ok:true});
+}
+
+if(url.pathname==="/api/meals"&&method==="DELETE"){
+  const b=await body(request),
+    mealId=Number(b.id);
+
+  if(!mealId)
+    return json({error:"Meal ID is required."},400);
+
+  const existing=await env.DB.prepare(
+    "SELECT id FROM meals WHERE id=?"
+  ).bind(mealId).first();
+
+  if(!existing)
+    return json({error:"Meal not found."},404);
+
+  await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE weekly_plan SET meal_id=NULL WHERE meal_id=?"
+    ).bind(mealId),
+
+    env.DB.prepare(
+      "DELETE FROM ratings WHERE meal_id=?"
+    ).bind(mealId),
+
+    env.DB.prepare(
+      "DELETE FROM meal_votes WHERE meal_id=?"
+    ).bind(mealId),
+
+    env.DB.prepare(
+      "DELETE FROM meals WHERE id=?"
+    ).bind(mealId)
+  ]);
+
+  return json({ok:true});
+}
 if(url.pathname==="/api/plan"&&method==="POST"){const b=await body(request),date=String(b.plan_date||"").trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return json({error:"Valid plan date required."},400);await env.DB.prepare("INSERT INTO weekly_plan (plan_date,meal_id,note) VALUES (?,?,?) ON CONFLICT(plan_date) DO UPDATE SET meal_id=excluded.meal_id,note=excluded.note,updated_at=CURRENT_TIMESTAMP").bind(date,b.meal_id?Number(b.meal_id):null,String(b.note||"").trim()).run();return json({ok:true})}
 return json({error:"Not found."},404)}};
