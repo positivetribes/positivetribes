@@ -1,10 +1,92 @@
+// Applied once per database, only when there are no existing family meals.
+const starterMeals = [
+  [
+    "Tacos",
+    "Build your own with seasoned beef or black beans, lettuce, cheese, salsa, and tortillas."
+  ],
+  [
+    "Spaghetti and Meatballs",
+    "Serve with marinara, a green salad, and garlic bread; use beef or turkey meatballs."
+  ],
+  [
+    "Grilled Chicken",
+    "Pair with roasted potatoes and broccoli; season simply with lemon and herbs."
+  ],
+  [
+    "Burgers",
+    "Beef, turkey, or bean patties with favorite toppings, oven fries, and veggie sticks."
+  ],
+  [
+    "Chicken Stir-Fry",
+    "Toss chicken and colorful vegetables in a mild ginger-soy sauce; serve over rice."
+  ],
+  [
+    "Homemade Pizza",
+    "Use ready-made dough and let everyone choose cheese, vegetables, or pepperoni."
+  ],
+  [
+    "Baked Salmon",
+    "Serve lemon-baked salmon with rice and green beans."
+  ],
+  [
+    "Chicken Fajitas",
+    "Sizzle chicken, peppers, and onions; serve with warm tortillas and avocado."
+  ],
+  [
+    "Baked Ziti",
+    "Bake pasta with marinara, ricotta, and mozzarella; add spinach and a side salad."
+  ],
+  [
+    "Pulled Pork Sandwiches",
+    "Slow-cook pork with mild barbecue sauce; serve on buns with slaw and corn."
+  ],
+  [
+    "Chicken Caesar Wraps",
+    "Wrap cooked chicken, romaine, Parmesan, and Caesar dressing in tortillas; add fruit."
+  ],
+  [
+    "Beef or Chicken Rice Bowls",
+    "Top rice with beef or chicken, cucumber, carrots, and a favorite mild sauce."
+  ],
+  [
+    "Breakfast for Dinner",
+    "Scrambled eggs, pancakes, fresh fruit, and breakfast potatoes."
+  ],
+  [
+    "Chili",
+    "Make a mild beef-and-bean or all-bean chili; serve with cornbread and cheese."
+  ],
+  [
+    "Cheese and Bean Quesadillas",
+    "Fill tortillas with cheese and black beans; serve with salsa, avocado, and corn."
+  ]
+];
+const starterMealsVersion = "family-dinners-v1";
+
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
 async function ensureSchema(db){await db.batch([
 db.prepare("CREATE TABLE IF NOT EXISTS meals (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,notes TEXT DEFAULT '',recipe_url TEXT DEFAULT '',suggested_by TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT,meal_id INTEGER NOT NULL,member TEXT NOT NULL,rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),comment TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(meal_id,member))"),
 db.prepare("CREATE TABLE IF NOT EXISTS meal_votes (id INTEGER PRIMARY KEY AUTOINCREMENT,meal_id INTEGER NOT NULL,member TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(meal_id,member))"),
+db.prepare("CREATE TABLE IF NOT EXISTS app_seeds (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
-])}
+]);
+// D1 batches are transactional. Keep the empty-table check, all 15 inserts,
+// and the marker together so simultaneous first requests cannot seed twice.
+// Record the marker for existing databases too; never replace family content.
+await db.batch([
+  db.prepare(`
+    WITH starter_meals(name, notes) AS (
+      VALUES ${starterMeals.map(() => "(?, ?)").join(", ")}
+    )
+    INSERT INTO meals (name, notes)
+    SELECT name, notes FROM starter_meals
+    WHERE NOT EXISTS (SELECT 1 FROM meals)
+      AND NOT EXISTS (SELECT 1 FROM app_seeds WHERE name = ?)
+  `).bind(...starterMeals.flat(), starterMealsVersion),
+  db.prepare("INSERT OR IGNORE INTO app_seeds (name) VALUES (?)").bind(starterMealsVersion)
+]);
+}
 const body=async r=>{try{return await r.json()}catch{return {}}};
 export default{async fetch(request,env){
 const url=new URL(request.url);if(!url.pathname.startsWith("/api/"))return env.ASSETS.fetch(request);
