@@ -2,6 +2,21 @@ import { addDays, daysBetween, weekDates, proposeWeek, recommendMeal } from './p
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
+const themeMedia = matchMedia('(prefers-color-scheme: dark)');
+const themeChoice = localStorage.getItem('familyMealsTheme') || 'system';
+$('#themeChoice').value = ['system', 'light', 'dark'].includes(themeChoice) ? themeChoice : 'system';
+function applyTheme() {
+  const choice = $('#themeChoice').value;
+  const dark = choice === 'dark' || (choice === 'system' && themeMedia.matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#18241e' : '#f7f4ed';
+}
+$('#themeChoice').onchange = () => {
+  localStorage.setItem('familyMealsTheme', $('#themeChoice').value);
+  applyTheme();
+};
+themeMedia.addEventListener('change', applyTheme);
+applyTheme();
 let pin = localStorage.getItem('familyMealsPin') || '';
 let member = localStorage.getItem('familyMealsMember') || '';
 let data = { meals: [], ratings: [], votes: [], plan: [] };
