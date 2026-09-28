@@ -1,45 +1,65 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f7f4ed"><meta name="apple-mobile-web-app-capable" content="yes"><title>Family Meals</title><link rel="stylesheet" href="/styles.css"></head><body><main class="shell"><header class="topbar"><div><p class="eyebrow">OUR TABLE</p><h1>Family Meals</h1><p class="sub">Plan the week. Remember the favorites.</p></div><button class="avatar" id="memberButton">?</button></header><section id="locked" class="card auth-card"><span class="big-icon">🍽️</span><h2>Welcome home</h2><p>Enter your family PIN once on this device.</p><form id="pinForm" class="stack"><input id="pin" type="password" inputmode="numeric" placeholder="Family PIN" required><button class="primary">Open Family Meals</button></form><p id="setupMessage" class="hint"></p></section><div id="app" hidden><nav class="tabs"><button class="tab active" data-tab="week">This Week</button><button class="tab" data-tab="ideas">Meal Ideas</button><button class="tab" data-tab="favorites">Favorites</button></nav><section id="week" class="panel active"><div class="section-head"><div><p class="eyebrow">DINNER PLAN</p><h2>This Week</h2></div><button class="ghost" id="nextWeek">Next ›</button></div><p id="weekLabel" class="hint"></p><div id="weekList" class="week-list"></div></section><section id="ideas" class="panel"><div class="section-head"><div><p class="eyebrow">FAMILY PICKS</p><h2>Meal Ideas</h2></div><button class="primary small" id="addMeal">+ Suggest</button></div><div id="ideasList" class="meal-grid"></div></section><section id="favorites" class="panel"><div class="section-head"><div><p class="eyebrow">KEEPERS</p><h2>Family Favorites</h2></div></div><div id="favoritesList" class="meal-grid"></div></section></div></main><dialog id="memberDialog"><form method="dialog" class="modal"><h2>Who are you?</h2><p class="hint">Your name labels your ratings.</p><input id="memberName" maxlength="30" placeholder="Your name" required><div class="actions"><button value="cancel" class="ghost">Cancel</button><button id="saveMember" class="primary">Save</button></div></form></dialog><dialog id="mealDialog"><form id="mealForm" class="modal"><h2>Suggest a meal</h2><input id="mealName" maxlength="80" placeholder="Meal name" required><input id="recipeUrl" type="url" placeholder="Recipe link (optional)"><textarea id="mealNotes" placeholder="Notes (optional)"></textarea><div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Add idea</button></div></form></dialog><dialog id="editMealDialog">
-  <form id="editMealForm" class="modal">
-    <h2>Edit meal</h2>
-
-    <input
-      id="editMealName"
-      maxlength="80"
-      placeholder="Meal name"
-      required
-    >
-
-    <input
-      id="editRecipeUrl"
-      type="url"
-      placeholder="Recipe link (optional)"
-    >
-
-    <textarea
-      id="editMealNotes"
-      placeholder="Notes (optional)"
-    ></textarea>
-
-    <div class="actions">
-      <button
-        type="button"
-        id="deleteMeal"
-        class="ghost"
-      >
-        Delete Meal
-      </button>
-
-      <button
-        type="button"
-        class="ghost close-dialog"
-      >
-        Cancel
-      </button>
-
-      <button class="primary">
-        Save Changes
-      </button>
-    </div>
-  </form>
-</dialog>
-<dialog id="rateDialog"><form id="rateForm" class="modal"><h2 id="rateTitle">Rate meal</h2><div class="stars" id="stars"></div><textarea id="ratingComment" placeholder="What should we remember next time?"></textarea><div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Save rating</button></div></form></dialog><dialog id="planDialog"><form id="planForm" class="modal"><h2 id="planTitle">Choose dinner</h2><select id="planMeal"></select><input id="planNote" placeholder="Note, e.g. leftovers / eating out"><div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Save</button></div></form></dialog><div id="toast" class="toast"></div><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4ed">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="description" content="Your family's dinner plans, favorites, and grocery list.">
+  <title>Family Meals</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="topbar"><div><p class="eyebrow">OUR TABLE</p><h1>Family Meals</h1><p class="sub">Plan the week. Remember the favorites.</p></div><button class="avatar" id="memberButton" aria-label="Choose family member">?</button></header>
+  <section id="locked" class="card auth-card"><span class="big-icon">🍽️</span><h2>Welcome home</h2><p>Enter your family PIN once on this device.</p><form id="pinForm" class="stack"><label class="sr-only" for="pin">Family PIN</label><input id="pin" type="password" inputmode="numeric" placeholder="Family PIN" required><button class="primary">Open Family Meals</button></form><p id="setupMessage" class="hint" role="alert"></p></section>
+  <div id="app" hidden>
+    <nav class="tabs" aria-label="Family Meals"><button class="tab active" data-tab="week">This Week</button><button class="tab" data-tab="ideas">Meal Ideas</button><button class="tab" data-tab="favorites">Favorites</button><button class="tab" data-tab="groceries">Groceries</button></nav>
+    <section id="week" class="panel active">
+      <div class="section-head"><div><p class="eyebrow">DINNER PLAN</p><h2 id="weekTitle">This Week</h2></div><div class="week-nav"><button class="ghost" data-week-offset="-1" aria-label="Previous week">‹</button><button class="ghost" id="nextWeek" data-week-offset="1" aria-label="Next week">›</button></div></div>
+      <p id="weekLabel" class="hint"></p>
+      <div class="week-tools"><button class="primary" id="planMyWeek">✦ Plan My Week</button><button class="ghost" id="openGroceries">Grocery list →</button></div>
+      <p class="hint help">Suggestions fill empty nights from today onward, keeping dinners and notes you already planned.</p>
+      <div id="previewBanner" class="preview card" hidden><strong>A little inspiration for the week</strong><p>Review or swap any dinner, then accept. Nothing changes until you save.</p><div class="actions"><button class="ghost" id="cancelPreview">Cancel preview</button><button class="primary" id="acceptWeek">Accept week</button></div></div>
+      <div id="weekList" class="week-list"></div>
+    </section>
+    <section id="ideas" class="panel">
+      <div class="section-head"><div><p class="eyebrow">FAMILY PICKS</p><h2>Meal Ideas</h2></div><button class="primary small" id="addMeal">+ Suggest</button></div>
+      <div class="filters"><label><span class="sr-only">Search meals</span><input id="mealSearch" type="search" placeholder="Find a favorite…"></label><label><span class="sr-only">Filter by tag</span><select id="tagFilter"><option value="">All tags</option></select></label></div>
+      <p class="hint help">Last made uses past dinner plans. Today's and future meals don't count yet.</p>
+      <div id="ideasList" class="meal-grid"></div>
+    </section>
+    <section id="favorites" class="panel"><div class="section-head"><div><p class="eyebrow">KEEPERS</p><h2>Family Favorites</h2></div></div><div id="favoritesList" class="meal-grid"></div></section>
+    <section id="groceries" class="panel">
+      <div class="section-head"><div><p class="eyebrow">READY FOR THE STORE</p><h2>Grocery List</h2></div><div class="week-nav"><button class="ghost" data-week-offset="-1" aria-label="Previous grocery week">‹</button><button class="ghost" data-week-offset="1" aria-label="Next grocery week">›</button></div></div>
+      <p id="groceryWeekLabel" class="hint"></p>
+      <div class="week-tools"><p id="groceryStatus" class="hint" role="status"></p><button class="ghost small" id="refreshGroceries">Refresh</button></div>
+      <p class="hint help">Built from your saved dinners. Identical ingredient lines are grouped; “× 2 meals” means buy that amount twice. Manual items and checkmarks stay with this week.</p>
+      <div id="missingIngredients" class="missing"></div><div id="groceryList" class="week-list"></div>
+      <form id="groceryForm" class="add-grocery"><label class="sr-only" for="groceryItem">Add grocery item</label><input id="groceryItem" maxlength="200" placeholder="Add milk, snacks, anything…" required><button class="primary">Add</button></form>
+    </section>
+  </div>
+</main>
+<dialog id="memberDialog"><form method="dialog" class="modal"><h2>Who are you?</h2><p class="hint">Your name labels your ratings.</p><label class="sr-only" for="memberName">Your name</label><input id="memberName" maxlength="30" placeholder="Your name" required><div class="actions"><button value="cancel" class="ghost" formnovalidate>Cancel</button><button id="saveMember" class="primary">Save</button></div></form></dialog>
+<dialog id="mealDialog"><form id="mealForm" class="modal"><h2>Suggest a meal</h2>
+  <label>Meal name<input id="mealName" maxlength="80" required></label>
+  <label>Recipe link <span class="hint">(optional)</span><input id="recipeUrl" type="url" maxlength="2000" placeholder="https://…"></label>
+  <label>Notes<textarea id="mealNotes" maxlength="2000" placeholder="What makes this a favorite?"></textarea></label>
+  <label>Tags<input id="mealTags" placeholder="Chicken, quick, Mexican"><small class="hint">Separate with commas. Up to 12 tags.</small></label>
+  <label>Grocery ingredients<textarea id="ingredients" placeholder="1 lb chicken&#10;2 bell peppers&#10;8 tortillas"></textarea><small class="hint">One item per line, with the amount for one family dinner. Up to 80 items.</small></label>
+  <div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Add idea</button></div>
+</form></dialog>
+<dialog id="editMealDialog"><form id="editMealForm" class="modal"><h2>Edit meal</h2>
+  <label>Meal name<input id="editMealName" maxlength="80" required></label>
+  <label>Recipe link <span class="hint">(optional)</span><input id="editRecipeUrl" type="url" maxlength="2000" placeholder="https://…"></label>
+  <label>Notes<textarea id="editMealNotes" maxlength="2000"></textarea></label>
+  <label>Tags<input id="editMealTags" placeholder="Chicken, quick, Mexican"><small class="hint">Separate with commas. Up to 12 tags.</small></label>
+  <label>Grocery ingredients<textarea id="editIngredients" placeholder="1 lb chicken&#10;2 bell peppers&#10;8 tortillas"></textarea><small class="hint">One item per line, with the amount for one family dinner. Up to 80 items.</small></label>
+  <div class="actions"><button type="button" id="deleteMeal" class="ghost danger">Delete Meal</button><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Save Changes</button></div>
+</form></dialog>
+<dialog id="rateDialog"><form id="rateForm" class="modal"><h2 id="rateTitle">Rate meal</h2><div class="stars" id="stars"></div><label class="sr-only" for="ratingComment">Rating notes</label><textarea id="ratingComment" maxlength="2000" placeholder="What should we remember next time?"></textarea><div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Save rating</button></div></form></dialog>
+<dialog id="planDialog"><form id="planForm" class="modal"><h2 id="planTitle">Choose dinner</h2><label>Dinner<select id="planMeal"></select></label><button type="button" class="ghost" id="suggestSwap">Suggest another</button><p id="swapReason" class="hint" aria-live="polite"></p><label>Note<input id="planNote" maxlength="500" placeholder="Leftovers / eating out / a reminder"></label><div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button class="primary" id="savePlan">Save dinner</button></div></form></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

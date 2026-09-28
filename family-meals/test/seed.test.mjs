@@ -1,42 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DatabaseSync } from 'node:sqlite';
-import { readFile } from 'node:fs/promises';
+import { database } from './helpers.mjs';
+import worker from '../src/index.js';
 
-const source = await readFile(new URL('../src/index.js', import.meta.url), 'utf8');
-const { default: worker } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
-
-// SQLite-backed D1 adapter: execute the Worker's real SQL, including batch rollback.
-function database() {
-  const sqlite = new DatabaseSync(':memory:');
-  const db = {
-    prepare(sql) {
-      let values = [];
-      return {
-        bind(...args) { values = args; return this; },
-        async all() { return { results: sqlite.prepare(sql).all(...values) }; },
-        async first() { return sqlite.prepare(sql).get(...values); },
-        async run() {
-          const result = sqlite.prepare(sql).run(...values);
-          return { meta: { last_row_id: Number(result.lastInsertRowid) } };
-        }
-      };
-    },
-    async batch(statements) {
-      sqlite.exec('BEGIN');
-      try {
-        const result = [];
-        for (const statement of statements) result.push(await statement.run());
-        sqlite.exec('COMMIT');
-        return result;
-      } catch (error) {
-        sqlite.exec('ROLLBACK');
-        throw error;
-      }
-    }
-  };
-  return { sqlite, db };
-}
 const request = (db, path = '/summary', payload) => worker.fetch(
   new Request('https://example.test/api' + path, {
     method: payload ? 'POST' : 'GET',
