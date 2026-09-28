@@ -175,3 +175,52 @@ test('calendar rules handle month/year boundaries and invalid dates', () => {
   assert.equal(addDays('2026-12-31', 1), '2027-01-01');
   assert.equal(weekDates('2026-09-28')[6], '2026-10-04');
 });
+
+test('grocery stores: assign to generated and manual items, keep spelling consistent, isolate weeks, and validate', async () => {
+  const { call, sqlite, meals } = await fixture();
+  try {
+    const [a] = meals;
+    await call('/meals', 'PUT', { id: a.id, name: a.name, ingredients: ['1 onion', '2 cups rice'] });
+    await call('/plan', 'POST', { plan_date: start, meal_id: a.id });
+    // Manual item created with a store, and another without one.
+    const milk = await call('/groceries', 'POST', { week_start: start, label: 'Milk', store: '  Whole   Foods ' });
+    assert.equal(milk.status, 201);
+    const chips = await call('/groceries', 'POST', { week_start: start, label: 'Chips' });
+    let list = (await call('/groceries?week=' + start)).body;
+    assert.equal(list.manual.find(i => i.label === 'Milk').store, 'Whole Foods');
+    assert.equal(list.manual.find(i => i.label === 'Chips').store, '');
+    assert.equal(list.generated[0].store, '');
+    // Generated ingredient and manual item can be assigned/changed; case variants reuse the first spelling.
+    assert.equal((await call('/groceries/store', 'POST', { week_start: start, kind: 'generated', key: '1 onion', store: 'Costco' })).body.store, 'Costco');
+    assert.equal((await call('/groceries/store', 'POST', { week_start: start, kind: 'manual', id: chips.body.id, store: 'costco' })).body.store, 'Costco');
+    list = (await call('/groceries?week=' + start)).body;
+    assert.equal(list.generated.find(i => i.key === '1 onion').store, 'Costco');
+    assert.equal(list.manual.find(i => i.label === 'Chips').store, 'Costco');
+    assert.deepEqual(list.stores, ['Costco', 'Whole Foods']);
+    // Checking an item and re-planning do not disturb its store; stores are per week.
+    await call('/groceries', 'PATCH', { week_start: start, kind: 'generated', key: '1 onion', checked: true });
+    assert.equal((await call('/groceries?week=' + start)).body.generated.find(i => i.key === '1 onion').store, 'Costco');
+    const next = (await call('/groceries?week=' + addDays(start, 7))).body;
+    assert.equal(next.manual.length, 0); assert.deepEqual(next.stores, ['Costco', 'Whole Foods']);
+    assert.equal((await call('/groceries/store', 'POST', { week_start: addDays(start, 7), kind: 'manual', id: milk.body.id, store: 'Target' })).status, 404);
+    // Clearing removes the assignment; removing a manual item removes its store.
+    await call('/groceries/store', 'POST', { week_start: start, kind: 'generated', key: '1 onion', store: '' });
+    assert.equal((await call('/groceries?week=' + start)).body.generated.find(i => i.key === '1 onion').store, '');
+    await call('/groceries', 'DELETE', { week_start: start, kind: 'manual', id: milk.body.id });
+    assert.deepEqual((await call('/groceries?week=' + start)).body.stores, ['Costco']);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM grocery_stores WHERE kind='manual' AND item_key=?").get(String(milk.body.id)).n, 0);
+    // Validation and auth.
+    for (const payload of [
+      { week_start: start, kind: 'generated', key: 'not on plan', store: 'Costco' },
+    ]) assert.equal((await call('/groceries/store', 'POST', payload)).status, 409);
+    for (const payload of [
+      { week_start: start, kind: 'manual', id: chips.body.id },
+      { week_start: start, kind: 'manual', id: chips.body.id, store: 5 },
+      { week_start: start, kind: 'manual', id: chips.body.id, store: 'x'.repeat(41) },
+      { week_start: start, kind: 'other', store: 'Costco' },
+      { week_start: '2026-09-29', kind: 'manual', id: chips.body.id, store: 'Costco' }
+    ]) assert.equal((await call('/groceries/store', 'POST', payload)).status, 400);
+    assert.equal((await call('/groceries', 'POST', { week_start: start, label: 'Eggs', store: 'x'.repeat(41) })).status, 400);
+    assert.equal((await call('/groceries/store', 'POST', { week_start: start, kind: 'manual', id: chips.body.id, store: 'Costco' }, false)).status, 401);
+  } finally { sqlite.close(); }
+});

@@ -7,6 +7,8 @@ let member = localStorage.getItem('familyMealsMember') || '';
 let data = { meals: [], ratings: [], votes: [], plan: [] };
 let weekOffset = 0, selectedRating = 0, activeMeal = null, activeDate = null;
 let draft = null, draftRevision = null, tagFilter = '', groceryRequest = 0;
+let storeFilter = '', groceryState = null, storeTarget = null;
+const NO_STORE = '__none__';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const iso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const today = () => iso(new Date());
@@ -168,22 +170,48 @@ async function loadGroceries() {
   try {
     const result = await api('/groceries?week=' + start);
     if (requestId !== groceryRequest) return;
-    const items = [...result.generated.map(item => ({ ...item, kind: 'generated' })), ...result.manual.map(item => ({ ...item, kind: 'manual' }))];
-    $('#groceryStatus').textContent = `${items.filter(item => item.checked).length} of ${items.length} checked · ${result.planned_count} planned dinners${draft ? ' · Preview is not saved yet' : ''}`;
-    $('#missingIngredients').innerHTML = result.missing.length ? `<p class="hint">Add ingredients to complete the list:</p><div class="chips">${result.missing.map(meal => `<button class="chip missing-meal" data-id="${meal.id}">${esc(meal.name)} +</button>`).join('')}</div>` : '';
-    $$('.missing-meal').forEach(button => button.onclick = () => openEditMeal(button.dataset.id));
-    $('#groceryList').innerHTML = items.map((item, i) => `<div class="grocery-item ${item.checked ? 'checked' : ''}"><label><input type="checkbox" data-item="${i}" ${item.checked ? 'checked' : ''}><span><strong>${esc(item.label)}${item.count > 1 ? ` × ${item.count} meals` : ''}</strong><small>${item.kind === 'manual' ? 'Added by your family' : esc(item.meals.join(' · '))}</small></span></label>${item.kind === 'manual' ? `<button class="ghost remove-item" data-item="${i}" aria-label="Remove ${esc(item.label)}">×</button>` : ''}</div>`).join('') || '<div class="card auth-card">Plan dinners and add their ingredients, or add an item below.</div>';
-    $$('#groceryList input').forEach(input => input.onchange = () => action(input, async () => {
-      const item = items[+input.dataset.item];
-      try { await send('/groceries', 'PATCH', { week_start: start, kind: item.kind, id: item.id, key: item.key, checked: input.checked }); }
-      catch (error) { input.checked = !input.checked; throw error; }
-      await loadGroceries();
-    }));
-    $$('.remove-item').forEach(button => button.onclick = () => action(button, async () => {
-      await send('/groceries', 'DELETE', { week_start: start, kind: 'manual', id: items[+button.dataset.item].id });
-      await loadGroceries();
-    }));
+    groceryState = { result, start };
+    renderGroceries();
   } catch (error) { if (requestId === groceryRequest) $('#groceryStatus').textContent = error.message; }
+}
+function renderGroceries() {
+  if (!groceryState) return;
+  const { result, start } = groceryState;
+  const items = [...result.generated.map(item => ({ ...item, kind: 'generated' })), ...result.manual.map(item => ({ ...item, kind: 'manual' }))];
+  const weekStores = [...new Set(items.map(item => item.store).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const unassigned = items.filter(item => !item.store).length;
+  // Only offer store filtering once at least one item has a store; drop a filter that no longer applies.
+  if (!weekStores.length || (storeFilter === NO_STORE ? !unassigned : storeFilter && !weekStores.includes(storeFilter))) storeFilter = '';
+  $('#storeFilterBar').hidden = !weekStores.length;
+  $('#storeFilter').innerHTML = `<option value="">All stores (${items.length})</option>` +
+    weekStores.map(store => `<option value="${esc(store)}" ${store === storeFilter ? 'selected' : ''}>${esc(store)} (${items.filter(item => item.store === store).length})</option>`).join('') +
+    (unassigned ? `<option value="${NO_STORE}" ${storeFilter === NO_STORE ? 'selected' : ''}>No store yet (${unassigned})</option>` : '');
+  $('#storeOptions').innerHTML = result.stores.map(store => `<option value="${esc(store)}">`).join('');
+  const shown = items.map((item, i) => ({ item, i })).filter(({ item }) => !storeFilter || (storeFilter === NO_STORE ? !item.store : item.store === storeFilter));
+  $('#groceryStatus').textContent = `${shown.filter(({ item }) => item.checked).length} of ${shown.length} checked${storeFilter ? (storeFilter === NO_STORE ? ' · no store yet' : ' · ' + storeFilter) : ''} · ${result.planned_count} planned dinners${draft ? ' · Preview is not saved yet' : ''}`;
+  $('#missingIngredients').innerHTML = result.missing.length ? `<p class="hint">Add ingredients to complete the list:</p><div class="chips">${result.missing.map(meal => `<button class="chip missing-meal" data-id="${meal.id}">${esc(meal.name)} +</button>`).join('')}</div>` : '';
+  $$('.missing-meal').forEach(button => button.onclick = () => openEditMeal(button.dataset.id));
+  $('#groceryList').innerHTML = shown.map(({ item, i }) => `<div class="grocery-item ${item.checked ? 'checked' : ''}"><label><input type="checkbox" data-item="${i}" ${item.checked ? 'checked' : ''}><span><strong>${esc(item.label)}${item.count > 1 ? ` × ${item.count} meals` : ''}</strong><small>${item.kind === 'manual' ? 'Added by your family' : esc(item.meals.join(' · '))}</small></span></label><button class="chip store-chip ${item.store ? 'set' : ''}" data-item="${i}" aria-label="${item.store ? `Store for ${esc(item.label)}: ${esc(item.store)}. Change store` : `Choose a store for ${esc(item.label)}`}">${item.store ? esc(item.store) : '+ Store'}</button>${item.kind === 'manual' ? `<button class="ghost remove-item" data-item="${i}" aria-label="Remove ${esc(item.label)}">×</button>` : ''}</div>`).join('') || '<div class="card auth-card">Plan dinners and add their ingredients, or add an item below.</div>';
+  $$('#groceryList input').forEach(input => input.onchange = () => action(input, async () => {
+    const item = items[+input.dataset.item];
+    try { await send('/groceries', 'PATCH', { week_start: start, kind: item.kind, id: item.id, key: item.key, checked: input.checked }); }
+    catch (error) { input.checked = !input.checked; throw error; }
+    await loadGroceries();
+  }));
+  $$('.remove-item').forEach(button => button.onclick = () => action(button, async () => {
+    await send('/groceries', 'DELETE', { week_start: start, kind: 'manual', id: items[+button.dataset.item].id });
+    await loadGroceries();
+  }));
+  $$('.store-chip').forEach(button => button.onclick = () => openStore(items[+button.dataset.item]));
+}
+function openStore(item) {
+  storeTarget = item;
+  $('#storeTitle').textContent = `Where to buy ${item.label}`;
+  $('#storeInput').value = item.store || '';
+  $('#storeChips').innerHTML = groceryState.result.stores.map(store => `<button type="button" class="chip pick-store ${store === item.store ? 'voted' : ''}" data-store="${esc(store)}">${esc(store)}</button>`).join('');
+  $$('.pick-store').forEach(button => button.onclick = () => { $('#storeInput').value = button.dataset.store; $('#storeForm').requestSubmit(); });
+  $('#clearStore').hidden = !item.store;
+  $('#storeDialog').showModal();
 }
 $('#pinForm').onsubmit = event => {
   event.preventDefault(); pin = $('#pin').value.trim(); localStorage.setItem('familyMealsPin', pin); action(event.submitter, load);
@@ -246,8 +274,24 @@ $('#openGroceries').onclick = () => switchTab('groceries');
 $('#refreshGroceries').onclick = loadGroceries;
 $('#groceryForm').onsubmit = event => {
   event.preventDefault(); action(event.submitter, async () => {
-    await send('/groceries', 'POST', { week_start: monday(), label: $('#groceryItem').value });
+    const store = $('#groceryStore').value.trim();
+    // Show the new item even if a different store is being filtered.
+    if (storeFilter && (storeFilter === NO_STORE ? store : store.toLowerCase() !== storeFilter.toLowerCase())) storeFilter = '';
+    await send('/groceries', 'POST', { week_start: monday(), label: $('#groceryItem').value, store });
     $('#groceryItem').value = ''; await loadGroceries();
   });
 };
+$('#storeFilter').onchange = () => {
+  storeFilter = $('#storeFilter').value;
+  $('#groceryStore').value = storeFilter && storeFilter !== NO_STORE ? storeFilter : '';
+  renderGroceries();
+};
+$('#storeForm').onsubmit = event => {
+  event.preventDefault(); action(event.submitter, async () => {
+    const item = storeTarget, start = groceryState.start;
+    await send('/groceries/store', 'POST', { week_start: start, kind: item.kind, id: item.id, key: item.key, store: $('#storeInput').value });
+    $('#storeDialog').close(); await loadGroceries();
+  });
+};
+$('#clearStore').onclick = () => { $('#storeInput').value = ''; $('#storeForm').requestSubmit(); };
 if (pin) load();
