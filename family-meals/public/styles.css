@@ -5,7 +5,7 @@
 .store-filter{margin:12px 0 0}.store-chip{flex-shrink:0;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:44px;background:#f0ede6;border:1px dashed #cfc9bb;color:var(--muted)}.store-chip.set{background:var(--green2);border:0;color:var(--green)}.add-grocery{flex-wrap:wrap}.add-grocery #groceryItem{flex:1 1 100%}.add-grocery #groceryStore{flex:1 1 0}#storeChips:empty{display:none}
 
 .header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.appearance select{width:auto;min-height:44px;padding:9px 28px 9px 10px;border-radius:12px;font-size:14px;font-weight:650}
+
 .avatar{flex-shrink:0}
 
 :root[data-theme="dark"]{
@@ -44,6 +44,8 @@
 [data-theme="dark"] dialog::backdrop{background:#080f0bc9}
 @media(max-width:550px){.topbar{flex-wrap:wrap}.header-actions{margin-left:auto}}
 [data-theme="dark"] dialog{color:#e9ede7}
-.appearance{display:grid;gap:3px}
-.appearance span{font-size:11px;font-weight:750;color:var(--muted)}
+
+
 [data-theme="dark"] .store-chip{background:#35473b;border-color:#6b7e6e;color:#d5e5d8}
+/* Profile */
+.profile-head{display:flex;align-items:center;gap:14px}.profile-avatar{display:grid;place-items:center;width:56px;height:56px;font-size:20px;flex-shrink:0}.setting{border:0;padding:0;margin:0;display:grid;gap:6px}.setting legend{font-size:14px;font-weight:600;padding:0;margin-bottom:6px}.segmented{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--green2);padding:4px;border-radius:14px}.segmented label{position:relative;display:block}.segmented input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}.segmented span{display:grid;place-items:center;min-height:44px;border-radius:11px;font-size:14px;font-weight:700;color:var(--green)}.segmented input:checked+span{background:var(--card);box-shadow:0 1px 4px #0000001f}.segmented input:focus-visible+span{outline:3px solid #a07b32;outline-offset:2px}.setting small{font-size:12px}

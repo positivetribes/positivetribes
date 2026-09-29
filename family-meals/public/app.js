@@ -3,19 +3,15 @@ import { addDays, daysBetween, weekDates, proposeWeek, recommendMeal } from './p
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const themeMedia = matchMedia('(prefers-color-scheme: dark)');
-const themeChoice = localStorage.getItem('familyMealsTheme') || 'system';
-$('#themeChoice').value = ['system', 'light', 'dark'].includes(themeChoice) ? themeChoice : 'system';
-function applyTheme() {
-  const choice = $('#themeChoice').value;
+const THEMES = ['system', 'light', 'dark'];
+let savedTheme = localStorage.getItem('familyMealsTheme');
+if (!THEMES.includes(savedTheme)) savedTheme = 'system';
+function applyTheme(choice = savedTheme) {
   const dark = choice === 'dark' || (choice === 'system' && themeMedia.matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   document.querySelector('meta[name="theme-color"]').content = dark ? '#18241e' : '#f7f4ed';
 }
-$('#themeChoice').onchange = () => {
-  localStorage.setItem('familyMealsTheme', $('#themeChoice').value);
-  applyTheme();
-};
-themeMedia.addEventListener('change', applyTheme);
+themeMedia.addEventListener('change', () => applyTheme($('#memberDialog').open ? $('#profileForm [name=theme]:checked')?.value : savedTheme));
 applyTheme();
 let pin = localStorage.getItem('familyMealsPin') || '';
 let member = localStorage.getItem('familyMealsMember') || '';
@@ -66,7 +62,7 @@ async function load() {
     await refresh();
     $('#locked').hidden = true;
     $('#app').hidden = false;
-    if (!member && !$('#memberDialog').open) $('#memberDialog').showModal();
+    if (!member && !$('#memberDialog').open) openProfile();
   } catch (error) { $('#setupMessage').textContent = error.message; }
 }
 function render() {
@@ -113,7 +109,7 @@ function renderMeals() {
   $('#ideasList').innerHTML = meals.map(mealCard).join('') || '<div class="card auth-card">No meals match. Try another tag or suggest a meal.</div>';
   $('#favoritesList').innerHTML = data.meals.filter(m => Number(m.average_rating) >= 4).map(mealCard).join('') || '<div class="card auth-card">Your 4+ star meals will appear here.</div>';
   $$('.vote').forEach(button => button.onclick = () => action(button, async () => {
-    if (!member) return $('#memberDialog').showModal();
+    if (!member) return openProfile();
     await send('/vote', 'POST', { meal_id: +button.dataset.id, member }); await refresh();
   }));
   $$('.edit-meal').forEach(button => button.onclick = () => openEditMeal(button.dataset.id));
@@ -143,7 +139,7 @@ function mealPayload(edit = false) {
     ingredients: $(edit ? '#editIngredients' : '#ingredients').value.split('\n').map(s => s.trim()).filter(Boolean) };
 }
 function openRate(id) {
-  if (!member) return $('#memberDialog').showModal();
+  if (!member) return openProfile();
   activeMeal = +id;
   const mine = data.ratings.find(r => +r.meal_id === activeMeal && r.member === member);
   selectedRating = Number(mine?.rating || 0);
@@ -231,10 +227,26 @@ function openStore(item) {
 $('#pinForm').onsubmit = event => {
   event.preventDefault(); pin = $('#pin').value.trim(); localStorage.setItem('familyMealsPin', pin); action(event.submitter, load);
 };
-$('#memberButton').onclick = () => { $('#memberName').value = member; $('#memberDialog').showModal(); };
-$('#saveMember').onclick = event => {
-  event.preventDefault(); const name = $('#memberName').value.trim(); if (!name) return;
-  member = name; localStorage.setItem('familyMealsMember', member); $('#memberDialog').close(); render();
+function openProfile() {
+  $('#memberName').value = member;
+  $('#profileTitle').textContent = member ? 'Profile' : 'Who are you?';
+  $('#profileHint').textContent = member ? 'Settings for you on this device.' : 'Add your name so the family knows who rated what.';
+  $('#profileAvatar').textContent = initials(member);
+  $$('#profileForm [name=theme]').forEach(radio => radio.checked = radio.value === savedTheme);
+  $('#memberDialog').showModal();
+}
+$('#memberButton').onclick = openProfile;
+$('#memberName').oninput = () => { $('#profileAvatar').textContent = initials($('#memberName').value); };
+// Preview the look immediately; Cancel, Escape, or closing without saving restores the saved choice.
+$$('#profileForm [name=theme]').forEach(radio => radio.onchange = () => applyTheme(radio.value));
+$('#memberDialog').addEventListener('close', () => applyTheme());
+$('#profileForm').onsubmit = event => {
+  event.preventDefault();
+  const name = $('#memberName').value.trim(); if (!name) return;
+  member = name; localStorage.setItem('familyMealsMember', member);
+  savedTheme = $('#profileForm [name=theme]:checked')?.value || savedTheme;
+  try { localStorage.setItem('familyMealsTheme', savedTheme); } catch {}
+  $('#memberDialog').close(); render(); toast('Profile saved');
 };
 $$('.tab').forEach(button => button.onclick = () => switchTab(button.dataset.tab));
 $$('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
