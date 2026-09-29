@@ -22,7 +22,7 @@
 </head>
 <body>
 <main class="shell">
-  <header class="topbar"><div><p class="eyebrow">OUR TABLE</p><h1>Family Meals</h1><p class="sub">Plan the week. Remember the favorites.</p></div><div class="header-actions"><label class="appearance"><span>Appearance</span><select id="themeChoice"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><button class="avatar" id="memberButton" aria-label="Choose family member">?</button></div></header>
+  <header class="topbar"><div><p class="eyebrow">OUR TABLE</p><h1>Family Meals</h1><p class="sub">Plan the week. Remember the favorites.</p></div><div class="header-actions"><button class="avatar" id="memberButton" aria-label="Open profile and settings">?</button></div></header>
   <section id="locked" class="card auth-card"><span class="big-icon">🍽️</span><h2>Welcome home</h2><p>Enter your family PIN once on this device.</p><form id="pinForm" class="stack"><label class="sr-only" for="pin">Family PIN</label><input id="pin" type="password" inputmode="numeric" placeholder="Family PIN" required><button class="primary">Open Family Meals</button></form><p id="setupMessage" class="hint" role="alert"></p></section>
   <div id="app" hidden>
     <nav class="tabs" aria-label="Family Meals"><button class="tab active" data-tab="week">This Week</button><button class="tab" data-tab="ideas">Meal Ideas</button><button class="tab" data-tab="favorites">Favorites</button><button class="tab" data-tab="groceries">Groceries</button></nav>
@@ -52,7 +52,11 @@
     </section>
   </div>
 </main>
-<dialog id="memberDialog"><form method="dialog" class="modal"><h2>Who are you?</h2><p class="hint">Your name labels your ratings.</p><label class="sr-only" for="memberName">Your name</label><input id="memberName" maxlength="30" placeholder="Your name" required><div class="actions"><button value="cancel" class="ghost" formnovalidate>Cancel</button><button id="saveMember" class="primary">Save</button></div></form></dialog>
+<dialog id="memberDialog"><form id="profileForm" class="modal profile"><div class="profile-head"><span class="avatar profile-avatar" id="profileAvatar" aria-hidden="true">?</span><div><h2 id="profileTitle">Profile</h2><p class="hint" id="profileHint">Settings for you on this device.</p></div></div>
+  <label>Your name<input id="memberName" maxlength="30" placeholder="Your name" autocomplete="name" required><small class="hint">Labels your ratings and votes.</small></label>
+  <fieldset class="setting"><legend>Appearance</legend><div class="segmented" role="radiogroup"><label><input type="radio" name="theme" value="system"><span>System</span></label><label><input type="radio" name="theme" value="light"><span>Light</span></label><label><input type="radio" name="theme" value="dark"><span>Dark</span></label></div><small class="hint">System follows your phone's light or dark mode.</small></fieldset>
+  <div class="actions"><button type="button" class="ghost close-dialog" id="cancelProfile">Cancel</button><button class="primary" id="saveMember">Save</button></div>
+</form></dialog>
 <dialog id="mealDialog"><form id="mealForm" class="modal"><h2>Suggest a meal</h2>
   <label>Meal name<input id="mealName" maxlength="80" required></label>
   <label>Recipe link <span class="hint">(optional)</span><input id="recipeUrl" type="url" maxlength="2000" placeholder="https://…"></label>
