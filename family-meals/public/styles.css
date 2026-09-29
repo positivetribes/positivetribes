@@ -59,3 +59,6 @@ input,textarea,select{font-size:16px}
 .week-nav{align-items:center}.week-nav .week-home{min-width:0;display:inline-flex;align-items:center;min-height:44px;padding:0 15px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:13px;font-weight:750;white-space:nowrap;cursor:default;transition:background .2s,color .2s,border-color .2s,transform .15s}.week-home.away{background:var(--green);border-color:var(--green);color:#fff;cursor:pointer;box-shadow:0 4px 12px #315b4633}.week-home.away:active{transform:scale(.96)}
 [data-theme="dark"] .week-home.away{color:#173023}
 @media(max-width:400px){.week-nav .week-home{padding:0 10px;font-size:12px}.week-nav button:not(.week-home){min-width:40px;padding:9px 11px}}
+/* Highlight today's row in the week list. */
+.day-row.today{background:var(--green2);border-color:var(--green);box-shadow:inset 4px 0 0 var(--green)}.day-row.today .date{color:var(--green);font-weight:700}
+.day-row.today .swap{background:var(--card)}
