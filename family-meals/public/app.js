@@ -234,6 +234,8 @@ function openProfile() {
   $('#profileAvatar').textContent = initials(member);
   $$('#profileForm [name=theme]').forEach(radio => radio.checked = radio.value === savedTheme);
   $('#memberDialog').showModal();
+  // Only jump into the name field (and raise the keyboard) when a name is still needed.
+  if (member) $('#profileTitle').focus(); else $('#memberName').focus();
 }
 $('#memberButton').onclick = openProfile;
 $('#memberName').oninput = () => { $('#profileAvatar').textContent = initials($('#memberName').value); };
