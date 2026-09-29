@@ -52,7 +52,7 @@
     </section>
   </div>
 </main>
-<dialog id="memberDialog"><form id="profileForm" class="modal profile"><div class="profile-head"><span class="avatar profile-avatar" id="profileAvatar" aria-hidden="true">?</span><div><h2 id="profileTitle">Profile</h2><p class="hint" id="profileHint">Settings for you on this device.</p></div></div>
+<dialog id="memberDialog"><form id="profileForm" class="modal profile"><div class="profile-head"><span class="avatar profile-avatar" id="profileAvatar" aria-hidden="true">?</span><div><h2 id="profileTitle" tabindex="-1">Profile</h2><p class="hint" id="profileHint">Settings for you on this device.</p></div></div>
   <label>Your name<input id="memberName" maxlength="30" placeholder="Your name" autocomplete="name" required><small class="hint">Labels your ratings and votes.</small></label>
   <fieldset class="setting"><legend>Appearance</legend><div class="segmented" role="radiogroup"><label><input type="radio" name="theme" value="system"><span>System</span></label><label><input type="radio" name="theme" value="light"><span>Light</span></label><label><input type="radio" name="theme" value="dark"><span>Dark</span></label></div><small class="hint">System follows your phone's light or dark mode.</small></fieldset>
   <div class="actions"><button type="button" class="ghost close-dialog" id="cancelProfile">Cancel</button><button class="primary" id="saveMember">Save</button></div>
