@@ -27,7 +27,7 @@
   <div id="app" hidden>
     <nav class="tabs" aria-label="Family Meals"><button class="tab active" data-tab="week">This Week</button><button class="tab" data-tab="ideas">Meal Ideas</button><button class="tab" data-tab="favorites">Favorites</button><button class="tab" data-tab="groceries">Groceries</button></nav>
     <section id="week" class="panel active">
-      <div class="section-head"><div><p class="eyebrow">DINNER PLAN</p><h2 id="weekTitle">This Week</h2></div><div class="week-nav"><button class="ghost" data-week-offset="-1" aria-label="Previous week">‹</button><button class="ghost" id="nextWeek" data-week-offset="1" aria-label="Next week">›</button></div></div>
+      <div class="section-head"><div><p class="eyebrow">DINNER PLAN</p><h2 id="weekTitle">This Week</h2></div><div class="week-nav"><button class="ghost" data-week-offset="-1" aria-label="Previous week">‹</button><button class="week-home" data-week-home type="button" aria-label="Go to this week"><span class="week-dot" aria-hidden="true"></span><span class="week-home-text">This week</span></button><button class="ghost" id="nextWeek" data-week-offset="1" aria-label="Next week">›</button></div></div>
       <p id="weekLabel" class="hint"></p>
       <div class="week-tools"><button class="primary" id="planMyWeek">✦ Plan My Week</button><button class="ghost" id="openGroceries">Grocery list →</button></div>
       <p class="hint help">Suggestions fill empty nights from today onward, keeping dinners and notes you already planned.</p>
@@ -42,7 +42,7 @@
     </section>
     <section id="favorites" class="panel"><div class="section-head"><div><p class="eyebrow">KEEPERS</p><h2>Family Favorites</h2></div></div><div id="favoritesList" class="meal-grid"></div></section>
     <section id="groceries" class="panel">
-      <div class="section-head"><div><p class="eyebrow">READY FOR THE STORE</p><h2>Grocery List</h2></div><div class="week-nav"><button class="ghost" data-week-offset="-1" aria-label="Previous grocery week">‹</button><button class="ghost" data-week-offset="1" aria-label="Next grocery week">›</button></div></div>
+      <div class="section-head"><div><p class="eyebrow">READY FOR THE STORE</p><h2>Grocery List</h2></div><div class="week-nav"><button class="ghost" data-week-offset="-1" aria-label="Previous grocery week">‹</button><button class="week-home" data-week-home type="button" aria-label="Go to this week"><span class="week-dot" aria-hidden="true"></span><span class="week-home-text">This week</span></button><button class="ghost" data-week-offset="1" aria-label="Next grocery week">›</button></div></div>
       <p id="groceryWeekLabel" class="hint"></p>
       <div class="week-tools"><p id="groceryStatus" class="hint" role="status"></p><button class="ghost small" id="refreshGroceries">Refresh</button></div>
       <p class="hint help">Built from your saved dinners. Identical ingredient lines are grouped; “× 2 meals” means buy that amount twice. Manual items and checkmarks stay with this week. Tap “+ Store” on any item to say where to buy it, then filter the list by store.</p>

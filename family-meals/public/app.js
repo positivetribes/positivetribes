@@ -107,6 +107,13 @@ function renderWeek() {
   $('#planMyWeek').hidden = !!draft;
   $('#planMyWeek').disabled = addDays(start, 6) < today() || !data.meals.length;
   $('#weekTitle').textContent = draft ? 'Your week, proposed' : weekOffset === 0 ? 'This Week' : 'Dinner Plan';
+  $$('[data-week-home]').forEach(button => {
+    const away = weekOffset !== 0, weeks = Math.abs(weekOffset);
+    button.classList.toggle('away', away);
+    button.setAttribute('aria-disabled', String(!away));
+    button.setAttribute('aria-label', away ? `Back to this week (${weeks} week${weeks > 1 ? 's' : ''} ${weekOffset > 0 ? 'ahead' : 'back'})` : 'Showing this week');
+    button.title = away ? 'Back to this week' : 'You are on this week';
+  });
   $('#weekList').innerHTML = weekDates(start).map(date => {
     const row = source.find(p => p.plan_date === date);
     const meal = data.meals.find(m => +m.id === +row?.meal_id);
@@ -294,6 +301,7 @@ $('#profileForm').onsubmit = event => {
 $$('.tab').forEach(button => button.onclick = () => switchTab(button.dataset.tab));
 $$('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
 $$('[data-week-offset]').forEach(button => button.onclick = () => navigateWeek(+button.dataset.weekOffset));
+$$('[data-week-home]').forEach(button => button.onclick = () => { if (weekOffset) navigateWeek(-weekOffset); });
 $('#addMeal').onclick = () => $('#mealDialog').showModal();
 $('#tagFilter').onchange = () => { tagFilter = $('#tagFilter').value; renderMeals(); };
 $('#mealSearch').oninput = renderMeals;
