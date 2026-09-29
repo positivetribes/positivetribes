@@ -31,6 +31,29 @@ function monday(offset = weekOffset) {
   return iso(date);
 }
 const initials = name => name ? name.trim().split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase() : '?';
+let photo = localStorage.getItem('familyMealsPhoto') || '';
+let pendingPhoto = photo;
+// Show a photo when there is one, otherwise the person's initials.
+function paintAvatar(el, name, src) {
+  el.replaceChildren();
+  if (src) { const img = new Image(); img.src = src; img.alt = ''; el.append(img); }
+  else el.textContent = initials(name);
+  el.classList.toggle('has-photo', !!src);
+}
+// Center-crop to a square and shrink to 256px so it stays small enough to keep on the device.
+async function squarePhoto(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const side = Math.min(img.naturalWidth, img.naturalHeight), size = Math.min(256, side);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  } finally { URL.revokeObjectURL(url); }
+}
 function toast(message) {
   $('#toast').textContent = message;
   $('#toast').classList.add('show');
@@ -66,7 +89,7 @@ async function load() {
   } catch (error) { $('#setupMessage').textContent = error.message; }
 }
 function render() {
-  $('#memberButton').textContent = initials(member);
+  paintAvatar($('#memberButton'), member, photo);
   renderWeek(); renderMeals();
   if ($('#groceries').classList.contains('active')) loadGroceries();
 }
@@ -231,14 +254,28 @@ function openProfile() {
   $('#memberName').value = member;
   $('#profileTitle').textContent = member ? 'Profile' : 'Who are you?';
   $('#profileHint').textContent = member ? 'Settings for you on this device.' : 'Add your name so the family knows who rated what.';
-  $('#profileAvatar').textContent = initials(member);
+  pendingPhoto = photo;
+  paintProfilePhoto();
   $$('#profileForm [name=theme]').forEach(radio => radio.checked = radio.value === savedTheme);
   $('#memberDialog').showModal();
   // Only jump into the name field (and raise the keyboard) when a name is still needed.
   if (member) $('#profileTitle').focus(); else $('#memberName').focus();
 }
 $('#memberButton').onclick = openProfile;
-$('#memberName').oninput = () => { $('#profileAvatar').textContent = initials($('#memberName').value); };
+function paintProfilePhoto() {
+  paintAvatar($('#profileAvatar'), $('#memberName').value, pendingPhoto);
+  $('#photoAction').textContent = pendingPhoto ? 'Change photo' : 'Add photo';
+  $('#removePhoto').hidden = !pendingPhoto;
+}
+$('#memberName').oninput = paintProfilePhoto;
+$('#photoInput').onchange = async () => {
+  const file = $('#photoInput').files[0];
+  $('#photoInput').value = '';
+  if (!file) return;
+  try { pendingPhoto = await squarePhoto(file); paintProfilePhoto(); }
+  catch { toast('That photo could not be opened. Try a different one.'); }
+};
+$('#removePhoto').onclick = () => { pendingPhoto = ''; paintProfilePhoto(); };
 // Preview the look immediately; Cancel, Escape, or closing without saving restores the saved choice.
 $$('#profileForm [name=theme]').forEach(radio => radio.onchange = () => applyTheme(radio.value));
 $('#memberDialog').addEventListener('close', () => applyTheme());
@@ -246,6 +283,10 @@ $('#profileForm').onsubmit = event => {
   event.preventDefault();
   const name = $('#memberName').value.trim(); if (!name) return;
   member = name; localStorage.setItem('familyMealsMember', member);
+  try {
+    if (pendingPhoto) localStorage.setItem('familyMealsPhoto', pendingPhoto); else localStorage.removeItem('familyMealsPhoto');
+    photo = pendingPhoto;
+  } catch { toast('Could not save the photo on this device.'); }
   savedTheme = $('#profileForm [name=theme]:checked')?.value || savedTheme;
   try { localStorage.setItem('familyMealsTheme', savedTheme); } catch {}
   $('#memberDialog').close(); render(); toast('Profile saved');
