@@ -1,4 +1,4 @@
-import { mkdir, copyFile, writeFile } from 'node:fs/promises';
+import { mkdir, copyFile, writeFile, cp } from 'node:fs/promises';
 
 const recipient = process.env.CONTACT_TO;
 if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) throw new Error('Set CONTACT_TO to the verified email destination in Cloudflare build variables.');
@@ -12,6 +12,8 @@ for (const screen of ['workouts', 'training-frequency', 'blood-pressure', 'medic
   await copyFile(`pulselift-${screen}.png`, `public/pulselift-${screen}.png`);
 }
 await copyFile('positive-tribes-community.jpg', 'public/positive-tribes-community.jpg');
+await cp('fonts', 'public/fonts', { recursive: true });
+await cp('brand', 'public/brand', { recursive: true });
 await writeFile('wrangler.json', JSON.stringify({
   name: 'positivetribes', main: 'contact-worker.mjs', compatibility_date: '2026-09-11',
   assets: { directory: './public', binding: 'ASSETS' }, observability: { enabled: true },
