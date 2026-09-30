@@ -15,7 +15,8 @@ themeMedia.addEventListener('change', () => applyTheme($('#memberDialog').open ?
 applyTheme();
 let pin = localStorage.getItem('familyMealsPin') || '';
 let member = localStorage.getItem('familyMealsMember') || '';
-let data = { meals: [], ratings: [], votes: [], plan: [] };
+let data = { meals: [], ratings: [], votes: [], plan: [], members: [], absences: [] };
+let familyEdit = false;
 let weekOffset = 0, selectedRating = 0, activeMeal = null, activeDate = null;
 let draft = null, draftRevision = null, tagFilter = '', groceryRequest = 0;
 let storeFilter = '', groceryState = null, storeTarget = null;
@@ -86,6 +87,7 @@ async function load() {
     $('#locked').hidden = true;
     $('#app').hidden = false;
     if (!member && !$('#memberDialog').open) openProfile();
+    if (member && !data.members.some(m => sameName(m, member))) { await joinFamily(); render(); }
   } catch (error) { $('#setupMessage').textContent = error.message; }
 }
 function render() {
@@ -98,10 +100,28 @@ function switchTab(id) {
   $$('.panel').forEach(panel => panel.classList.toggle('active', panel.id === id));
   if (id === 'groceries') loadGroceries();
 }
+const sameName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+const isOut = (date, name) => data.absences.some(a => a.plan_date === date && sameName(a.member, name));
+// Show "All home" or just who is out, so the list stays short. Needs at least two people to mean anything.
+function whoIsOut(date) { return data.members.filter(name => isOut(date, name)); }
+function homeLine(date) {
+  if (data.members.length < 2) return '';
+  const out = whoIsOut(date);
+  const text = !out.length ? 'All home' : out.length <= 2 ? `${out.map(esc).join(' &amp; ')} out` : `${out.length} out`;
+  return `<div class="home${out.length ? ' some' : ''}">${text}</div>`;
+}
+function renderTogether(start) {
+  const strip = $('#togetherStrip');
+  strip.hidden = data.members.length < 2;
+  if (strip.hidden) return;
+  const nights = weekDates(start).filter(date => !whoIsOut(date).length).length;
+  strip.innerHTML = `<strong>${nights} of 7 nights</strong> everyone's home`;
+}
 function renderWeek() {
   const start = monday(), source = draft || data.plan;
   const label = `${displayDate(start)} – ${displayDate(addDays(start, 6))}`;
   $('#weekLabel').textContent = label;
+  renderTogether(start);
   $('#groceryWeekLabel').textContent = label;
   $('#previewBanner').hidden = !draft;
   $('#planMyWeek').hidden = !!draft;
@@ -117,7 +137,7 @@ function renderWeek() {
   $('#weekList').innerHTML = weekDates(start).map(date => {
     const row = source.find(p => p.plan_date === date);
     const meal = data.meals.find(m => +m.id === +row?.meal_id);
-    return `<div class="day-row${date === today() ? ' today' : ''}"><button class="day" data-date="${date}"${date === today() ? ' aria-current="date"' : ''} aria-label="Choose dinner for ${esc(displayDate(date))}${date === today() ? ' (today)' : ''}"><div><div class="dayname">${new Date(date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}</div><div class="date">${new Date(date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div></div><div><div class="meal-title">${esc(meal?.name || row?.note || 'Pick a meal')}</div><div class="meal-sub">${esc(row?.reason || (meal && row?.note) || (draft ? 'Choose or swap before accepting' : 'Tap to plan dinner'))}</div></div><span>›</span></button>${date >= today() ? `<button class="swap ghost" data-date="${date}" aria-label="Suggest another dinner for ${esc(displayDate(date))}">Swap</button>` : ''}</div>`;
+    return `<div class="day-row${date === today() ? ' today' : ''}"><button class="day" data-date="${date}"${date === today() ? ' aria-current="date"' : ''} aria-label="Choose dinner for ${esc(displayDate(date))}${date === today() ? ' (today)' : ''}"><div><div class="dayname">${new Date(date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}</div><div class="date">${new Date(date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div></div><div><div class="meal-title">${esc(meal?.name || row?.note || 'Pick a meal')}</div><div class="meal-sub">${esc(row?.reason || (meal && row?.note) || (draft ? 'Choose or swap before accepting' : 'Tap to plan dinner'))}</div>${homeLine(date)}</div><span>›</span></button>${date >= today() ? `<button class="swap ghost" data-date="${date}" aria-label="Suggest another dinner for ${esc(displayDate(date))}">Swap</button>` : ''}</div>`;
   }).join('');
   $$('.day').forEach(button => button.onclick = () => openPlan(button.dataset.date));
   $$('.swap').forEach(button => button.onclick = () => { openPlan(button.dataset.date); suggestSwap(); });
@@ -190,7 +210,45 @@ function openPlan(date) {
   $('#swapReason').textContent = '';
   $('#savePlan').textContent = draft ? 'Update preview' : 'Save dinner';
   $('#suggestSwap').hidden = date < today();
+  familyEdit = false; $('#addPerson').hidden = true;
+  renderWho();
   $('#planDialog').showModal();
+}
+function renderWho() {
+  const people = [...data.members].sort((a, b) => sameName(a, member) ? -1 : sameName(b, member) ? 1 : 0);
+  $('#peopleList').innerHTML = people.map(name => {
+    const out = isOut(activeDate, name), me = sameName(name, member);
+    const label = familyEdit ? `Remove ${name} from the family list` : `${name}${me ? ' (you)' : ''}: ${out ? 'out' : 'home'}. Tap to mark ${out ? 'home' : 'out'}`;
+    return `<button type="button" class="person${out && !familyEdit ? ' out' : ''}${me ? ' me' : ''}${familyEdit ? ' editing' : ''}" data-name="${esc(name)}" aria-label="${esc(label)}"><b>${esc(initials(name))}${familyEdit ? '<i>×</i>' : ''}</b><span class="pname">${esc(name)}</span><small>${familyEdit ? 'Remove' : `${me ? 'You · ' : ''}${out ? 'Out' : 'Home'}`}</small></button>`;
+  }).join('') + (familyEdit ? '' : '<button type="button" class="person add" id="addPersonButton" aria-label="Add a family member"><b>+</b><span class="pname">Add</span><small>&nbsp;</small></button>');
+  $('#whoHint').textContent = data.members.length < 2 ? 'Add your family to see who can make it to dinner.' : familyEdit ? 'Tap a person to remove them.' : 'Tap to mark someone out.';
+  $('#editFamily').hidden = !data.members.length;
+  $('#editFamily').textContent = familyEdit ? 'Done' : 'Edit family';
+  $$('#peopleList .person[data-name]').forEach(button => button.onclick = () => action(button, async () => familyEdit ? removePerson(button.dataset.name) : toggleAbsence(button.dataset.name)));
+  const add = $('#addPersonButton');
+  if (add) add.onclick = () => { $('#addPerson').hidden = false; $('#newPerson').focus(); };
+}
+async function toggleAbsence(name) {
+  const date = activeDate, out = !isOut(date, name);
+  await send('/absence', 'POST', { plan_date: date, member: name, out });
+  data.absences = data.absences.filter(a => !(a.plan_date === date && sameName(a.member, name)));
+  if (out) data.absences.push({ plan_date: date, member: name });
+  renderWho(); renderWeek();
+}
+async function joinFamily(name = member) {
+  if (!name || data.members.some(m => sameName(m, name))) return;
+  try {
+    const result = await send('/members', 'POST', { name });
+    if (!data.members.some(m => sameName(m, result.name))) data.members.push(result.name);
+  } catch { /* the family list is a convenience; never block the app on it */ }
+}
+async function removePerson(name) {
+  if (!confirm(`Remove ${name} from the family list?\n\nTheir in/out marks are cleared. Ratings and votes stay.`)) return;
+  await send('/members', 'DELETE', { name });
+  data.members = data.members.filter(m => !sameName(m, name));
+  data.absences = data.absences.filter(a => !sameName(a.member, name));
+  if (!data.members.length) familyEdit = false;
+  renderWho(); renderWeek();
 }
 function suggestSwap() {
   const week = weekDates(monday()).map(date => ({ plan_date: date, ...(draft || data.plan).find(p => p.plan_date === date) }));
@@ -297,6 +355,7 @@ $('#profileForm').onsubmit = event => {
   savedTheme = $('#profileForm [name=theme]:checked')?.value || savedTheme;
   try { localStorage.setItem('familyMealsTheme', savedTheme); } catch {}
   $('#memberDialog').close(); render(); toast('Profile saved');
+  joinFamily().then(() => { renderWeek(); });
 };
 $$('.tab').forEach(button => button.onclick = () => switchTab(button.dataset.tab));
 $$('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
@@ -331,6 +390,18 @@ $('#rateForm').onsubmit = event => {
   });
 };
 $('#suggestSwap').onclick = suggestSwap;
+$('#editFamily').onclick = () => { familyEdit = !familyEdit; renderWho(); };
+const submitPerson = () => action($('#addPersonSave'), async () => {
+  const name = $('#newPerson').value.trim().replace(/\s+/g, ' ');
+  if (!name) return;
+  const result = await send('/members', 'POST', { name });
+  if (!data.members.some(m => sameName(m, result.name))) data.members.push(result.name);
+  $('#newPerson').value = ''; $('#addPerson').hidden = true;
+  renderWho(); renderWeek();
+});
+$('#addPersonSave').onclick = submitPerson;
+// Enter adds the person instead of saving the whole dinner popup.
+$('#newPerson').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); submitPerson(); } };
 $('#planForm').onsubmit = event => {
   event.preventDefault(); action(event.submitter, async () => {
     const row = { plan_date: activeDate, meal_id: +$('#planMeal').value || null, note: $('#planNote').value };

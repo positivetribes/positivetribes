@@ -64,6 +64,7 @@ const starterMeals = [
   ]
 ];
 const starterMealsVersion = "family-dinners-v1";
+const rosterSeedVersion = "family-members-v1";
 
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
 async function ensureSchema(db){await db.batch([
@@ -77,6 +78,8 @@ db.prepare("CREATE TABLE IF NOT EXISTS meal_details (meal_id INTEGER PRIMARY KEY
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_items (id INTEGER PRIMARY KEY AUTOINCREMENT,week_start TEXT NOT NULL,label TEXT NOT NULL,checked INTEGER NOT NULL DEFAULT 0 CHECK(checked IN (0,1)))"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_checks (week_start TEXT NOT NULL,item_key TEXT NOT NULL,checked INTEGER NOT NULL DEFAULT 0 CHECK(checked IN (0,1)),PRIMARY KEY(week_start,item_key))"),
 db.prepare("CREATE INDEX IF NOT EXISTS grocery_items_week ON grocery_items(week_start)"),
+db.prepare("CREATE TABLE IF NOT EXISTS family_members (name TEXT PRIMARY KEY COLLATE NOCASE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+db.prepare("CREATE TABLE IF NOT EXISTS dinner_absences (plan_date TEXT NOT NULL,member TEXT NOT NULL COLLATE NOCASE,PRIMARY KEY(plan_date,member))"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_stores (week_start TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('generated','manual')),item_key TEXT NOT NULL,store TEXT NOT NULL,PRIMARY KEY(week_start,kind,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
 ]);
@@ -94,6 +97,13 @@ await db.batch([
       AND NOT EXISTS (SELECT 1 FROM app_seeds WHERE name = ?)
   `).bind(...starterMeals.flat(), starterMealsVersion),
   db.prepare("INSERT OR IGNORE INTO app_seeds (name) VALUES (?)").bind(starterMealsVersion)
+]);
+// Start the family list from names already used on ratings and votes, once. Removing someone later sticks.
+await db.batch([
+  db.prepare(`INSERT OR IGNORE INTO family_members (name)
+    SELECT DISTINCT member FROM (SELECT member FROM ratings UNION SELECT member FROM meal_votes)
+    WHERE trim(member)<>'' AND NOT EXISTS (SELECT 1 FROM app_seeds WHERE name=?)`).bind(rosterSeedVersion),
+  db.prepare("INSERT OR IGNORE INTO app_seeds (name) VALUES (?)").bind(rosterSeedVersion)
 ]);
 }
 
@@ -143,6 +153,12 @@ function detailsStatement(db, id, input) {
     .bind(id, input.tags === undefined ? null : JSON.stringify(input.tags), input.ingredients === undefined ? null : JSON.stringify(input.ingredients),
       input.tags === undefined ? null : JSON.stringify(input.tags), input.ingredients === undefined ? null : JSON.stringify(input.ingredients));
 }
+async function requireMember(db, value) {
+  const name = text(value, 30);
+  const row = name && await db.prepare('SELECT name FROM family_members WHERE name=?').bind(name).first();
+  if (!row) throw new InputError('Family member not found.', 404);
+  return row.name;
+}
 const rows = async (db, sql, ...values) => (await db.prepare(sql).bind(...values).all()).results;
 async function summary(db) {
   const meals = await rows(db, `SELECT m.*,COALESCE(d.tags,'[]') tags,COALESCE(d.ingredients,'[]') ingredients,
@@ -153,7 +169,9 @@ async function summary(db) {
   return { plan_revision: (await db.prepare('SELECT revision FROM plan_revision WHERE id=1').first()).revision, meals: meals.map(m => ({ ...m, tags: JSON.parse(m.tags), ingredients: JSON.parse(m.ingredients) })),
     ratings: await rows(db, 'SELECT * FROM ratings ORDER BY created_at DESC'),
     votes: await rows(db, 'SELECT * FROM meal_votes'),
-    plan: await rows(db, `SELECT p.*,m.name meal_name FROM weekly_plan p LEFT JOIN meals m ON m.id=p.meal_id ORDER BY p.plan_date`) };
+    plan: await rows(db, `SELECT p.*,m.name meal_name FROM weekly_plan p LEFT JOIN meals m ON m.id=p.meal_id ORDER BY p.plan_date`),
+    members: (await rows(db, 'SELECT name FROM family_members ORDER BY created_at,rowid')).map(r => r.name),
+    absences: await rows(db, 'SELECT plan_date,member FROM dinner_absences ORDER BY plan_date,member') };
 }
 function weekStart(value) {
   if (!validDate(value) || new Date(value + 'T12:00:00Z').getUTCDay() !== 1) throw new InputError('A valid Monday is required.');
@@ -277,6 +295,25 @@ export default {
           if (current.revision !== b.expected_revision) throw new InputError('The family plan changed while you were previewing. Cancel the preview and refresh before planning again.', 409);
           throw error;
         }
+        return json({ ok: true });
+      }
+      if (path === '/api/members' && method === 'POST') {
+        const name = text((await body(request)).name, 30).replace(/\s+/g, ' ');
+        if (!name) throw new InputError('Name is required.');
+        await db.prepare('INSERT OR IGNORE INTO family_members (name) VALUES (?)').bind(name).run();
+        return json({ ok: true, name: await requireMember(db, name) });
+      }
+      if (path === '/api/members' && method === 'DELETE') {
+        const name = await requireMember(db, (await body(request)).name);
+        await db.batch([db.prepare('DELETE FROM dinner_absences WHERE member=?').bind(name), db.prepare('DELETE FROM family_members WHERE name=?').bind(name)]);
+        return json({ ok: true });
+      }
+      if (path === '/api/absence' && method === 'POST') {
+        const b = await body(request);
+        if (!validDate(b.plan_date)) throw new InputError('Valid plan date required.');
+        if (typeof b.out !== 'boolean') throw new InputError('Out must be true or false.');
+        const name = await requireMember(db, b.member);
+        await (b.out ? db.prepare('INSERT OR IGNORE INTO dinner_absences (plan_date,member) VALUES (?,?)') : db.prepare('DELETE FROM dinner_absences WHERE plan_date=? AND member=?')).bind(b.plan_date, name).run();
         return json({ ok: true });
       }
       if (path === '/api/groceries' && method === 'GET') return json(await groceries(db, weekStart(url.searchParams.get('week'))));

@@ -62,3 +62,20 @@ input,textarea,select{font-size:16px}
 /* Highlight today's row in the week list. */
 .day-row.today{background:var(--green2);border-color:var(--green);box-shadow:inset 4px 0 0 var(--green)}.day-row.today .date{color:var(--green);font-weight:700}
 .day-row.today .swap{background:var(--card)}
+/* Who's home */
+.together-strip{margin-top:12px;padding:10px 14px;background:var(--green2);border:1px solid var(--line);border-radius:14px;font-size:13px;color:var(--muted)}.together-strip strong{color:var(--green)}
+.home{display:flex;align-items:center;gap:5px;margin-top:4px;font-size:12px;font-weight:700;color:var(--green);overflow-wrap:anywhere}.home::before{content:'';flex-shrink:0;width:8px;height:8px;border-radius:50%;background:var(--green)}.home.some{color:#9c3b2e}.home.some::before{background:#c9614f}
+.who .people{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:8px 4px}
+.person{display:grid;justify-items:center;align-content:start;gap:3px;border:0;background:none;padding:2px;font-size:12px;font-weight:700;color:var(--green);min-width:0}
+.person b{position:relative;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--green);color:var(--card);font-size:16px}
+.person .pname{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.person small{font-size:11px;font-weight:600;color:var(--muted)}
+.person.me b{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--green)}
+.person.out{color:#9c3b2e}.person.out b{background:#e4cbc5;color:#9c3b2e;opacity:.85}.person.out small{color:#9c3b2e}
+.person.add b{background:none;border:2px dashed var(--green);color:var(--green);font-size:24px;font-weight:500}
+.person.editing b i{position:absolute;right:-4px;top:-4px;width:22px;height:22px;border-radius:50%;background:#9c3b2e;color:#fff;font-style:normal;font-size:15px;line-height:21px;text-align:center}
+.add-person{display:flex;gap:8px}.add-person input{min-width:0}
+.who-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}.who-foot .hint{font-size:12px}.who .link-button{flex-shrink:0;white-space:nowrap}
+:root[data-theme="dark"] .home.some,:root[data-theme="dark"] .person.out,:root[data-theme="dark"] .person.out small{color:#f0a898}
+:root[data-theme="dark"] .home.some::before{background:#e58a78}
+:root[data-theme="dark"] .person.out b{background:#5a3a34;color:#f0a898}
