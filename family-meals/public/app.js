@@ -15,7 +15,7 @@ themeMedia.addEventListener('change', () => applyTheme($('#memberDialog').open ?
 applyTheme();
 let pin = localStorage.getItem('familyMealsPin') || '';
 let member = localStorage.getItem('familyMealsMember') || '';
-let data = { meals: [], ratings: [], votes: [], plan: [], members: [], absences: [] };
+let data = { meals: [], ratings: [], votes: [], plan: [], members: [], unclaimed: [], absences: [] };
 let familyEdit = false;
 let weekOffset = 0, selectedRating = 0, activeMeal = null, activeDate = null;
 let draft = null, draftRevision = null, tagFilter = '', groceryRequest = 0;
@@ -86,8 +86,12 @@ async function load() {
     await refresh();
     $('#locked').hidden = true;
     $('#app').hidden = false;
-    if (!member && !$('#memberDialog').open) openProfile();
-    if (member && !data.members.some(m => sameName(m, member))) { await joinFamily(); render(); }
+    if (!$('#memberDialog').open) {
+      if (!member) openProfile();
+      else if (!data.members.length) { await registerSelf(); render(); }             // a brand-new family: the first name starts the list
+      else if (!inFamily(member)) { if (!pickerDismissed()) openProfile(); }        // an older name: ask who they are
+      else if (data.unclaimed.some(m => sameName(m, member))) { await registerSelf(); }  // already known: quietly mark it as taken
+    }
   } catch (error) { $('#setupMessage').textContent = error.message; }
 }
 function render() {
@@ -106,8 +110,9 @@ const isOut = (date, name) => data.absences.some(a => a.plan_date === date && sa
 function whoIsOut(date) { return data.members.filter(name => isOut(date, name)); }
 function homeLine(date) {
   if (data.members.length < 2) return '';
-  const out = whoIsOut(date);
-  const text = !out.length ? 'All home' : out.length <= 2 ? `${out.map(esc).join(' &amp; ')} out` : `${out.length} out`;
+  const out = whoIsOut(date).map(esc);
+  const names = out.length > 1 ? `${out.slice(0, -1).join(', ')} &amp; ${out[out.length - 1]}` : out[0];
+  const text = !out.length ? 'All home' : out.length === data.members.length ? 'Everyone out' : `${names}&nbsp;out`;
   return `<div class="home${out.length ? ' some' : ''}">${text}</div>`;
 }
 function renderTogether(start) {
@@ -235,11 +240,14 @@ async function toggleAbsence(name) {
   if (out) data.absences.push({ plan_date: date, member: name });
   renderWho(); renderWeek();
 }
-async function joinFamily(name = member) {
-  if (!name || data.members.some(m => sameName(m, name))) return;
+// Tell the family list who this phone is. Claiming hides the name from other people's first-time picker.
+async function registerSelf(previous) {
+  if (!member) return;
   try {
-    const result = await send('/members', 'POST', { name });
+    const result = await send('/members', 'POST', { name: member, claim: true, ...(previous && !sameName(previous, member) ? { release: previous } : {}) });
     if (!data.members.some(m => sameName(m, result.name))) data.members.push(result.name);
+    data.unclaimed = data.unclaimed.filter(m => !sameName(m, result.name));
+    if (previous && !sameName(previous, result.name) && data.members.some(m => sameName(m, previous)) && !data.unclaimed.some(m => sameName(m, previous))) data.unclaimed.push(previous);
   } catch { /* the family list is a convenience; never block the app on it */ }
 }
 async function removePerson(name) {
@@ -247,6 +255,7 @@ async function removePerson(name) {
   await send('/members', 'DELETE', { name });
   data.members = data.members.filter(m => !sameName(m, name));
   data.absences = data.absences.filter(a => !sameName(a.member, name));
+  data.unclaimed = data.unclaimed.filter(m => !sameName(m, name));
   if (!data.members.length) familyEdit = false;
   renderWho(); renderWeek();
 }
@@ -315,16 +324,57 @@ function openStore(item) {
 $('#pinForm').onsubmit = event => {
   event.preventDefault(); pin = $('#pin').value.trim(); localStorage.setItem('familyMealsPin', pin); action(event.submitter, load);
 };
+const inFamily = name => data.members.some(m => sameName(m, name));
+const pickerDismissed = () => { try { return sessionStorage.getItem('familyMealsPickerDismissed') === '1'; } catch { return false; } };
+let profileMode = 'profile', pickerAll = false, picked = false;
+// 'pick' shows the family's names to tap; 'new' asks for a typed name; 'profile' is the normal settings screen.
+function setProfileMode(mode) {
+  profileMode = mode;
+  const pick = mode === 'pick', typing = mode === 'new';
+  $('#pickPanel').hidden = !pick;
+  $('#nameField').hidden = pick;
+  $('#themeField').hidden = pick || typing;
+  $('.photo-picker').hidden = pick || typing;
+  $('#saveMember').hidden = pick;
+  $('#cancelProfile').textContent = pick ? 'Not now' : 'Cancel';
+  $('#profileForm').classList.toggle('picking', pick || typing);
+}
+function renderPicker() {
+  const showAll = pickerAll || !data.unclaimed.length;
+  const names = showAll ? data.members : data.unclaimed;
+  const taken = name => !data.unclaimed.some(m => sameName(m, name));
+  $('#pickList').innerHTML = names.map(name => `<button type="button" class="person" data-name="${esc(name)}" aria-label="I'm ${esc(name)}"><b>${esc(initials(name))}</b><span class="pname">${esc(name)}</span><small>${showAll && taken(name) ? 'Other phone' : '&nbsp;'}</small></button>`).join('');
+  $$('#pickList .person').forEach(button => button.onclick = () => action(button, () => chooseName(button.dataset.name)));
+  $('#pickShowAll').hidden = showAll;
+  $('#profileTitle').textContent = 'Who are you?';
+  $('#profileHint').textContent = member ? `This phone is saved as “${member}”. Tap who you are in the family.`
+    : !data.unclaimed.length ? 'Everyone’s name is taken. If this is a new phone, tap yours.'
+    : showAll ? 'Everyone in the family. Tap yours if this is a new phone.' : 'Tap your name.';
+}
+async function chooseName(name) {
+  const previous = member;
+  member = name;
+  await registerSelf(previous);
+  member = data.members.find(m => sameName(m, name)) || name;
+  localStorage.setItem('familyMealsMember', member);
+  picked = true;
+  $('#memberDialog').close(); render(); toast(`Welcome, ${member}`);
+}
 function openProfile() {
+  picked = false; pickerAll = false;
   $('#memberName').value = member;
-  $('#profileTitle').textContent = member ? 'Profile' : 'Who are you?';
-  $('#profileHint').textContent = member ? 'Settings for you on this device.' : 'Add your name so the family knows who rated what.';
   pendingPhoto = photo;
   paintProfilePhoto();
   $$('#profileForm [name=theme]').forEach(radio => radio.checked = radio.value === savedTheme);
+  if (data.members.length && (!member || !inFamily(member))) { setProfileMode('pick'); renderPicker(); }
+  else {
+    setProfileMode('profile');
+    $('#profileTitle').textContent = member ? 'Profile' : 'Who are you?';
+    $('#profileHint').textContent = member ? 'Settings for you on this device.' : 'Add your name so the family knows who rated what.';
+  }
   $('#memberDialog').showModal();
-  // Only jump into the name field (and raise the keyboard) when a name is still needed.
-  if (member) $('#profileTitle').focus(); else $('#memberName').focus();
+  // Only jump into the name field (and raise the keyboard) when a name still has to be typed.
+  if (profileMode === 'pick') $('#profileTitle').focus(); else if (member) $('#profileTitle').focus(); else $('#memberName').focus();
 }
 $('#memberButton').onclick = openProfile;
 function paintProfilePhoto() {
@@ -343,10 +393,21 @@ $('#photoInput').onchange = async () => {
 $('#removePhoto').onclick = () => { pendingPhoto = ''; paintProfilePhoto(); };
 // Preview the look immediately; Cancel, Escape, or closing without saving restores the saved choice.
 $$('#profileForm [name=theme]').forEach(radio => radio.onchange = () => applyTheme(radio.value));
-$('#memberDialog').addEventListener('close', () => applyTheme());
+$('#memberDialog').addEventListener('close', () => {
+  applyTheme();
+  if (profileMode !== 'profile' && !picked) { try { sessionStorage.setItem('familyMealsPickerDismissed', '1'); } catch {} }
+});
+$('#pickShowAll').onclick = () => { pickerAll = true; renderPicker(); };
+$('#pickNew').onclick = () => {
+  setProfileMode('new');
+  $('#profileTitle').textContent = 'What’s your name?';
+  $('#profileHint').textContent = 'Add yourself to the family.';
+  $('#memberName').value = ''; $('#memberName').focus();
+};
 $('#profileForm').onsubmit = event => {
   event.preventDefault();
   const name = $('#memberName').value.trim(); if (!name) return;
+  const previousName = member;
   member = name; localStorage.setItem('familyMealsMember', member);
   try {
     if (pendingPhoto) localStorage.setItem('familyMealsPhoto', pendingPhoto); else localStorage.removeItem('familyMealsPhoto');
@@ -355,7 +416,8 @@ $('#profileForm').onsubmit = event => {
   savedTheme = $('#profileForm [name=theme]:checked')?.value || savedTheme;
   try { localStorage.setItem('familyMealsTheme', savedTheme); } catch {}
   $('#memberDialog').close(); render(); toast('Profile saved');
-  joinFamily().then(() => { renderWeek(); });
+  picked = true;
+  registerSelf(previousName).then(() => { renderWeek(); });
 };
 $$('.tab').forEach(button => button.onclick = () => switchTab(button.dataset.tab));
 $$('.close-dialog').forEach(button => button.onclick = () => button.closest('dialog').close());
@@ -395,7 +457,7 @@ const submitPerson = () => action($('#addPersonSave'), async () => {
   const name = $('#newPerson').value.trim().replace(/\s+/g, ' ');
   if (!name) return;
   const result = await send('/members', 'POST', { name });
-  if (!data.members.some(m => sameName(m, result.name))) data.members.push(result.name);
+  if (!data.members.some(m => sameName(m, result.name))) { data.members.push(result.name); data.unclaimed.push(result.name); }
   $('#newPerson').value = ''; $('#addPerson').hidden = true;
   renderWho(); renderWeek();
 });

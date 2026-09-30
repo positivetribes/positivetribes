@@ -277,3 +277,36 @@ test("who's home: family list, in/out marks, case-insensitive names, cleanup, va
     assert.deepEqual((await call('/summary')).body.members, ['Eric R']);
   } finally { sqlite.close(); }
 });
+
+test('first-time name picker: remaining names, claiming, releasing, and cleanup', async () => {
+  const { call, sqlite } = await fixture();
+  try {
+    for (const name of ['Ava', 'Sam', 'Max']) await call('/members', 'POST', { name });
+    assert.deepEqual((await call('/summary')).body.unclaimed, ['Ava', 'Sam', 'Max']);
+    // Picking a name claims it, in any capitalization, and repeating it changes nothing.
+    assert.equal((await call('/members', 'POST', { name: 'sam', claim: true })).body.name, 'Sam');
+    await call('/members', 'POST', { name: 'SAM', claim: true });
+    assert.deepEqual((await call('/summary')).body.unclaimed, ['Ava', 'Max']);
+    // A new name is added and claimed in one step.
+    await call('/members', 'POST', { name: 'Zed', claim: true });
+    let summary = (await call('/summary')).body;
+    assert.deepEqual(summary.members, ['Ava', 'Sam', 'Max', 'Zed']); assert.deepEqual(summary.unclaimed, ['Ava', 'Max']);
+    // Switching names releases the old one; "releasing" your own name never drops it.
+    await call('/members', 'POST', { name: 'Ava', claim: true, release: 'Sam' });
+    assert.deepEqual((await call('/summary')).body.unclaimed, ['Sam', 'Max']);
+    await call('/members', 'POST', { name: 'Ava', claim: true, release: 'ava' });
+    assert.deepEqual((await call('/summary')).body.unclaimed, ['Sam', 'Max']);
+    // Adding someone without claiming leaves them available to pick.
+    await call('/members', 'POST', { name: 'Kid' });
+    assert.deepEqual((await call('/summary')).body.unclaimed, ['Sam', 'Max', 'Kid']);
+    // Removing a person also forgets their claim, so re-adding them starts unclaimed.
+    await call('/members', 'DELETE', { name: 'Ava' });
+    await call('/members', 'POST', { name: 'Ava' });
+    assert.ok((await call('/summary')).body.unclaimed.includes('Ava'));
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM family_claims WHERE name='Ava'").get().n, 0);
+    // Validation and PIN.
+    assert.equal((await call('/members', 'POST', { name: 'Sam', claim: 'yes' })).status, 400);
+    assert.equal((await call('/members', 'POST', { name: 'Sam', claim: true, release: 5 })).status, 400);
+    assert.equal((await call('/members', 'POST', { name: 'Sam', claim: true }, false)).status, 401);
+  } finally { sqlite.close(); }
+});

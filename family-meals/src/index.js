@@ -79,6 +79,7 @@ db.prepare("CREATE TABLE IF NOT EXISTS grocery_items (id INTEGER PRIMARY KEY AUT
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_checks (week_start TEXT NOT NULL,item_key TEXT NOT NULL,checked INTEGER NOT NULL DEFAULT 0 CHECK(checked IN (0,1)),PRIMARY KEY(week_start,item_key))"),
 db.prepare("CREATE INDEX IF NOT EXISTS grocery_items_week ON grocery_items(week_start)"),
 db.prepare("CREATE TABLE IF NOT EXISTS family_members (name TEXT PRIMARY KEY COLLATE NOCASE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+db.prepare("CREATE TABLE IF NOT EXISTS family_claims (name TEXT PRIMARY KEY COLLATE NOCASE,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS dinner_absences (plan_date TEXT NOT NULL,member TEXT NOT NULL COLLATE NOCASE,PRIMARY KEY(plan_date,member))"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_stores (week_start TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('generated','manual')),item_key TEXT NOT NULL,store TEXT NOT NULL,PRIMARY KEY(week_start,kind,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
@@ -171,6 +172,8 @@ async function summary(db) {
     votes: await rows(db, 'SELECT * FROM meal_votes'),
     plan: await rows(db, `SELECT p.*,m.name meal_name FROM weekly_plan p LEFT JOIN meals m ON m.id=p.meal_id ORDER BY p.plan_date`),
     members: (await rows(db, 'SELECT name FROM family_members ORDER BY created_at,rowid')).map(r => r.name),
+    // Names nobody has picked as their own yet, offered to people opening the app for the first time.
+    unclaimed: (await rows(db, 'SELECT m.name FROM family_members m WHERE NOT EXISTS (SELECT 1 FROM family_claims c WHERE c.name=m.name) ORDER BY m.created_at,m.rowid')).map(r => r.name),
     absences: await rows(db, 'SELECT plan_date,member FROM dinner_absences ORDER BY plan_date,member') };
 }
 function weekStart(value) {
@@ -298,14 +301,24 @@ export default {
         return json({ ok: true });
       }
       if (path === '/api/members' && method === 'POST') {
-        const name = text((await body(request)).name, 30).replace(/\s+/g, ' ');
+        const b = await body(request), name = text(b.name, 30).replace(/\s+/g, ' ');
         if (!name) throw new InputError('Name is required.');
+        if (b.claim !== undefined && typeof b.claim !== 'boolean') throw new InputError('Claim must be true or false.');
+        const release = b.release == null ? '' : text(b.release, 30).replace(/\s+/g, ' ');
         await db.prepare('INSERT OR IGNORE INTO family_members (name) VALUES (?)').bind(name).run();
-        return json({ ok: true, name: await requireMember(db, name) });
+        const canonical = await requireMember(db, name);
+        // Claiming means "this is me on this phone". It only hides the name from other first-time pickers.
+        const changes = [];
+        if (b.claim) {
+          changes.push(db.prepare('INSERT OR IGNORE INTO family_claims (name) VALUES (?)').bind(canonical));
+          if (release && release.toLowerCase() !== canonical.toLowerCase()) changes.push(db.prepare('DELETE FROM family_claims WHERE name=?').bind(release));
+        }
+        if (changes.length) await db.batch(changes);
+        return json({ ok: true, name: canonical });
       }
       if (path === '/api/members' && method === 'DELETE') {
         const name = await requireMember(db, (await body(request)).name);
-        await db.batch([db.prepare('DELETE FROM dinner_absences WHERE member=?').bind(name), db.prepare('DELETE FROM family_members WHERE name=?').bind(name)]);
+        await db.batch([db.prepare('DELETE FROM dinner_absences WHERE member=?').bind(name), db.prepare('DELETE FROM family_claims WHERE name=?').bind(name), db.prepare('DELETE FROM family_members WHERE name=?').bind(name)]);
         return json({ ok: true });
       }
       if (path === '/api/absence' && method === 'POST') {
