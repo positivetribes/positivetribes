@@ -81,6 +81,7 @@ db.prepare("CREATE INDEX IF NOT EXISTS grocery_items_week ON grocery_items(week_
 db.prepare("CREATE TABLE IF NOT EXISTS family_members (name TEXT PRIMARY KEY COLLATE NOCASE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS family_claims (name TEXT PRIMARY KEY COLLATE NOCASE,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS dinner_absences (plan_date TEXT NOT NULL,member TEXT NOT NULL COLLATE NOCASE,PRIMARY KEY(plan_date,member))"),
+db.prepare("CREATE TABLE IF NOT EXISTS grocery_labels (week_start TEXT NOT NULL,item_key TEXT NOT NULL,label TEXT NOT NULL,PRIMARY KEY(week_start,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_stores (week_start TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('generated','manual')),item_key TEXT NOT NULL,store TEXT NOT NULL,PRIMARY KEY(week_start,kind,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
 ]);
@@ -204,6 +205,7 @@ async function groceries(db, start) {
     WHERE p.plan_date>=? AND p.plan_date<=? ORDER BY p.plan_date`, start, addDays(start, 6));
   const checks = new Map((await rows(db, 'SELECT item_key,checked FROM grocery_checks WHERE week_start=?', start)).map(r => [r.item_key, !!r.checked]));
   const stores = new Map((await rows(db, 'SELECT kind,item_key,store FROM grocery_stores WHERE week_start=?', start)).map(r => [`${r.kind}:${r.item_key}`, r.store]));
+  const labels = new Map((await rows(db, 'SELECT item_key,label FROM grocery_labels WHERE week_start=?', start)).map(r => [r.item_key, r.label]));
   const combined = new Map();
   const missing = new Map();
   for (const meal of planned) {
@@ -211,7 +213,7 @@ async function groceries(db, start) {
     if (!ingredients.length) missing.set(meal.id, meal.name);
     for (const label of ingredients) {
       const key = itemKey(label);
-      if (!combined.has(key)) combined.set(key, { key, label, count: 0, meals: [], checked: checks.get(key) || false, store: stores.get('generated:' + key) || '' });
+      if (!combined.has(key)) combined.set(key, { key, label: labels.get(key) || label, original_label: label, edited: labels.has(key), count: 0, meals: [], checked: checks.get(key) || false, store: stores.get('generated:' + key) || '' });
       const item = combined.get(key);
       item.count++;
       if (!item.meals.includes(meal.name)) item.meals.push(meal.name);
@@ -339,6 +341,29 @@ export default {
           ...(store ? [db.prepare("INSERT INTO grocery_stores (week_start,kind,item_key,store) VALUES (?,'manual',CAST(last_insert_rowid() AS TEXT),?)").bind(start, store)] : [])
         ]);
         return json({ ok: true, id: result[0].meta.last_row_id }, 201);
+      }
+      // Rename a grocery line. Meal-generated lines are renamed for this week only (the recipe is untouched); an empty label restores the original.
+      if (path === '/api/groceries/label' && method === 'POST') {
+        const b = await body(request), start = weekStart(b.week_start);
+        if (typeof b.label !== 'string') throw new InputError('Item name must be text.');
+        const label = text(b.label, 200);
+        if (b.kind === 'generated') {
+          const key = text(b.key, 200), item = (await groceries(db, start)).generated.find(i => i.key === key);
+          if (!item) throw new InputError('This ingredient is no longer on the plan. Refresh the list.', 409);
+          await (label && label !== item.original_label
+            ? db.prepare(`INSERT INTO grocery_labels (week_start,item_key,label) VALUES (?,?,?)
+                ON CONFLICT(week_start,item_key) DO UPDATE SET label=excluded.label`).bind(start, key, label)
+            : db.prepare('DELETE FROM grocery_labels WHERE week_start=? AND item_key=?').bind(start, key)).run();
+          return json({ ok: true, label: label || item.original_label });
+        }
+        if (b.kind === 'manual') {
+          if (!label) throw new InputError('Grocery item is required.');
+          const id = Number(b.id);
+          if (!Number.isSafeInteger(id) || !await db.prepare('SELECT id FROM grocery_items WHERE id=? AND week_start=?').bind(id, start).first()) throw new InputError('Grocery item not found.', 404);
+          await db.prepare('UPDATE grocery_items SET label=? WHERE id=? AND week_start=?').bind(label, id, start).run();
+          return json({ ok: true, label });
+        }
+        throw new InputError('Choose a manual item or generated ingredient.');
       }
       if (path === '/api/groceries/store' && method === 'POST') {
         const b = await body(request), start = weekStart(b.week_start);

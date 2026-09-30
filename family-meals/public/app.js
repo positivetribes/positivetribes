@@ -299,19 +299,43 @@ function renderGroceries() {
   $('#groceryStatus').textContent = `${shown.filter(({ item }) => item.checked).length} of ${shown.length} checked${storeFilter ? (storeFilter === NO_STORE ? ' · no store yet' : ' · ' + storeFilter) : ''} · ${result.planned_count} planned dinners${draft ? ' · Preview is not saved yet' : ''}`;
   $('#missingIngredients').innerHTML = result.missing.length ? `<p class="hint">Add ingredients to complete the list:</p><div class="chips">${result.missing.map(meal => `<button class="chip missing-meal" data-id="${meal.id}">${esc(meal.name)} +</button>`).join('')}</div>` : '';
   $$('.missing-meal').forEach(button => button.onclick = () => openEditMeal(button.dataset.id));
-  $('#groceryList').innerHTML = shown.map(({ item, i }) => `<div class="grocery-item ${item.checked ? 'checked' : ''}"><label><input type="checkbox" data-item="${i}" ${item.checked ? 'checked' : ''}><span><strong>${esc(item.label)}${item.count > 1 ? ` × ${item.count} meals` : ''}</strong><small>${item.kind === 'manual' ? 'Added by your family' : esc(item.meals.join(' · '))}</small></span></label><button class="chip store-chip ${item.store ? 'set' : ''}" data-item="${i}" aria-label="${item.store ? `Store for ${esc(item.label)}: ${esc(item.store)}. Change store` : `Choose a store for ${esc(item.label)}`}">${item.store ? esc(item.store) : '+ Store'}</button>${item.kind === 'manual' ? `<button class="ghost remove-item" data-item="${i}" aria-label="Remove ${esc(item.label)}">×</button>` : ''}</div>`).join('') || '<div class="card auth-card">Plan dinners and add their ingredients, or add an item below.</div>';
+  $('#groceryList').innerHTML = shown.map(({ item, i }) => `<div class="grocery-item ${item.checked ? 'checked' : ''}"><label><input type="checkbox" data-item="${i}" ${item.checked ? 'checked' : ''}><span><strong>${esc(item.label)}${item.count > 1 ? ` × ${item.count} meals` : ''}</strong><small>${item.kind === 'manual' ? 'Added by your family' : esc(item.meals.join(' · ')) + (item.edited ? ` · edited from “${esc(item.original_label)}”` : '')}</small></span></label><button class="chip store-chip ${item.store ? 'set' : ''}" data-item="${i}" aria-label="${item.store ? `Store for ${esc(item.label)}: ${esc(item.store)}. Change store` : `Choose a store for ${esc(item.label)}`}">${item.store ? esc(item.store) : '+ Store'}</button><button class="ghost edit-item" data-item="${i}" aria-label="Edit ${esc(item.label)}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`).join('') || '<div class="card auth-card">Plan dinners and add their ingredients, or add an item below.</div>';
   $$('#groceryList input').forEach(input => input.onchange = () => action(input, async () => {
     const item = items[+input.dataset.item];
     try { await send('/groceries', 'PATCH', { week_start: start, kind: item.kind, id: item.id, key: item.key, checked: input.checked }); }
     catch (error) { input.checked = !input.checked; throw error; }
     await loadGroceries();
   }));
-  $$('.remove-item').forEach(button => button.onclick = () => action(button, async () => {
-    await send('/groceries', 'DELETE', { week_start: start, kind: 'manual', id: items[+button.dataset.item].id });
-    await loadGroceries();
-  }));
+  $$('.edit-item').forEach(button => button.onclick = () => openItem(items[+button.dataset.item]));
   $$('.store-chip').forEach(button => button.onclick = () => openStore(items[+button.dataset.item]));
 }
+let itemTarget = null;
+function openItem(item) {
+  itemTarget = item;
+  $('#itemInput').value = item.label;
+  $('#itemNote').textContent = item.kind === 'manual' ? '' : `From ${item.meals.join(', ')}. This changes this week's list only — the recipe stays the same.`;
+  $('#itemNote').hidden = item.kind === 'manual';
+  $('#deleteItem').hidden = item.kind !== 'manual';
+  $('#resetItem').hidden = !item.edited;
+  $('#itemDialog').showModal();
+  $('#itemInput').focus();
+}
+function saveItemLabel(submitter, label) {
+  return action(submitter, async () => {
+    const item = itemTarget, start = groceryState.start;
+    await send('/groceries/label', 'POST', { week_start: start, kind: item.kind, id: item.id, key: item.key, label });
+    $('#itemDialog').close(); await loadGroceries();
+  });
+}
+$('#itemForm').onsubmit = event => { event.preventDefault(); saveItemLabel(event.submitter, $('#itemInput').value); };
+$('#resetItem').onclick = event => saveItemLabel(event.currentTarget, '');
+$('#deleteItem').onclick = event => {
+  if (!confirm(`Remove “${itemTarget.label}” from the list?`)) return;
+  action(event.currentTarget, async () => {
+    await send('/groceries', 'DELETE', { week_start: groceryState.start, kind: 'manual', id: itemTarget.id });
+    $('#itemDialog').close(); await loadGroceries();
+  });
+};
 function openStore(item) {
   storeTarget = item;
   $('#storeTitle').textContent = `Where to buy ${item.label}`;

@@ -83,3 +83,5 @@ input,textarea,select{font-size:16px}
 .pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:14px 8px}.pick .person b{width:60px;height:60px;font-size:19px}.pick .person{font-size:13px}.pick .person small{font-size:11px;min-height:14px}
 .pick-tools{display:flex;justify-content:space-between;gap:8px;margin-top:6px}.pick-tools .link-button{white-space:nowrap}
 .profile.picking .profile-head{align-items:center}
+/* Grocery item edit button */
+.grocery-item .edit-item{display:grid;place-items:center;min-height:44px;min-width:44px;padding:0;flex-shrink:0}#itemDialog .actions .danger{margin-right:auto}

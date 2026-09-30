@@ -310,3 +310,39 @@ test('first-time name picker: remaining names, claiming, releasing, and cleanup'
     assert.equal((await call('/members', 'POST', { name: 'Sam', claim: true }, false)).status, 401);
   } finally { sqlite.close(); }
 });
+
+test('grocery items can be renamed: manual items directly, meal ingredients per week without touching the recipe', async () => {
+  const { call, sqlite, meals } = await fixture();
+  try {
+    const [a] = meals;
+    await call('/meals', 'PUT', { id: a.id, name: a.name, ingredients: ['1 onion', '2 cups rice'] });
+    await call('/plan', 'POST', { plan_date: start, meal_id: a.id });
+    const milk = await call('/groceries', 'POST', { week_start: start, label: 'Milk' });
+    // Manual item rename.
+    assert.equal((await call('/groceries/label', 'POST', { week_start: start, kind: 'manual', id: milk.body.id, label: '  2% milk ' })).status, 200);
+    let list = (await call('/groceries?week=' + start)).body;
+    assert.equal(list.manual[0].label, '2% milk');
+    assert.equal((await call('/groceries/label', 'POST', { week_start: start, kind: 'manual', id: milk.body.id, label: '  ' })).status, 400);
+    assert.equal((await call('/groceries/label', 'POST', { week_start: addDays(start, 7), kind: 'manual', id: milk.body.id, label: 'x' })).status, 404);
+    // Generated rename keeps key, check and store; recipe and other weeks are unchanged.
+    await call('/groceries', 'PATCH', { week_start: start, kind: 'generated', key: '1 onion', checked: true });
+    await call('/groceries/store', 'POST', { week_start: start, kind: 'generated', key: '1 onion', store: 'Costco' });
+    assert.equal((await call('/groceries/label', 'POST', { week_start: start, kind: 'generated', key: '1 onion', label: '2 red onions' })).body.label, '2 red onions');
+    list = (await call('/groceries?week=' + start)).body;
+    const onion = list.generated.find(i => i.key === '1 onion');
+    assert.deepEqual([onion.label, onion.original_label, onion.edited, onion.checked, onion.store], ['2 red onions', '1 onion', true, true, 'Costco']);
+    assert.deepEqual((await call('/summary')).body.meals.find(m => m.id === a.id).ingredients, ['1 onion', '2 cups rice']);
+    await call('/plan', 'POST', { plan_date: addDays(start, 7), meal_id: a.id });
+    assert.equal((await call('/groceries?week=' + addDays(start, 7))).body.generated.find(i => i.key === '1 onion').label, '1 onion');
+    // Empty label (or the original text) restores the original.
+    await call('/groceries/label', 'POST', { week_start: start, kind: 'generated', key: '1 onion', label: '' });
+    list = (await call('/groceries?week=' + start)).body;
+    assert.deepEqual([list.generated.find(i => i.key === '1 onion').label, list.generated.find(i => i.key === '1 onion').edited], ['1 onion', false]);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM grocery_labels').get().n, 0);
+    // Validation and auth.
+    assert.equal((await call('/groceries/label', 'POST', { week_start: start, kind: 'generated', key: 'not on plan', label: 'x' })).status, 409);
+    assert.equal((await call('/groceries/label', 'POST', { week_start: start, kind: 'other', label: 'x' })).status, 400);
+    assert.equal((await call('/groceries/label', 'POST', { week_start: start, kind: 'manual', id: milk.body.id }).then(r => r.status)), 400);
+    assert.equal((await call('/groceries/label', 'POST', { week_start: start, kind: 'manual', id: milk.body.id, label: 'x' }, false)).status, 401);
+  } finally { sqlite.close(); }
+});
