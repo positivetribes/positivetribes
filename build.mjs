@@ -14,6 +14,7 @@ for (const screen of ['workouts', 'training-frequency', 'blood-pressure', 'medic
 await copyFile('positive-tribes-community.jpg', 'public/positive-tribes-community.jpg');
 await cp('fonts', 'public/fonts', { recursive: true });
 await cp('brand', 'public/brand', { recursive: true });
+await cp('help-a-friend', 'public/help-a-friend', { recursive: true });
 await writeFile('wrangler.json', JSON.stringify({
   name: 'positivetribes', main: 'contact-worker.mjs', compatibility_date: '2026-09-11',
   assets: { directory: './public', binding: 'ASSETS' }, observability: { enabled: true },

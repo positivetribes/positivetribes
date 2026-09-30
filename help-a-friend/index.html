@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="What to do if a friend drank too much: warning signs of alcohol poisoning, first steps, and who to call.">
+<title>Help a Friend</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
+<style>
+/* Layout: single phone-first column, one urgent action pinned on top, calm steps below */
+:root { color-scheme: light;
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #16302b;
+  --muted: #56706a;
+  --line: #d6dfdc;
+  --teal: #1f6f63;
+  --teal-soft: #e1efec;
+  --alarm: #c8321f;
+  --alarm-ink: #ffffff;
+  --alarm-soft: #fbe7e3;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1a18; --surface: #172522; --ink: #e4efec; --muted: #9db4ae; --line: #2a3b37;
+    --teal: #6cc6b6; --teal-soft: #1d3531; --alarm: #ff5a44; --alarm-ink: #1a0603; --alarm-soft: #3a1a15;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1a18; --surface: #172522; --ink: #e4efec; --muted: #9db4ae; --line: #2a3b37;
+  --teal: #6cc6b6; --teal-soft: #1d3531; --alarm: #ff5a44; --alarm-ink: #1a0603; --alarm-soft: #3a1a15;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 1.05rem; line-height: 1.55; }
+.wrap { max-width: 34rem; margin: 0 auto; padding-inline: 16px; padding-block: 1.25rem 3rem; display: flex; flex-direction: column; gap: 1.5rem; }
+h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.3rem; font-weight: 600; }
+p { margin: 0; }
+.draft { font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.draft b { background: var(--teal-soft); color: var(--teal); padding: .15rem .5rem; border-radius: 4px; }
+.lede { color: var(--muted); margin-top: .5rem; }
+
+.call { background: var(--alarm); color: var(--alarm-ink); border-radius: 14px; padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: .75rem; }
+.call h2 { font-size: 1.15rem; }
+.call .row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.call a.num { font-family: var(--display); font-weight: 800; font-size: 3rem; line-height: 1; color: inherit; text-decoration: none; }
+.call small { opacity: .9; font-size: .9rem; }
+
+section { display: flex; flex-direction: column; gap: .75rem; }
+.hint { color: var(--muted); font-size: .95rem; }
+
+.signs { display: flex; flex-direction: column; gap: .5rem; }
+.sign { display: flex; gap: .75rem; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .75rem .9rem; cursor: pointer; }
+.sign input { width: 1.3rem; height: 1.3rem; margin-top: .15rem; accent-color: var(--alarm); flex: none; }
+.sign:has(input:checked) { border-color: var(--alarm); background: var(--alarm-soft); }
+.sign span { min-width: 0; }
+.verdict { border-radius: 10px; padding: .85rem 1rem; font-weight: 700; background: var(--teal-soft); color: var(--teal); }
+.verdict.urgent { background: var(--alarm); color: var(--alarm-ink); }
+
+ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; display: flex; flex-direction: column; gap: .9rem; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 2.2rem 1fr; gap: .75rem; align-items: start; }
+ol.steps li::before { content: counter(s); font-family: var(--display); font-weight: 800; font-size: 1.1rem; width: 2.2rem; height: 2.2rem; border-radius: 50%; display: grid; place-items: center; background: var(--teal); color: var(--bg); }
+ol.steps strong { display: block; }
+ol.steps div { min-width: 0; }
+
+.myths { display: flex; flex-direction: column; gap: .5rem; }
+.myth { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .75rem .9rem; }
+.myth s { color: var(--muted); }
+
+.safe { background: var(--teal-soft); border-radius: 14px; padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: .6rem; }
+.safe h2 { color: var(--teal); }
+.todo { font-size: .85rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: .5rem; }
+
+.contacts { display: flex; flex-direction: column; gap: .5rem; }
+.contact { display: flex; justify-content: space-between; align-items: center; gap: .75rem; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .7rem .9rem; flex-wrap: wrap; }
+.contact div { min-width: 0; }
+.contact .label { font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.contact .val { font-weight: 700; font-variant-numeric: tabular-nums; user-select: all; }
+.contact .val.ph { color: var(--muted); font-weight: 400; font-style: italic; }
+button.copy { font: inherit; font-size: .85rem; border: 1px solid var(--teal); color: var(--teal); background: transparent; border-radius: 999px; padding: .3rem .8rem; cursor: pointer; }
+button.copy:focus-visible, .sign:focus-within, a:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+footer { font-size: .85rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1rem; display: flex; flex-direction: column; gap: .35rem; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="draft"><b>Draft prototype</b><span>For review with [School] counselors</span></div>
+    <h1 style="margin-top:.6rem">Help a Friend</h1>
+    <p class="lede">Someone drank too much and you're worried. You're doing the right thing by checking. Here's what to do.</p>
+  </header>
+
+  <div class="call" role="region" aria-label="Emergency call">
+    <h2>If you're not sure, call.</h2>
+    <div class="row">
+      <a class="num" href="tel:911">911</a>
+      <small>Calling costs nothing. Waiting can cost a life.</small>
+    </div>
+  </div>
+
+  <section aria-labelledby="h-signs">
+    <h2 id="h-signs">Is it an emergency?</h2>
+    <p class="hint">Tap anything you see. Any one of these means call 911.</p>
+    <div class="signs" id="signs">
+      <label class="sign"><input type="checkbox" id="s1"><span>Can't wake them up, or they barely respond</span></label>
+      <label class="sign"><input type="checkbox" id="s2"><span>Slow breathing (fewer than 8 breaths a minute) or long gaps between breaths</span></label>
+      <label class="sign"><input type="checkbox" id="s3"><span>Throwing up while passed out or very confused</span></label>
+      <label class="sign"><input type="checkbox" id="s4"><span>Cold, clammy, pale or bluish skin or lips</span></label>
+      <label class="sign"><input type="checkbox" id="s5"><span>Seizure, shaking, or twitching</span></label>
+      <label class="sign"><input type="checkbox" id="s6"><span>Very confused, can't stand, or can't talk clearly</span></label>
+    </div>
+    <div class="verdict" id="verdict" aria-live="polite">Nothing checked. Stay with them and keep watching.</div>
+  </section>
+
+  <section aria-labelledby="h-steps">
+    <h2 id="h-steps">What to do right now</h2>
+    <ol class="steps">
+      <li><div><strong>Call 911.</strong>Say where you are, that someone drank too much, and what you see.</div></li>
+      <li><div><strong>Don't leave them alone.</strong>Stay with them until help arrives, even if they seem to be sleeping.</div></li>
+      <li><div><strong>Turn them on their side.</strong>Top knee bent, head tilted a little back. This keeps them from choking if they throw up.</div></li>
+      <li><div><strong>Keep them warm.</strong>Cover them with a jacket or blanket.</div></li>
+      <li><div><strong>Tell the responders what you know.</strong>What they drank, how much, and when. Mention any pills or other drugs.</div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="h-myths">
+    <h2 id="h-myths">These don't work</h2>
+    <div class="myths">
+      <div class="myth"><s>"Let them sleep it off."</s> Alcohol keeps entering the blood after they stop drinking. They can get worse while asleep.</div>
+      <div class="myth"><s>Coffee or a cold shower.</s> Neither sobers anyone up. A cold shower can make them colder and more at risk.</div>
+      <div class="myth"><s>Making them throw up.</s> They could choke. Keep them on their side instead.</div>
+    </div>
+  </section>
+
+  <div class="safe" role="region" aria-labelledby="h-safe">
+    <h2 id="h-safe">You won't get in trouble for helping</h2>
+    <p>Colorado law protects people who call 911 for someone having an alcohol or drug emergency, as long as you stay with them and cooperate with responders. The person who needs help is protected too.</p>
+    <p>Saving your friend matters more than any rule you broke tonight.</p>
+    <p class="todo">To confirm before launch: exact wording with the school, district policy, and a legal review of Colorado's Good Samaritan law (C.R.S. 18-1-711).</p>
+  </div>
+
+  <section aria-labelledby="h-contacts">
+    <h2 id="h-contacts">Other people who can help</h2>
+    <div class="contacts">
+      <div class="contact"><div><div class="label">Poison Control</div><div class="val">1-800-222-1222</div></div><button class="copy" type="button" data-copy="1-800-222-1222">Copy</button></div>
+      <div class="contact"><div><div class="label">Crisis line (call or text)</div><div class="val">988</div></div><button class="copy" type="button" data-copy="988">Copy</button></div>
+      <div class="contact"><div><div class="label">School counselor</div><div class="val ph">[Name and number from school]</div></div></div>
+      <div class="contact"><div><div class="label">Safe ride home</div><div class="val ph">[Local safe-ride option]</div></div></div>
+    </div>
+    <p class="hint">Save these to your phone now so you have them when you need them.</p>
+  </section>
+
+  <footer>
+    <span>Built free for [School] by Positive Tribes, a Golden, Colorado nonprofit.</span>
+    <span>This page is general safety information, not medical advice. In an emergency, always call 911.</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var boxes = document.querySelectorAll('#signs input');
+  var v = document.getElementById('verdict');
+  function update() {
+    var n = 0; boxes.forEach(function (b) { if (b.checked) n++; });
+    if (n) { v.textContent = 'Call 911 now. Then stay with them and turn them on their side.'; v.classList.add('urgent'); }
+    else { v.textContent = 'Nothing checked. Stay with them and keep watching.'; v.classList.remove('urgent'); }
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', update); });
+  document.querySelectorAll('button.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var t = btn.getAttribute('data-copy');
+      function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); }
+      function fallback() {
+        var el = btn.parentElement.querySelector('.val');
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        btn.textContent = 'Selected';
+      }
+      try { navigator.clipboard.writeText(t).then(done, fallback); } catch (e) { fallback(); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
