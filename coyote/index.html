@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Project Coyote Mange App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: role tabs on top, a phone-sized app in the middle, talking points beside it (below on phones).
+   Colors and type follow projectcoyote.org: charcoal, terracotta, slate blue, light humanist sans. */
+:root{
+  --bg:#f3f1ed; --surface:#ffffff; --raised:#ffffff; --fg:#283028; --muted:#5d6675; --line:#dcd8d1;
+  --accent:#a2593f; --accent-fg:#ffffff; --accent-soft:#f4e3da;
+  --hero:#86634c; --hero-fg:#ffffff; --hero-btn:#ffffff; --hero-btn-fg:#6f3a26;
+  --warn:#7d5200; --warn-bg:#f6e9c9; --ok:#2f6b45; --ok-bg:#dcedde; --bad:#a1263a; --bad-bg:#f6dade;
+  --h0:#ebe8e3; --h1:#f0d9c8; --h2:#dfaa8b; --h3:#c07452; --h4:#8a3f26;
+  --display:'Alegreya Sans',Georgia,'Trebuchet MS',sans-serif; --body:'Alegreya Sans',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#171c19; --surface:#212823; --raised:#2a322d; --fg:#eceeea; --muted:#a6afbb; --line:#3a443d;
+  --accent:#e2a48d; --accent-fg:#2a1a12; --accent-soft:#43302a;
+  --hero:#6f4f3c; --hero-fg:#ffffff; --hero-btn:#ffffff; --hero-btn-fg:#6f3a26;
+  --warn:#e5b95c; --warn-bg:#3b3016; --ok:#8bc79b; --ok-bg:#1d3324; --bad:#f2929b; --bad-bg:#40212a;
+  --h0:#2d3630; --h1:#5a4335; --h2:#8b5c44; --h3:#c0714f; --h4:#ea8d68; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#171c19; --surface:#212823; --raised:#2a322d; --fg:#eceeea; --muted:#a6afbb; --line:#3a443d;
+  --accent:#e2a48d; --accent-fg:#2a1a12; --accent-soft:#43302a;
+  --hero:#6f4f3c; --hero-fg:#ffffff; --hero-btn:#ffffff; --hero-btn-fg:#6f3a26;
+  --warn:#e5b95c; --warn-bg:#3b3016; --ok:#8bc79b; --ok-bg:#1d3324; --bad:#f2929b; --bad-bg:#40212a;
+  --h0:#2d3630; --h1:#5a4335; --h2:#8b5c44; --h3:#c0714f; --h4:#ea8d68; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:17px/1.45 var(--body);padding-inline:16px;padding-block:20px 40px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);font-weight:500;line-height:1.15;margin:0;text-wrap:balance}
+p{margin:0}
+.wrap{max-width:1040px;margin-inline:auto;display:flex;flex-direction:column;gap:18px}
+
+.top{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.top h1{font-size:28px;font-weight:700}
+.mission{width:100%;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.mission span{color:var(--muted)}
+.top small{color:var(--muted);font-size:13px}
+.tag{font-size:13px;letter-spacing:.06em;text-transform:uppercase;background:var(--warn-bg);color:var(--warn);padding:3px 9px;border-radius:99px;font-weight:700}
+
+.roles{display:flex;flex-wrap:wrap;gap:8px}
+.roles button{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:99px;font-weight:500}
+.roles button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+
+.stage{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:820px){.stage{grid-template-columns:minmax(0,1fr)}}
+
+.device{background:var(--surface);border:1px solid var(--line);border-radius:26px;overflow:hidden;display:flex;flex-direction:column;height:760px;max-height:calc(100vh - 150px);min-height:600px;position:relative;box-shadow:0 12px 40px rgba(10,30,25,.12)}
+@media (max-width:820px){.device{max-height:none;height:720px}}
+.appbar{padding:14px 18px 10px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+.appbar b{font-family:var(--display);font-size:20px;font-weight:700}
+.appbar span{font-size:12px;color:var(--muted)}
+#screen{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:16px}
+.tabbar{display:flex;border-top:1px solid var(--line);background:var(--raised)}
+.tabbar button{flex:1;border:0;background:none;padding:12px 6px;font-size:13px;font-weight:500;color:var(--muted);position:relative}
+.tabbar button[aria-current="page"]{color:var(--accent);font-weight:700;box-shadow:inset 0 3px 0 var(--accent)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:99px;background:var(--warn);color:var(--surface);font-size:11px;line-height:18px;text-align:center}
+
+.card{background:var(--raised);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.card h3{font-size:16px}
+.muted{color:var(--muted);font-size:13px}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.btn{border:0;background:var(--accent);color:var(--accent-fg);padding:12px 16px;border-radius:12px;font-weight:700;text-align:center}
+.btn.ghost{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+.btn.small{padding:8px 12px;font-size:13px;border-radius:10px}
+.btn.warn{background:var(--warn);color:var(--surface)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.pill{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.notice{border-radius:12px;padding:12px 14px;font-size:14px;background:var(--warn-bg);color:var(--fg);border-left:5px solid var(--warn)}
+.notice.ok{background:var(--ok-bg);border-color:var(--ok)}
+.notice b{display:block;margin-bottom:2px}
+.hero{background:var(--hero);color:var(--hero-fg);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.hero h2{font-size:30px;font-weight:300}
+.hero .btn{background:var(--hero-btn);color:var(--hero-btn-fg)}
+.steps{display:flex;gap:6px}
+.steps i{flex:1;height:5px;border-radius:9px;background:var(--line)}
+.steps i.on{background:var(--accent)}
+
+label.f{display:flex;flex-direction:column;gap:5px;font-weight:500;font-size:14px}
+input[type=text],input[type=email],textarea,select{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+textarea{min-height:76px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:7px 12px;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:14px}
+.check input{margin-top:4px;width:18px;height:18px;accent-color:var(--accent)}
+.photo{border:2px dashed var(--line);border-radius:12px;min-height:120px;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;color:var(--muted);cursor:pointer;overflow:hidden}
+.photo img{max-width:100%;max-height:200px;border-radius:8px}
+.pinmap{position:relative;height:170px;border-radius:12px;border:1px solid var(--line);cursor:crosshair;overflow:hidden;
+  background:
+   linear-gradient(var(--line) 1px,transparent 1px) 0 0/34px 34px,
+   linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/34px 34px,
+   var(--accent-soft)}
+.pin{position:absolute;width:22px;height:22px;margin:-22px 0 0 -11px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--warn);border:3px solid var(--surface)}
+.pinmap span.hint{position:absolute;left:10px;bottom:8px;font-size:12px;color:var(--muted);background:var(--surface);padding:2px 8px;border-radius:99px}
+
+.list{display:flex;flex-direction:column;gap:12px}
+.hex{stroke:var(--surface);stroke-width:1.5;cursor:pointer}
+.hex.l0{fill:var(--h0)}.hex.l1{fill:var(--h1)}.hex.l2{fill:var(--h2)}.hex.l3{fill:var(--h3)}.hex.l4{fill:var(--h4)}
+.hex.sel{stroke:var(--fg);stroke-width:2.5}
+.legend{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.legend i{width:22px;height:10px;border-radius:3px;display:inline-block}
+.stat{font-family:var(--display);font-size:34px;font-weight:300;line-height:1}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.scroll-x{overflow-x:auto}
+.mini{position:relative;height:120px;border-radius:10px;border:1px solid var(--line);overflow:hidden;
+  background:linear-gradient(var(--line) 1px,transparent 1px) 0 0/30px 30px,linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/30px 30px,var(--accent-soft)}
+.toast{position:absolute;left:16px;right:16px;bottom:74px;background:var(--fg);color:var(--surface);padding:12px 14px;border-radius:12px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+
+.notes{display:flex;flex-direction:column;gap:14px}
+.notes h2{font-size:22px}
+.notes ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.notes .try{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.notes .try h3{font-size:15px;margin-bottom:6px}
+.foot{font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.hero,.card{animation:rise .25s ease-out}@keyframes rise{from{opacity:.4;transform:translateY(4px)}}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>Project Coyote Mange App</h1>
+    <div class="mission">Protecting wild carnivores <span>Fostering thriving ecosystems</span></div>
+    <div><span class="tag">Clickable prototype</span> <small>Sample data only. Built by Positive Tribes.</small></div>
+  </div>
+  <div class="roles" role="tablist" aria-label="Choose who you are viewing the app as" id="roles"></div>
+  <div class="stage">
+    <div class="device" id="device">
+      <div class="appbar"><b>Mange Watch</b><span id="whoami"></span></div>
+      <div id="screen"></div>
+      <nav class="tabbar" id="tabbar" aria-label="App sections"></nav>
+    </div>
+    <aside class="notes" id="notes"></aside>
+  </div>
+</div>
+
+<script>
+const REGIONS = {
+  co:{name:'Denver area, CO', treat:false},
+  tx:{name:'Dallas area, TX', treat:true},
+  ca:{name:'Northern California', treat:true}
+};
+const ROLES = [
+  {id:'public', label:'Public reporter', who:'Signed out'},
+  {id:'rehabber', label:'Rehabber', who:'Dana K., rehabber'},
+  {id:'team', label:'Treatment team', who:'Dallas treatment team'},
+  {id:'reviewer', label:'Reviewer', who:'Reviewer'},
+  {id:'researcher', label:'Researcher', who:'State wildlife agency'}
+];
+const TABS = {
+  public:[['home','Home'],['report','Report'],['map','Map']],
+  rehabber:[['cases','Cases'],['map','Map']],
+  team:[['alerts','Alerts'],['map','Map']],
+  reviewer:[['queue','Review queue'],['map','Map']],
+  researcher:[['map','Heat map'],['data','Data']]
+};
+const NOTES = {
+  public:{h:'Anyone can report a sighting',
+    p:'No account and no cost. The report takes about a minute: safety guidance, a photo, a location and a few details.',
+    b:['Safety guidance comes first, before the form.','The photo has its hidden location data removed on upload.','Contact details are optional and never shown.','What happens next depends on where the animal was seen.'],
+    t:'Tap Report, pick Dallas area or Northern California, and finish a sighting. Then try again with Denver area and compare the last screen.'},
+  rehabber:{h:'Rehabbers hand off cases they cannot treat',
+    p:'A rehabber sees reports near them and can alert a treatment team when they lack the capacity to treat an animal.',
+    b:['The alert goes to a treatment team, not the public.','Alerts only work where field treatment is allowed.','Rehabbers see the exact area. The public map does not.'],
+    t:'Open a case in the Dallas area and send an alert. Then switch to Treatment team to see it arrive.'},
+  team:{h:'Treatment teams get the alert and coordinate',
+    p:'Teams see new alerts, the exact location, and who is responding. Field response happens only where it is legal.',
+    b:['Claim a case so two teams do not go to the same animal.','Exact locations are visible only to approved teams.','Status updates flow back to the data set.'],
+    t:'Claim the new alert, then mark it treated.'},
+  reviewer:{h:'A human checks reports before they reach the map',
+    p:'An automated first pass flags likely non-mange photos, duplicates and spam. A person makes the final call.',
+    b:['Flags explain why a report needs a second look.','Approved reports appear on the heat map.','Rejected reports never do.'],
+    t:'Approve the report you just submitted as a public reporter, then check the Map tab.'},
+  researcher:{h:'Researchers and agencies see trends, not addresses',
+    p:'Every case is shown in a general area of about five miles across, so no exact spot is revealed.',
+    b:['Heat map shows where cases are rising or falling.','Data view lists generalized case records.','Field treatment status by region supports the case for wider legal access.'],
+    t:'Switch periods and regions on the heat map and watch the trend change.'}
+};
+
+const state = {
+  role:'public', tab:{public:'home',rehabber:'cases',team:'alerts',reviewer:'queue',researcher:'map'},
+  nextId:104, nextAlert:3, toast:'',
+  rep:{step:1, ack:false, region:'tx', pin:null, photo:null, conds:[], note:'', contact:''},
+  lastReport:null, flagOpen:null, flagReason:'No open enclosure this week', flagNote:'', openAlert:null,
+  map:{region:'tx', period:'90', sel:null},
+  reports:[
+    {id:103,region:'tx',place:'Garland',when:'Sep 29, 8:05 pm',status:'pending',ai:'ok',aiText:'Photo shows hair loss and crusted skin. Looks like mange.',conds:['Hair loss','Crusted skin','Very thin'],note:'Limping near the creek trail.',exact:'Creek trail off Holford Rd'},
+    {id:102,region:'co',place:'Arvada',when:'Sep 28, 7:15 am',status:'pending',ai:'flag',aiText:'Photo may show a dog, not a coyote. Needs a human look.',conds:['Hair loss'],note:'Seen at the edge of a park.',exact:'Ralston Creek trail'},
+    {id:101,region:'tx',place:'Plano',when:'Sep 28, 6:40 pm',status:'pending',ai:'flag',aiText:'Possible duplicate of report #98. Same block, two hours apart.',conds:['Hair loss','Crusted skin'],note:'Behind the school, near the greenbelt.',exact:'Greenbelt behind Los Rios Elementary'},
+    {id:98,region:'tx',place:'Plano',when:'Sep 27, 4:30 pm',status:'approved',ai:'ok',aiText:'Looks like mange.',conds:['Hair loss','Crusted skin','Lethargic'],note:'Lying in the same spot for hours.',exact:'Greenbelt behind Los Rios Elementary'},
+    {id:95,region:'co',place:'Golden',when:'Sep 26, 7:50 am',status:'approved',ai:'ok',aiText:'Looks like mange.',conds:['Hair loss'],note:'Early signs on the tail.',exact:'Clear Creek path'},
+    {id:92,region:'ca',place:'Petaluma',when:'Sep 25, 5:10 pm',status:'approved',ai:'ok',aiText:'Looks like mange.',conds:['Hair loss','Crusted skin','Very thin'],note:'Visible in a vineyard row.',exact:'Vineyard off Lakeville Hwy'},
+    {id:90,region:'tx',place:'Garland',when:'Sep 24, 6:25 am',status:'approved',ai:'ok',aiText:'Looks like mange.',conds:['Hair loss'],note:'',exact:'Rowlett Creek'},
+    {id:88,region:'co',place:'Lakewood',when:'Sep 22, 8:00 pm',status:'approved',ai:'ok',aiText:'Looks like mange.',conds:['Crusted skin'],note:'',exact:'Bear Creek Lake Park'},
+    {id:85,region:'ca',place:'Santa Rosa',when:'Sep 21, 7:40 am',status:'approved',ai:'ok',aiText:'Looks like mange.',conds:['Hair loss','Very thin'],note:'',exact:'Howarth Park'}
+  ],
+  alerts:[
+    {id:1,reportId:98,region:'tx',from:'Dana K., rehabber',reason:'No open enclosure this week',note:'Animal is weak and staying in one spot.',status:'new',by:''},
+    {id:2,reportId:92,region:'ca',from:'Sam R., rehabber',reason:'Outside my permit',note:'',status:'claimed',by:'Northern California team'}
+  ]
+};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rep = id => state.reports.find(r=>r.id===id);
+const pendingCount = () => state.reports.filter(r=>r.status==='pending').length;
+const newAlerts = () => state.alerts.filter(a=>a.status==='new').length;
+
+/* Heat map: hex grid with seeded intensities, plus approved reports on top */
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const COLS=10, ROWS=8, R=17, W=Math.sqrt(3)*R;
+const BASE = {co:{seed:11,blobs:[[3,3,.9],[7,5,.6]]}, tx:{seed:23,blobs:[[6,3,1],[2,5,.5]]}, ca:{seed:37,blobs:[[4,2,.8],[7,6,.7]]}};
+const PERIOD = {'30':.55,'90':.8,'365':1};
+const TREND = {co:{'30':'+9%','90':'+18%','365':'+41%'},tx:{'30':'+22%','90':'+31%','365':'+58%'},ca:{'30':'-6%','90':'-11%','365':'+4%'}};
+function cells(region){
+  const b=BASE[region], r=rng(b.seed), out=[];
+  for(let row=0;row<ROWS;row++)for(let col=0;col<COLS;col++){
+    let v=r()*.25;
+    b.blobs.forEach(([bc,br,s])=>{const d=Math.hypot(col-bc,row-br);v+=s*Math.exp(-d*d/5)});
+    out.push({i:row*COLS+col,col,row,v:Math.min(v,1)});
+  }
+  state.reports.filter(x=>x.status==='approved'&&x.region===region).forEach(x=>{const c=out[(x.id*7)%out.length];c.v=Math.min(1,c.v+.18)});
+  return out;
+}
+const level = v => v<.2?0:v<.4?1:v<.6?2:v<.8?3:4;
+function heatmap(){
+  const m=state.map, cs=cells(m.region), f=PERIOD[m.period];
+  const hexes=cs.map(c=>{
+    const x=c.col*W+(c.row%2?W/2:0)+R, y=c.row*1.5*R+R+2, l=level(c.v*f*1.15);
+    const pts=[0,1,2,3,4,5].map(k=>{const a=Math.PI/180*(60*k-30);return (x+R*Math.cos(a)).toFixed(1)+','+(y+R*Math.sin(a)).toFixed(1)}).join(' ');
+    return `<polygon class="hex l${l}${m.sel===c.i?' sel':''}" points="${pts}" data-act="hex" data-i="${c.i}"><title>Area ${c.i+1}</title></polygon>`;
+  }).join('');
+  const total=cs.reduce((a,c)=>a+Math.round(c.v*f*14),0);
+  let read='Tap a cell to see its case count.';
+  if(m.sel!==null){const c=cs[m.sel];read=`Area ${c.i+1}: about ${Math.round(c.v*f*14)} reported cases in this period.`}
+  const t=TREND[m.region][m.period], up=t.startsWith('+');
+  return `
+   <div class="chips" role="group" aria-label="Region">${Object.entries(REGIONS).map(([k,v])=>`<button class="chip" data-act="mapregion" data-v="${k}" aria-pressed="${m.region===k}">${v.name}</button>`).join('')}</div>
+   <div class="chips" role="group" aria-label="Time period">${[['30','30 days'],['90','90 days'],['365','12 months']].map(([k,l])=>`<button class="chip" data-act="mapperiod" data-v="${k}" aria-pressed="${m.period===k}">${l}</button>`).join('')}</div>
+   <div class="card">
+     <div class="row"><div><div class="stat">${total}</div><div class="muted">cases in view</div></div>
+       <div style="text-align:right"><div class="stat" style="color:${up?'var(--bad)':'var(--ok)'}">${t}</div><div class="muted">vs the period before</div></div></div>
+     <svg viewBox="0 0 ${(COLS*W+W).toFixed(0)} ${(ROWS*1.5*R+R+8).toFixed(0)}" role="img" aria-label="Heat map of mange cases in ${REGIONS[m.region].name}" style="width:100%;height:auto">${hexes}</svg>
+     <div class="legend"><span>Fewer</span>${[0,1,2,3,4].map(l=>`<i style="background:var(--h${l})"></i>`).join('')}<span>More</span></div>
+     <div class="muted" aria-live="polite">${read}</div>
+   </div>
+   <p class="muted">Each cell covers roughly five square miles. Exact locations are never shown on this map.</p>`;
+}
+
+/* Screens */
+function pubHome(){
+  return `
+  <div class="hero"><h2>See a coyote that looks sick?</h2><p>Report it here. Trained rehabbers and treatment teams can respond, and your report helps track where mange is spreading.</p>
+    <button class="btn" data-act="startreport">Report a sighting</button></div>
+  <div class="notice"><b>Stay back</b>Do not approach, feed, capture or try to treat any wild animal. Take a photo from a safe distance.</div>
+  <div class="card"><h3>How it works</h3>
+    <p class="muted">1. You send a photo and location.<br>2. A quick automated check and a person review it.<br>3. Cases show up on the map as general areas, and local teams are alerted where treatment is allowed.</p></div>
+  <p class="muted">Free for everyone. No account needed.</p>`;
+}
+function pubReport(){
+  const r=state.rep, steps=`<div class="steps" aria-label="Step ${r.step} of 3">${[1,2,3].map(i=>`<i class="${i<=r.step?'on':''}"></i>`).join('')}</div>`;
+  if(r.step===1) return steps+`
+    <h2>Before you report</h2>
+    <div class="notice"><b>Your safety and the animal's</b>Keep your distance. Do not approach, feed, capture or try to treat the animal. If it is aggressive or someone is hurt, call your local animal control or wildlife agency.</div>
+    <label class="check"><input type="checkbox" id="ack" data-bind="ack" ${r.ack?'checked':''}> <span>I understand. I will report from a safe distance.</span></label>
+    <button class="btn" data-act="step" data-v="2" ${r.ack?'':'disabled'}>Continue</button>`;
+  if(r.step===2) return steps+`
+    <h2>Tell us what you saw</h2>
+    <div><div class="muted" style="margin-bottom:6px">Where was it?</div>
+      <div class="chips" role="group" aria-label="Region">${Object.entries(REGIONS).map(([k,v])=>`<button class="chip" data-act="repregion" data-v="${k}" aria-pressed="${r.region===k}">${v.name}</button>`).join('')}</div></div>
+    <div class="pinmap" data-act="pin" id="pinmap" aria-label="Tap the map to drop a pin">${r.pin?`<div class="pin" style="left:${r.pin.x}%;top:${r.pin.y}%"></div>`:''}<span class="hint">${r.pin?'Pin dropped. Tap to move it.':'Tap to drop a pin. GPS is off in this prototype.'}</span></div>
+    <div><div class="muted" style="margin-bottom:6px">Photo</div>
+      <label class="photo" for="photo">${r.photo?`<img src="${r.photo}" alt="Your photo">`:'Tap to add a photo. Hidden location data is removed when you upload.'}<input type="file" id="photo" accept="image/*" hidden></label></div>
+    <div><div class="muted" style="margin-bottom:6px">What do you see? (pick any)</div>
+      <div class="chips">${['Hair loss','Crusted skin','Very thin','Lethargic','Limping'].map(c=>`<button class="chip" data-act="cond" data-v="${c}" aria-pressed="${r.conds.includes(c)}">${c}</button>`).join('')}</div></div>
+    <label class="f">Notes (optional)<textarea id="note" data-bind="note" placeholder="Anything that helps someone find it">${esc(r.note)}</textarea></label>
+    <label class="f">Email for follow up (optional, never shown publicly)<input type="email" id="contact" data-bind="contact" value="${esc(r.contact)}" placeholder="you@example.com"></label>
+    <div class="row"><button class="btn ghost" data-act="step" data-v="1">Back</button><button class="btn" data-act="submit" style="flex:1" ${r.pin?'':'disabled'}>Submit report</button></div>
+    ${r.pin?'':'<p class="muted">Drop a pin to continue.</p>'}`;
+  const lr=state.lastReport, reg=REGIONS[lr.region];
+  return steps+`
+    <div class="notice ok"><b>Report #${lr.id} received</b>Thank you. It is now in the review queue.</div>
+    ${reg.treat
+      ? `<div class="card"><h3>A treatment team can respond here</h3><p class="muted">${reg.name} has a field treatment team. If a rehabber cannot take the animal, the team is alerted. Please do not try to help the animal yourself.</p></div>`
+      : `<div class="card"><h3>Field treatment is not available here yet</h3><p class="muted">${reg.name} is not currently covered by a field treatment team, and treating wildlife without authorization may be illegal. Your report goes to local rehabbers and adds to the data that supports wider legal access.</p></div>`}
+    <div class="card"><h3>What happens next</h3><p class="muted">An automated check and a reviewer look at your report. Once approved, it appears on the heat map as a general area, never your exact pin.</p></div>
+    <button class="btn" data-act="newreport">Report another</button>`;
+}
+function rehCases(){
+  const list=state.reports.filter(r=>r.status==='approved');
+  return `<h2>Cases near you</h2><p class="muted">Approved reports with exact areas. Alert a treatment team when you cannot take a case.</p>
+  <div class="list">${list.map(r=>{
+    const al=state.alerts.find(a=>a.reportId===r.id), reg=REGIONS[r.region], open=state.flagOpen===r.id;
+    return `<div class="card">
+      <div class="row"><h3>#${r.id} ${esc(r.place)}</h3>${al?`<span class="pill ${al.status==='new'?'warn':'ok'}">${al.status==='new'?'Alert sent':al.status==='claimed'?'Team responding':'Treated'}</span>`:''}</div>
+      <div class="muted">${esc(r.when)} · ${esc(r.exact)}</div>
+      <div class="chips">${r.conds.map(c=>`<span class="pill">${esc(c)}</span>`).join('')}</div>
+      ${r.note?`<p>${esc(r.note)}</p>`:''}
+      ${al?'':reg.treat
+        ? `<button class="btn small warn" data-act="flag" data-id="${r.id}">${open?'Cancel':'I cannot treat this. Alert a team'}</button>`
+        : `<div class="muted">No treatment team covers ${reg.name} yet. This case stays with local rehabbers and in the data set.</div>`}
+      ${open?`<div class="card" style="background:var(--surface)">
+        <label class="f">Why are you handing this off?<select id="flagReason" data-bind="flagReason">${['No open enclosure this week','Outside my permit','Animal needs field treatment','Too far for me to reach'].map(o=>`<option ${state.flagReason===o?'selected':''}>${o}</option>`).join('')}</select></label>
+        <label class="f">Note for the team (optional)<textarea id="flagNote" data-bind="flagNote">${esc(state.flagNote)}</textarea></label>
+        <button class="btn" data-act="sendalert" data-id="${r.id}">Send alert to ${reg.name} team</button></div>`:''}
+    </div>`}).join('')}</div>`;
+}
+function teamAlerts(){
+  return `<h2>Alerts from rehabbers</h2><p class="muted">Claim a case so no one else heads out for the same animal. Respond only where field treatment is legal and you are authorized.</p>
+  <div class="list">${state.alerts.map(a=>{
+    const r=rep(a.reportId), pill=a.status==='new'?'<span class="pill warn">New</span>':a.status==='claimed'?'<span class="pill">Claimed</span>':'<span class="pill ok">Treated</span>', open=state.openAlert===a.id;
+    return `<div class="card">
+      <div class="row"><h3>#${r.id} ${esc(r.place)}, ${a.region.toUpperCase()}</h3>${pill}</div>
+      <div class="muted">From ${esc(a.from)} · ${esc(a.reason)}</div>
+      ${a.note?`<p>${esc(a.note)}</p>`:''}
+      <button class="btn ghost small" data-act="openalert" data-id="${a.id}">${open?'Hide location':'Show exact location'}</button>
+      ${open?`<div class="mini" aria-label="Exact location"><div class="pin" style="left:${30+(r.id*13)%40}%;top:${45+(r.id*7)%25}%"></div></div><div class="muted">${esc(r.exact)}. Exact locations are only visible to approved teams.</div>`:''}
+      ${a.status==='new'?`<button class="btn" data-act="claim" data-id="${a.id}">Claim this case</button>`:''}
+      ${a.status==='claimed'?`<div class="muted">Claimed by ${esc(a.by)}</div><button class="btn" data-act="treated" data-id="${a.id}">Mark treated</button>`:''}
+      ${a.status==='treated'?`<div class="muted">Treated by ${esc(a.by)}. Logged in the data set.</div>`:''}
+    </div>`}).join('')}</div>`;
+}
+function revQueue(){
+  const q=state.reports.filter(r=>r.status==='pending');
+  if(!q.length) return `<h2>Review queue</h2><div class="notice ok"><b>All caught up</b>New reports appear here as they come in.</div>`;
+  return `<h2>Review queue</h2><p class="muted">${q.length} report${q.length>1?'s':''} waiting. Flags come from the automated first pass. You decide.</p>
+  <div class="list">${q.map(r=>`<div class="card">
+    <div class="row"><h3>#${r.id} ${esc(r.place)}</h3><span class="pill ${r.ai==='ok'?'ok':'bad'}">${r.ai==='ok'?'Looks like mange':'Flagged'}</span></div>
+    <div class="muted">${esc(r.when)} · ${REGIONS[r.region].name}</div>
+    <div class="notice ${r.ai==='ok'?'ok':''}"><b>Automated check</b>${esc(r.aiText)}</div>
+    <div class="chips">${r.conds.map(c=>`<span class="pill">${esc(c)}</span>`).join('')}</div>
+    ${r.note?`<p>${esc(r.note)}</p>`:''}
+    <div class="row"><button class="btn ghost small" data-act="reject" data-id="${r.id}">Reject</button><button class="btn small" data-act="approve" data-id="${r.id}" style="flex:1">Approve</button></div>
+  </div>`).join('')}</div>`;
+}
+function resData(){
+  const rows=state.reports.filter(r=>r.status==='approved');
+  return `<h2>Case data</h2><p class="muted">Approved cases with generalized location. Full export comes with the full build.</p>
+  <div class="card scroll-x"><table><thead><tr><th>Date</th><th>Area</th><th>Signs</th><th>Field tx</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td>${esc(r.when.split(',')[0])}</td><td>${REGIONS[r.region].name.replace(' area','')}</td><td>${r.conds.length}</td><td>${REGIONS[r.region].treat?'Yes':'No'}</td></tr>`).join('')}
+  </tbody></table></div>
+  <p class="muted">Field tx shows whether field treatment is currently allowed in that region.</p>`;
+}
+
+/* Rendering */
+function render(){
+  const role=state.role, tab=state.tab[role], R_=ROLES.find(r=>r.id===role);
+  $('#roles').innerHTML=ROLES.map(r=>`<button role="tab" aria-selected="${r.id===role}" data-act="role" data-v="${r.id}">${r.label}</button>`).join('');
+  $('#whoami').textContent=R_.who;
+  $('#tabbar').innerHTML=TABS[role].map(([id,l])=>{
+    let b=''; if(role==='reviewer'&&id==='queue'&&pendingCount())b=`<span class="badge">${pendingCount()}</span>`;
+    if(role==='team'&&id==='alerts'&&newAlerts())b=`<span class="badge">${newAlerts()}</span>`;
+    return `<button data-act="tab" data-v="${id}" ${id===tab?'aria-current="page"':''}>${l}${b}</button>`}).join('');
+  let html='';
+  if(tab==='map') html=`<h2>${role==='researcher'?'Heat map':'Where mange is showing up'}</h2>`+heatmap();
+  else if(role==='public') html=tab==='home'?pubHome():pubReport();
+  else if(role==='rehabber') html=rehCases();
+  else if(role==='team') html=teamAlerts();
+  else if(role==='reviewer') html=revQueue();
+  else if(role==='researcher') html=resData();
+  const sc=$('#screen'), top=sc.scrollTop;
+  sc.innerHTML=html; sc.scrollTop=top;
+  const n=NOTES[role];
+  $('#notes').innerHTML=`<h2>${n.h}</h2><p>${n.p}</p><ul>${n.b.map(x=>`<li>${x}</li>`).join('')}</ul><div class="try"><h3>Try this</h3><p>${n.t}</p></div><p class="foot">Everything here is sample data. Changes you make (a new report, an alert, an approval) carry across roles so you can follow a case from start to finish. Refresh the page to reset.</p>`;
+  const old=$('.toast'); if(old)old.remove();
+  if(state.toast){const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent=state.toast;$('#device').appendChild(t)}
+}
+let toastTimer;
+function say(msg){state.toast=msg;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{state.toast='';const t=$('.toast');if(t)t.remove()},3200)}
+
+/* Actions */
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]'); if(!el) return;
+  const a=el.dataset.act, v=el.dataset.v, id=+el.dataset.id, r=state.rep;
+  if(a==='pin'){const b=el.getBoundingClientRect();r.pin={x:Math.round((e.clientX-b.left)/b.width*100),y:Math.round((e.clientY-b.top)/b.height*100)}}
+  else if(a==='role'){state.role=v}
+  else if(a==='tab'){state.tab[state.role]=v}
+  else if(a==='startreport'){state.rep={step:1,ack:false,region:'tx',pin:null,photo:null,conds:[],note:'',contact:''};state.tab.public='report'}
+  else if(a==='step'){r.step=+v}
+  else if(a==='repregion'){r.region=v}
+  else if(a==='cond'){r.conds=r.conds.includes(v)?r.conds.filter(c=>c!==v):[...r.conds,v]}
+  else if(a==='submit'){
+    const rp={id:state.nextId++,region:r.region,place:REGIONS[r.region].name.split(',')[0].replace(' area',''),when:'Sep 30, just now',status:'pending',ai:'ok',
+      aiText:r.photo?'Photo checked. Looks like mange.':'No photo added. A reviewer will check the details.',conds:r.conds.length?r.conds:['Hair loss'],note:r.note,exact:'Dropped pin on file'};
+    state.reports.unshift(rp); state.lastReport=rp; r.step=3;
+  }
+  else if(a==='newreport'){state.rep={step:1,ack:false,region:'tx',pin:null,photo:null,conds:[],note:'',contact:''}}
+  else if(a==='flag'){state.flagOpen=state.flagOpen===id?null:id}
+  else if(a==='sendalert'){
+    const rp=rep(id); state.alerts.unshift({id:state.nextAlert++,reportId:id,region:rp.region,from:'Dana K., rehabber',reason:state.flagReason,note:state.flagNote,status:'new',by:''});
+    state.flagOpen=null;state.flagNote='';say('Alert sent to the '+REGIONS[rp.region].name+' treatment team.');
+  }
+  else if(a==='openalert'){state.openAlert=state.openAlert===id?null:id}
+  else if(a==='claim'){const al=state.alerts.find(x=>x.id===id);al.status='claimed';al.by='Dallas treatment team';say('Case claimed. Other teams can see you are on it.')}
+  else if(a==='treated'){const al=state.alerts.find(x=>x.id===id);al.status='treated';say('Marked treated and logged.')}
+  else if(a==='approve'){rep(id).status='approved';say('Approved. It now appears on the heat map.')}
+  else if(a==='reject'){state.reports=state.reports.filter(x=>x.id!==id);say('Rejected. It will not appear on the map.')}
+  else if(a==='mapregion'){state.map.region=v;state.map.sel=null}
+  else if(a==='mapperiod'){state.map.period=v}
+  else if(a==='hex'){state.map.sel=+el.dataset.i}
+  render();
+  if(a==='step'||a==='startreport'||a==='newreport'||a==='role'||a==='tab')$('#screen').scrollTop=0;
+});
+document.addEventListener('input',e=>{
+  const k=e.target.dataset&&e.target.dataset.bind; if(!k) return;
+  const val=e.target.type==='checkbox'?e.target.checked:e.target.value;
+  if(k==='ack'){state.rep.ack=val;render()}
+  else if(k==='note'||k==='contact'){state.rep[k]=val}
+  else if(k==='flagReason'||k==='flagNote'){state[k]=val}
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='photo'&&e.target.files[0]){
+    const fr=new FileReader();fr.onload=()=>{state.rep.photo=fr.result;render()};fr.readAsDataURL(e.target.files[0]);
+  }
+});
+render();
+</script>
+
+</body>
+</html>
