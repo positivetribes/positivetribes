@@ -224,3 +224,56 @@ test('grocery stores: assign to generated and manual items, keep spelling consis
     assert.equal((await call('/groceries/store', 'POST', { week_start: start, kind: 'manual', id: chips.body.id, store: 'Costco' }, false)).status, 401);
   } finally { sqlite.close(); }
 });
+
+test('family list starts from existing ratings and votes once; removals stick', async () => {
+  const { db, sqlite } = database();
+  try {
+    sqlite.exec(`CREATE TABLE meals(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,notes TEXT DEFAULT '',recipe_url TEXT DEFAULT '',suggested_by TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE ratings(id INTEGER PRIMARY KEY,meal_id INTEGER,member TEXT,rating INTEGER,comment TEXT,created_at TEXT,UNIQUE(meal_id,member));
+      CREATE TABLE meal_votes(id INTEGER PRIMARY KEY,meal_id INTEGER,member TEXT,created_at TEXT,UNIQUE(meal_id,member));
+      CREATE TABLE weekly_plan(plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT,updated_at TEXT);
+      INSERT INTO meals(name) VALUES('Our meal');
+      INSERT INTO ratings VALUES(1,1,'Julia',5,'',''),(2,1,'Eric',4,'','');
+      INSERT INTO meal_votes VALUES(1,1,'Eric',''),(2,1,'  ','');`);
+    const call = async (path, method = 'GET', payload) => {
+      const response = await worker.fetch(new Request('https://test.invalid/api' + path, { method, headers: { 'content-type': 'application/json', 'x-family-pin': 'test-only-pin' }, ...(payload === undefined ? {} : { body: JSON.stringify(payload) }) }), { DB: db, FAMILY_PIN: 'test-only-pin' });
+      return { status: response.status, body: await response.json() };
+    };
+    assert.deepEqual((await call('/summary')).body.members.sort(), ['Eric', 'Julia']);
+    assert.equal((await call('/members', 'DELETE', { name: 'julia' })).status, 200);
+    assert.deepEqual((await call('/summary')).body.members, ['Eric']);
+  } finally { sqlite.close(); }
+});
+
+test("who's home: family list, in/out marks, case-insensitive names, cleanup, validation, and PIN", async () => {
+  const { call, sqlite } = await fixture();
+  try {
+    assert.deepEqual((await call('/summary')).body.members, []);
+    assert.equal((await call('/members', 'POST', { name: '  Eric   R ' })).body.name, 'Eric R');
+    assert.equal((await call('/members', 'POST', { name: 'eric r' })).body.name, 'Eric R');
+    await call('/members', 'POST', { name: 'Ava' });
+    let summary = (await call('/summary')).body;
+    assert.deepEqual(summary.members, ['Eric R', 'Ava']); assert.deepEqual(summary.absences, []);
+    // Marking out is idempotent, works with any capitalization, and is stored under the canonical name.
+    assert.equal((await call('/absence', 'POST', { plan_date: start, member: 'ava', out: true })).status, 200);
+    assert.equal((await call('/absence', 'POST', { plan_date: start, member: 'Ava', out: true })).status, 200);
+    await call('/absence', 'POST', { plan_date: addDays(start, 1), member: 'Ava', out: true });
+    assert.deepEqual((await call('/summary')).body.absences, [{ plan_date: start, member: 'Ava' }, { plan_date: addDays(start, 1), member: 'Ava' }]);
+    assert.equal((await call('/absence', 'POST', { plan_date: start, member: 'Ava', out: false })).status, 200);
+    assert.deepEqual((await call('/summary')).body.absences, [{ plan_date: addDays(start, 1), member: 'Ava' }]);
+    // Removing a person clears their marks but not other people's.
+    await call('/absence', 'POST', { plan_date: start, member: 'Eric R', out: true });
+    assert.equal((await call('/members', 'DELETE', { name: 'AVA' })).status, 200);
+    summary = (await call('/summary')).body;
+    assert.deepEqual(summary.members, ['Eric R']); assert.deepEqual(summary.absences, [{ plan_date: start, member: 'Eric R' }]);
+    // Validation.
+    for (const payload of [{}, { name: '   ' }, { name: 'x'.repeat(31) }, { name: 5 }]) assert.equal((await call('/members', 'POST', payload)).status, 400);
+    assert.equal((await call('/members', 'DELETE', { name: 'Nobody' })).status, 404);
+    assert.equal((await call('/absence', 'POST', { plan_date: start, member: 'Nobody', out: true })).status, 404);
+    for (const payload of [{ plan_date: '2026-02-30', member: 'Eric R', out: true }, { plan_date: start, member: 'Eric R' }, { plan_date: start, member: 'Eric R', out: 'yes' }])
+      assert.equal((await call('/absence', 'POST', payload)).status, 400);
+    for (const [path, method, payload] of [['/members', 'POST', { name: 'Sam' }], ['/members', 'DELETE', { name: 'Eric R' }], ['/absence', 'POST', { plan_date: start, member: 'Eric R', out: true }]])
+      assert.equal((await call(path, method, payload, false)).status, 401);
+    assert.deepEqual((await call('/summary')).body.members, ['Eric R']);
+  } finally { sqlite.close(); }
+});
