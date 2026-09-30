@@ -10,7 +10,9 @@
   },
   "d1_databases": [
     {
-      "binding": "DB"
+      "binding": "DB",
+      "database_name": "coyote-backlog-db",
+      "database_id": "41321f8f-8e42-4eb8-b288-351226f7bd9b"
     }
   ]
 }
