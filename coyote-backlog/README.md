@@ -2,6 +2,8 @@
 
 A small shared list where Mark, Rainer, and the Positive Tribes team collect feedback on the Project Coyote mange app prototype. Anyone with the passcode can add a suggestion, mark it **Must have**, **Nice to have**, or **Idea for now**, and move items up or down to set the order inside a tier. Items can be edited, marked done, or deleted.
 
+Each item also has a **phase**, which says when it gets built, separate from how much it matters: **To review** (new, not sorted yet), **Prototype** (next prototype round), **Full build** (the real app after approval), or **Later**. New suggestions start as To review. The page can be filtered by phase, and Up and Down reorder within the phase being shown.
+
 This is a separate Cloudflare Worker with its own D1 database, like Family Meals. The main Positive Tribes website and its contact form are not touched.
 
 ## Deploy
@@ -11,7 +13,7 @@ This is a separate Cloudflare Worker with its own D1 database, like Family Meals
 3. Add a Worker secret named `BACKLOG_PASSCODE` with the passcode to share. Do not put it in GitHub.
 4. Share the Worker URL and the passcode with Mark and Rainer. The page is marked noindex so search engines skip it.
 
-Tables are created on the first authenticated request. The first request also adds six starting items from Rainer's feedback, once. Deleted starter items do not come back.
+Tables are created on the first authenticated request. The first request also adds six starting items from Rainer's feedback, once. Deleted starter items do not come back. Databases created before phases existed get the phase column added automatically, and the six starting items are sorted into phases one time; later edits are never overwritten.
 
 ## How it works
 

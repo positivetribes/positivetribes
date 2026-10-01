@@ -22,6 +22,7 @@
   --must:#f2929b; --must-bg:#40212a; --nice:#e5b95c; --nice-bg:#3b3016; --idea:#9dbbe0; --idea-bg:#1f2b3a;
   --ok:#8bc79b; --ok-bg:#1d3324; color-scheme:dark}}
 *{box-sizing:border-box}
+[hidden]{display:none !important}
 body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.45 var(--font);padding:20px 16px 48px}
 button,input,textarea,select{font:inherit;color:inherit}
 button{cursor:pointer}
@@ -41,6 +42,14 @@ a.btn{text-decoration:none;display:inline-block}
 .pill.nice{background:var(--nice-bg);color:var(--nice)}
 .pill.idea{background:var(--idea-bg);color:var(--idea)}
 .pill.done{background:var(--ok-bg);color:var(--ok)}
+.pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
+.pill.phase.prototype{border-color:var(--accent);color:var(--accent)}
+.pill.phase.full{border-color:var(--idea);color:var(--idea)}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.filters button{border:1px solid var(--line);background:var(--surface);padding:5px 12px;border-radius:99px;font-size:15px}
+.filters button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+.phase-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.phase-row .meta{margin-right:2px}
 label{display:block;font-weight:700;font-size:15px;margin-bottom:4px}
 input[type=text],input[type=password],textarea,select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
 textarea{min-height:76px;resize:vertical}
@@ -97,6 +106,13 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
       <li><span class="pill idea">Idea for now</span><span>Worth remembering. Not decided, not promised.</span></li>
     </ul>
 
+    <ul class="legend card">
+      <li><span class="pill phase review">To review</span><span>New and not sorted yet. Eric will place it.</span></li>
+      <li><span class="pill phase prototype">Prototype</span><span>Planned for the next round of the clickable prototype.</span></li>
+      <li><span class="pill phase full">Full build</span><span>Part of the real app after the prototype is approved. The prototype will not do this.</span></li>
+      <li><span class="pill phase later">Later</span><span>Parked for a future version.</span></li>
+    </ul>
+
     <form id="add" class="card stack">
       <h2>Suggest a change</h2>
       <div><label for="title">What should change?</label>
@@ -115,6 +131,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
       <span class="muted" id="summary" aria-live="polite"></span>
       <span class="tools"><button class="btn ghost small" id="refresh" type="button">Refresh</button><button class="btn ghost small" id="lock" type="button">Sign out</button></span>
     </div>
+    <div class="filters" id="filters" role="group" aria-label="Show items by phase"></div>
     <div id="error" class="error" role="alert" hidden></div>
     <div id="lists" class="stack"></div>
   </div>
@@ -124,7 +141,8 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
 (() => {
   const TIERS = [['must', 'Must have'], ['nice', 'Nice to have'], ['idea', 'Idea for now']];
   const $ = id => document.getElementById(id);
-  let passcode = '', items = [], editing = null;
+  const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
+  let passcode = '', items = [], editing = null, filter = 'all';
 
   const store = {
     get(key) { try { return localStorage.getItem(key) || ''; } catch { return ''; } },
@@ -198,18 +216,23 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     const by = item.added_by ? 'Suggested by ' + item.added_by : 'Suggested';
     return h('article', { class: 'card item' + (item.done ? ' is-done' : '') },
       h('div', { class: 'tools' },
-        h('span', { class: 'pill ' + (item.done ? 'done' : item.tier) }, item.done ? 'Done' : tierName)),
+        h('span', { class: 'pill ' + (item.done ? 'done' : item.tier) }, item.done ? 'Done' : tierName),
+        h('span', { class: 'pill phase ' + item.phase }, PHASES.find(p => p[0] === item.phase)[1])),
       h('h3', {}, item.title),
       item.details && h('p', {}, item.details),
       h('div', { class: 'meta' }, by + ' on ' + item.created_at.slice(0, 10)),
+      !item.done && h('div', { class: 'phase-row' }, h('span', { class: 'meta' }, 'When:'),
+        h('span', { class: 'seg', role: 'group', 'aria-label': 'Phase for ' + item.title },
+          PHASES.map(([key, label]) => h('button', { type: 'button', 'aria-pressed': String(item.phase === key),
+            onclick: () => item.phase !== key && act('/items/' + item.id, patch({ phase: key })) }, label)))),
       h('div', { class: 'tools' },
         !item.done && h('span', { class: 'seg', role: 'group', 'aria-label': 'Priority for ' + item.title },
           TIERS.map(([key, label]) => h('button', { type: 'button', 'aria-pressed': String(item.tier === key),
             onclick: () => item.tier !== key && act('/items/' + item.id, patch({ tier: key })) }, label))),
         !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position <= 0,
-          'aria-label': 'Move up: ' + item.title, onclick: () => act('/items/' + item.id + '/move', post({ direction: 'up' })) }, 'Up'),
+          'aria-label': 'Move up: ' + item.title, onclick: () => act('/items/' + item.id + '/move', post({ direction: 'up', ...(filter === 'all' ? {} : { phase: filter }) })) }, 'Up'),
         !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open.length - 1,
-          'aria-label': 'Move down: ' + item.title, onclick: () => act('/items/' + item.id + '/move', post({ direction: 'down' })) }, 'Down'),
+          'aria-label': 'Move down: ' + item.title, onclick: () => act('/items/' + item.id + '/move', post({ direction: 'down', ...(filter === 'all' ? {} : { phase: filter }) })) }, 'Down'),
         h('span', { class: 'spacer' }),
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => { editing = item.id; render(); } }, 'Edit'),
         h('button', { class: 'btn ghost small', type: 'button',
@@ -240,8 +263,14 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     lists.replaceChildren();
     const open = items.filter(i => !i.done).length;
     $('summary').textContent = open + ' open, ' + (items.length - open) + ' done';
+    const filters = $('filters');
+    filters.replaceChildren(h('span', { class: 'meta' }, 'Show:'),
+      ...[['all', 'All'], ...PHASES].map(([key, label]) => {
+        const n = key === 'all' ? items.filter(i => !i.done).length : items.filter(i => !i.done && i.phase === key).length;
+        return h('button', { type: 'button', 'aria-pressed': String(filter === key), onclick: () => { filter = key; render(); } }, label + ' (' + n + ')');
+      }));
     for (const [key, label] of TIERS) {
-      const group = items.filter(i => i.tier === key);
+      const group = items.filter(i => i.tier === key && (filter === 'all' || i.phase === filter));
       const active = group.filter(i => !i.done), finished = group.filter(i => i.done);
       lists.append(h('section', { class: 'tier' },
         h('h2', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'count' }, active.length + (active.length === 1 ? ' item' : ' items'))),
