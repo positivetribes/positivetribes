@@ -168,3 +168,87 @@ test('stored text is returned as plain data and SQL in input is inert', async ()
     assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name='backlog_items'").get().n, 1);
   } finally { sqlite.close(); }
 });
+
+test('seeds are sorted into phases: submit is full build, Rainer fields are prototype', async () => {
+  const { sqlite, db } = database();
+  try {
+    const list = await items(db);
+    const phaseOf = title => list.find(i => i.title === title).phase;
+    assert.equal(phaseOf('Let people submit a sighting report'), 'full');
+    assert.equal(list.filter(i => i.phase === 'prototype').length, 5);
+    assert.ok(list.every(i => ['review', 'prototype', 'full', 'later'].includes(i.phase)));
+  } finally { sqlite.close(); }
+});
+
+test('new suggestions start as to review and the phase can be set on create', async () => {
+  const { sqlite, db } = database();
+  try {
+    await items(db);
+    await call(db, 'POST', '/items', { title: 'Plain suggestion', added_by: 'Mark' });
+    await call(db, 'POST', '/items', { title: 'Pre-sorted', phase: 'later' });
+    const list = await items(db);
+    assert.equal(list.find(i => i.title === 'Plain suggestion').phase, 'review');
+    assert.equal(list.find(i => i.title === 'Pre-sorted').phase, 'later');
+    assert.equal((await call(db, 'POST', '/items', { title: 'Bad', phase: 'soon' })).status, 400);
+  } finally { sqlite.close(); }
+});
+
+test('changing phase leaves tier and order alone, and rejects unknown phases', async () => {
+  const { sqlite, db } = database();
+  try {
+    const before = (await items(db)).filter(i => i.tier === 'idea');
+    const target = before[2];
+    assert.equal((await call(db, 'PATCH', '/items/' + target.id, { phase: 'later' })).status, 200);
+    const after = (await items(db)).filter(i => i.tier === 'idea');
+    assert.deepEqual(after.map(i => i.id), before.map(i => i.id));
+    const changed = after.find(i => i.id === target.id);
+    assert.equal(changed.phase, 'later');
+    assert.equal(changed.position, target.position);
+    assert.equal((await call(db, 'PATCH', '/items/' + target.id, { phase: 'soon' })).status, 400);
+  } finally { sqlite.close(); }
+});
+
+test('moving with a phase filter swaps with the next item in that phase', async () => {
+  const { sqlite, db } = database();
+  try {
+    const list = (await items(db)).filter(i => i.tier === 'idea');
+    // Order is [size, behavior, time, lingering, repeat]; park behavior and lingering as later.
+    await call(db, 'PATCH', '/items/' + list[1].id, { phase: 'later' });
+    await call(db, 'PATCH', '/items/' + list[3].id, { phase: 'later' });
+    // Within prototype, the third prototype item (repeat) moving up should pass over the hidden ones and swap with time.
+    const repeat = list[4];
+    await call(db, 'POST', `/items/${repeat.id}/move`, { direction: 'up', phase: 'prototype' });
+    const order = (await items(db)).filter(i => i.tier === 'idea').map(i => i.id);
+    assert.deepEqual(order, [list[0].id, list[1].id, list[4].id, list[3].id, list[2].id]);
+    assert.equal((await call(db, 'POST', `/items/${repeat.id}/move`, { direction: 'up', phase: 'soon' })).status, 400);
+  } finally { sqlite.close(); }
+});
+
+test('an existing database without phases is upgraded once, keeping its data and edits', async () => {
+  const { sqlite, db } = database();
+  try {
+    // Shape of the live database before this feature: no phase column, six seeded rows.
+    sqlite.exec(`CREATE TABLE backlog_items (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, details TEXT NOT NULL DEFAULT '',
+      tier TEXT NOT NULL CHECK(tier IN ('must','nice','idea')), position INTEGER NOT NULL, done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0,1)),
+      added_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE app_seeds (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+      INSERT INTO app_seeds (name) VALUES ('rainer-feedback-v1');
+      INSERT INTO backlog_items (title, details, tier, position, added_by) VALUES
+        ('Let people submit a sighting report', 'x', 'must', 1, 'Rainer'),
+        ('Record the animal size: pup or adult', 'x', 'idea', 2, 'Rainer'),
+        ('Mark added this', 'keep me', 'nice', 1, 'Mark');`);
+    let list = await items(db);
+    assert.equal(list.length, 3);
+    const phase = title => list.find(i => i.title === title).phase;
+    assert.equal(phase('Let people submit a sighting report'), 'full');
+    assert.equal(phase('Record the animal size: pup or adult'), 'prototype');
+    assert.equal(phase('Mark added this'), 'review');
+    assert.equal(list.find(i => i.title === 'Mark added this').details, 'keep me');
+    // The sorting is a one-time step: a later edit is not undone by the next request.
+    const submit = list.find(i => i.title === 'Let people submit a sighting report');
+    await call(db, 'PATCH', '/items/' + submit.id, { phase: 'review' });
+    list = await items(db);
+    assert.equal(phase('Let people submit a sighting report'), 'review');
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM pragma_table_info('backlog_items') WHERE name='phase'").get().n, 1);
+  } finally { sqlite.close(); }
+});
