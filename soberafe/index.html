@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Concept preview of a redesigned homepage for Sober AF Entertainment.">
+<title>Sober AF Entertainment | Website Concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Concept preview: dark ink ground, coral accent, violet secondary. Photos are loaded from soberafe.com
+   with a gradient behind each one, so a blocked image still leaves a finished-looking block. */
+:root{
+  --ink:#14121F; --paper:#F5F4F8; --white:#FFFFFF; --muted:#55526A; --muted-dark:#C9C6DA; --line:#E2DFEC;
+  --accent:#FF5A36; --violet:#6C4DFF; --violet-soft:#E5DEFF; --violet-ink:#3B22B8;
+  --display:'Archivo',system-ui,sans-serif; --body:'DM Sans',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--body);color:var(--ink);background:var(--paper);line-height:1.5}
+a{color:inherit;text-decoration:none}
+a:hover{opacity:.88}
+a:focus-visible,button:focus-visible{outline:3px solid var(--violet);outline-offset:3px}
+img{display:block;max-width:100%}
+h1,h2,h3{font-family:var(--display);margin:0}
+p{margin:0}
+.wrap{max-width:1200px;margin:0 auto}
+.sec{padding:112px 32px}
+.eyebrow{font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.h2{font-weight:900;font-size:clamp(36px,5vw,64px);line-height:1;letter-spacing:-.02em}
+.lede{font-size:20px;line-height:1.55;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:14px 30px;border-radius:999px;font-weight:700;font-size:18px;border:2px solid transparent}
+.btn-accent{background:var(--accent);color:var(--ink)}
+.btn-ghost{border-color:var(--paper);color:var(--paper)}
+.btn-ink{background:var(--ink);color:var(--paper)}
+.btn-outline-ink{border-color:var(--ink)}
+.btn-white{background:#fff;color:var(--ink)}
+.row{display:flex;flex-wrap:wrap;gap:24px}
+.row>*{flex:1 1 300px}
+.ph{position:relative;overflow:hidden;background:linear-gradient(135deg,#6C4DFF,#B64DFF 45%,#FF5A36)}
+.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+/* header + hero */
+.hero{background:var(--ink);color:var(--paper);padding:0 32px 96px}
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 32px;padding:24px 0}
+.logo{font-family:var(--display);font-weight:900;font-size:28px;letter-spacing:-.02em}
+.logo span{color:var(--accent)}
+nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px 28px;font-weight:500}
+nav a{padding:12px 0}
+nav a.donate{background:var(--accent);color:var(--ink);font-weight:700;padding:12px 24px;border-radius:999px}
+.hero-grid{display:flex;flex-wrap:wrap;align-items:center;gap:48px;padding-top:56px}
+.hero-copy{flex:1 1 480px;display:flex;flex-direction:column;gap:28px}
+.hero-copy .eyebrow{color:var(--accent)}
+.hero-copy h1{font-weight:900;font-size:clamp(48px,8vw,112px);line-height:.95;letter-spacing:-.03em}
+.hero-copy h1 em{font-style:normal;color:var(--accent)}
+.hero-copy p{font-size:20px;line-height:1.55;color:var(--muted-dark);max-width:560px}
+.hero-photo{flex:1 1 380px;min-height:460px;border-radius:28px}
+.ticket{position:absolute;left:20px;right:20px;bottom:20px;background:var(--paper);color:var(--ink);border-radius:20px;padding:20px 24px;display:flex;align-items:center;gap:20px}
+.ticket .d{text-align:center;min-width:56px}
+.ticket .d b{display:block;font-size:13px;letter-spacing:.1em;color:#B5320F}
+.ticket .d span{font-family:var(--display);font-weight:900;font-size:40px;line-height:1}
+.ticket small{display:block;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ticket strong{font-size:18px;line-height:1.3}
+
+/* stats */
+.stats{background:var(--accent);color:var(--ink);padding:56px 32px}
+.stats .wrap{display:flex;flex-wrap:wrap;gap:40px 48px}
+.stat{flex:1 1 220px;display:flex;flex-direction:column;gap:8px}
+.stat b{font-family:var(--display);font-weight:900;font-size:72px;line-height:1;letter-spacing:-.03em}
+.stat span{font-size:17px;font-weight:500;line-height:1.4}
+
+/* paths */
+.paths .head{display:flex;flex-direction:column;gap:16px;max-width:760px;margin-bottom:48px}
+.path{background:var(--white);border:1px solid var(--line);border-radius:24px;padding:36px;display:flex;flex-direction:column;gap:16px}
+.path .n{font-family:var(--display);font-weight:900;font-size:18px;color:var(--violet)}
+.path h3{font-weight:800;font-size:30px;line-height:1.1}
+.path p{font-size:17px;line-height:1.55;color:var(--muted)}
+.path .go{margin-top:auto;padding-top:12px;font-weight:700;color:var(--violet)}
+
+/* events */
+.events{background:var(--ink);color:var(--paper)}
+.events .head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:48px}
+.events .head .eyebrow{color:var(--accent);margin-bottom:16px}
+.events .head h2{max-width:700px}
+.ev{background:var(--paper);color:var(--ink);border-radius:24px;overflow:hidden;display:flex;flex-direction:column}
+.ev .ph{height:200px;border-radius:0}
+.ev .when{position:absolute;z-index:1;top:16px;left:16px;background:var(--ink);color:var(--paper);border-radius:14px;padding:8px 16px;text-align:center}
+.ev .when b{display:block;font-size:12px;letter-spacing:.1em}
+.ev .when span{font-family:var(--display);font-weight:900;font-size:32px;line-height:1}
+.ev .body{padding:28px;display:flex;flex-direction:column;gap:12px;flex-grow:1}
+.ev h3{font-weight:800;font-size:26px;line-height:1.15}
+.ev .meta{font-size:16px;line-height:1.5;color:var(--muted)}
+.ev .foot{margin-top:auto;padding-top:8px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.chip{background:var(--violet-soft);color:var(--violet-ink);font-weight:700;font-size:14px;padding:6px 14px;border-radius:999px}
+
+/* training */
+.training{background:var(--violet);color:#fff}
+.training .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:56px}
+.training .copy{flex:1 1 460px;display:flex;flex-direction:column;gap:24px}
+.training .eyebrow{color:#FFD6CC}
+.training .lede{color:#EFEBFF}
+.counties{display:flex;flex-wrap:wrap;gap:10px}
+.counties span{border:2px solid #fff;font-weight:700;font-size:15px;padding:8px 18px;border-radius:999px}
+.training .ph{flex:1 1 360px;min-height:420px;border-radius:28px;background:repeating-linear-gradient(135deg,#8468FF 0 24px,#7658FF 24px 48px)}
+
+/* community */
+.community .head{display:flex;flex-direction:column;gap:16px;max-width:760px;margin-bottom:48px}
+.gallery{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:56px}
+.gallery .ph{height:320px;border-radius:24px}
+.gallery .g1{flex:2 1 420px}.gallery .g2,.gallery .g3{flex:1 1 240px}
+.quote{background:var(--white);border:1px solid var(--line);border-radius:24px;padding:36px;display:flex;flex-direction:column;gap:20px;margin:0}
+.quote blockquote{margin:0;font-family:var(--display);font-weight:600;font-size:24px;line-height:1.3}
+.quote figcaption{margin-top:auto;font-size:15px;font-weight:700;color:var(--muted)}
+
+/* stories */
+.stories{background:var(--white)}
+.stories .head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:48px}
+.story{display:flex;flex-direction:column;gap:16px}
+.story .ph{height:220px;border-radius:20px}
+.story .tag{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--violet)}
+.story h3{font-weight:800;font-size:26px;line-height:1.15}
+.story p{font-size:17px;line-height:1.55;color:var(--muted)}
+
+/* give */
+.give{background:var(--accent);color:var(--ink);padding:104px 32px}
+.give .wrap{max-width:1000px;display:flex;flex-direction:column;align-items:flex-start;gap:28px}
+.give h2{font-weight:900;font-size:clamp(40px,6vw,80px);line-height:.98;letter-spacing:-.03em}
+.give p{font-size:21px;line-height:1.55;max-width:720px}
+.give .links{display:flex;flex-wrap:wrap;gap:12px 28px;font-weight:700}
+.give .links a{padding:8px 0}
+.btns{display:flex;flex-wrap:wrap;gap:16px}
+
+/* footer */
+footer{background:var(--ink);color:var(--paper);padding:80px 32px 40px}
+.f-grid{display:flex;flex-wrap:wrap;gap:48px;margin-bottom:56px}
+.f-grid>div{flex:1 1 200px;display:flex;flex-direction:column;gap:10px;font-size:16px;line-height:1.5}
+.f-grid>div:first-child{flex:2 1 360px;gap:20px}
+.f-grid .logo{font-size:32px}
+.f-grid p{color:var(--muted-dark);line-height:1.6;max-width:480px}
+.f-grid h4{margin:0;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.f-grid a{padding:4px 0}
+.legal{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;padding-top:28px;border-top:1px solid #38354A;font-size:14px;color:#B9B6CC}
+.legal div{display:flex;flex-wrap:wrap;gap:8px 24px}
+.concept{background:#2A2640;color:var(--muted-dark);font-size:14px;text-align:center;padding:10px 16px}
+
+@media (max-width:640px){
+  .sec{padding:72px 20px}
+  .hero,.stats,.give,footer{padding-left:20px;padding-right:20px}
+  .stat b{font-size:56px}
+  .hero-photo{min-height:380px}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="concept">Concept preview of a redesigned Sober AF homepage. Not the live site. Photos and facts come from soberafe.com.</div>
+
+<main id="top">
+<section class="hero">
+  <div class="wrap">
+    <header class="top">
+      <a href="#top" class="logo">SOBER AF<span>.</span></a>
+      <nav aria-label="Primary">
+        <a href="#events">Events</a>
+        <a href="#training">Peer Training</a>
+        <a href="#involved">Get Involved</a>
+        <a href="#stories">Stories</a>
+        <a href="#contact">Contact</a>
+        <a href="#give" class="donate">Donate</a>
+      </nav>
+    </header>
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <div class="eyebrow">Colorado recovery community organization</div>
+        <h1>Sober fun, <em>louder</em> than ever.</h1>
+        <p>We produce sober events, train peer specialists, and build collegiate recovery programs — so recovery never means sitting out the good stuff.</p>
+        <div class="btns">
+          <a class="btn btn-accent" href="#events">Find sober events</a>
+          <a class="btn btn-ghost" href="#training">Become a peer</a>
+        </div>
+      </div>
+      <div class="hero-photo ph">
+        <img src="https://soberafe.com/wp-content/uploads/2026/04/saf-community-photo.jpg" alt="Sober AF peer volunteers at a Colorado event" loading="eager" onerror="this.remove()">
+        <a class="ticket" href="#events">
+          <div class="d"><b>OCT</b><span>3</span></div>
+          <div><small>Next up</small><strong>Texas Tech vs. Colorado · Folsom Field, Boulder</strong></div>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="stats" aria-label="Impact">
+  <div class="wrap">
+    <div class="stat"><b>240</b><span>attendees at the 2026 Spring Social, our largest community event of the year</span></div>
+    <div class="stat"><b>150</b><span>free, COPA-approved peer training spots in the 2026 cohort</span></div>
+    <div class="stat"><b>5</b><span>Colorado counties with a fully funded peer cohort</span></div>
+    <div class="stat"><b>38%</b><span>of the peer-training budget now funded by monthly donors</span></div>
+  </div>
+</section>
+
+<section class="sec paths" id="involved">
+  <div class="wrap">
+    <div class="head">
+      <h2 class="h2">Spaces in fun places.</h2>
+      <p class="lede">Many communities struggle to offer safe, substance-free places to connect and grow. Pick how you want to be part of changing that.</p>
+    </div>
+    <div class="row">
+      <a class="path" href="#events"><div class="n">01</div><h3>Find sober events</h3><p>Discover sober-friendly events happening in your area, from stadium sections to community socials.</p><div class="go">Browse events →</div></a>
+      <a class="path" href="#give"><div class="n">02</div><h3>Host an event with us</h3><p>Bring sober fun to your community by hosting an event of your own.</p><div class="go">Start planning →</div></a>
+      <a class="path" href="#training"><div class="n">03</div><h3>Become a peer</h3><p>Inspire others by sharing your journey and experiences, with free training that builds real skills.</p><div class="go">Join the cohort →</div></a>
+    </div>
+  </div>
+</section>
+
+<section class="sec events" id="events">
+  <div class="wrap">
+    <div class="head">
+      <div><div class="eyebrow">Upcoming events</div><h2 class="h2">Your seat is in the sober section.</h2></div>
+      <a class="btn btn-ghost" href="https://soberafe.com/events/">See all events</a>
+    </div>
+    <div class="row">
+      <a class="ev" href="https://soberafe.com/events/colorado-buffaloes-vs-texas-tech-red-raiders/">
+        <div class="ph" style="background:linear-gradient(135deg,#6C4DFF,#B64DFF)"><img src="https://soberafe.com/wp-content/uploads/2026/08/Image_August_9_2026_5_10_PM-768x1145.jpg" alt="" loading="lazy" onerror="this.remove()"><div class="when"><b>OCT</b><span>3</span></div></div>
+        <div class="body"><h3>Texas Tech Red Raiders vs. Colorado Buffaloes</h3><div class="meta">Sat, Oct 3 · 1:00 PM<br>Folsom Field, Boulder, CO</div><div class="foot"><span class="chip">Peers on site: 5</span><strong>Details →</strong></div></div>
+      </a>
+      <a class="ev" href="https://soberafe.com/events/colorado-mesa-university-vs-colorado-school-of-mines/">
+        <div class="ph" style="background:linear-gradient(135deg,#FF5A36,#FFB199)"><img src="https://soberafe.com/wp-content/uploads/2026/08/Image_July_30_2026_6_12_PM-768x1145.jpg" alt="" loading="lazy" onerror="this.remove()"><div class="when"><b>OCT</b><span>16</span></div></div>
+        <div class="body"><h3>Colorado Mesa University vs. Colorado School of Mines</h3><div class="meta">Fri, Oct 16 · 7:00 PM<br>Community Hospital Unity Field</div><div class="foot"><span class="chip">Peers on site: 4</span><strong>Details →</strong></div></div>
+      </a>
+      <a class="ev" href="https://soberafe.com/events/notre-dame-vs-byu/">
+        <div class="ph" style="background:linear-gradient(135deg,#14121F,#6C4DFF)"><img src="https://soberafe.com/wp-content/uploads/2026/08/Image_August_9_2026_4_54_PM-768x1145.jpg" alt="" loading="lazy" onerror="this.remove()"><div class="when"><b>OCT</b><span>17</span></div></div>
+        <div class="body"><h3>Notre Dame vs. BYU</h3><div class="meta">Sat, Oct 17 · 11:00 AM<br>LaVell Edwards Stadium, Provo, UT</div><div class="foot"><span class="chip">Peers on site: 5</span><strong>Details →</strong></div></div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="sec training" id="training">
+  <div class="wrap">
+    <div class="copy">
+      <div class="eyebrow">Peer training</div>
+      <h2 class="h2">Lived experience is the credential.</h2>
+      <p class="lede">The 2026 peer support specialist cohort is fully funded: 150 COPA-approved spots, free for residents 18 and older. Peers meet people where they are — at the venue, on the campus quad, in the green room before a show.</p>
+      <div class="counties" aria-label="Counties served"><span>Adams</span><span>Denver</span><span>Boulder</span><span>Weld</span><span>Mesa</span></div>
+      <div><a class="btn btn-white" href="https://soberafe.com/peer-training/">Apply for training</a></div>
+    </div>
+    <div class="ph"><img src="https://soberafe.com/wp-content/uploads/2026/07/IMG_6186-Large-1024x768.jpeg" alt="Peer cohort members together" loading="lazy" onerror="this.remove()"></div>
+  </div>
+</section>
+
+<section class="sec community">
+  <div class="wrap">
+    <div class="head">
+      <h2 class="h2">Redefining what connection looks like.</h2>
+      <p class="lede">Through supportive, substance-free spaces, our community is reshaping the story around joy, belonging, and recovery.</p>
+    </div>
+    <div class="gallery">
+      <div class="ph g1"><img src="https://soberafe.com/wp-content/uploads/2026/07/IMG_2411-Large-768x576.jpeg" alt="Community members at a Sober AF event" loading="lazy" onerror="this.remove()"></div>
+      <div class="ph g2" style="background:linear-gradient(160deg,#14121F,#6C4DFF)"><img src="https://soberafe.com/wp-content/uploads/2026/07/IMG_1544-Large-768x1024.jpeg" alt="Sober AF event moment" loading="lazy" onerror="this.remove()"></div>
+      <div class="ph g3" style="background:linear-gradient(200deg,#B64DFF,#FF5A36)"><img src="https://soberafe.com/wp-content/uploads/2026/07/IMG_5806-Large-768x576.jpeg" alt="Sober AF event moment" loading="lazy" onerror="this.remove()"></div>
+    </div>
+    <div class="row">
+      <figure class="quote"><blockquote>“You have truly made my life so much better.”</blockquote><figcaption>— Recovery advocate, peer training graduate</figcaption></figure>
+      <figure class="quote"><blockquote>“I am just killing it staying sober and taking it one day at a time.”</blockquote><figcaption>— Recovery advocate</figcaption></figure>
+      <figure class="quote"><blockquote>“I would recommend your program to anyone who asked.”</blockquote><figcaption>— Recovery advocate</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="sec stories" id="stories">
+  <div class="wrap">
+    <div class="head">
+      <h2 class="h2">New perspectives.</h2>
+      <a class="btn btn-outline-ink" href="https://soberafe.com/blogs/">Read the blog</a>
+    </div>
+    <div class="row">
+      <a class="story" href="https://soberafe.com/post/event-recap-spring-social-2026/">
+        <div class="ph" style="background:linear-gradient(135deg,#FF5A36,#B64DFF)"><img src="https://soberafe.com/wp-content/uploads/2026/07/IMG_7637-Large-1024x768.jpeg" alt="" loading="lazy" onerror="this.remove()"></div>
+        <div class="tag">Event recap</div><h3>2026 SAFE Spring Social</h3>
+        <p>240 attendees, six trained peer specialists on the floor, and two Naloxone kits distributed at our largest community event of the year.</p>
+      </a>
+      <a class="story" href="https://soberafe.com/post/donor-spotlight-q1-2026/">
+        <div class="ph" style="background:linear-gradient(135deg,#6C4DFF,#14121F)"><img src="https://soberafe.com/wp-content/uploads/2026/05/IMG_7306-Large.jpeg" alt="" loading="lazy" onerror="this.remove()"></div>
+        <div class="tag">Donor spotlight</div><h3>Recurring giving, Q1 2026</h3>
+        <p>Monthly donors now fund 38% of our peer-training budget, a shift toward sustained, predictable program support.</p>
+      </a>
+      <a class="story" href="https://soberafe.com/post/why-sobriety-doesnt-mean-hiding-from-the-world/">
+        <div class="ph" style="background:linear-gradient(135deg,#FFB199,#6C4DFF)"><img src="https://soberafe.com/wp-content/uploads/2026/07/IMG_7399-Large-1024x768.jpeg" alt="" loading="lazy" onerror="this.remove()"></div>
+        <div class="tag">Perspective</div><h3>Why sobriety doesn’t mean hiding from the world</h3>
+        <p>Embrace discomfort, build supportive community, create a genuinely fun life, and bring your own non-alcoholic drinks to any event.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="give" id="give">
+  <div class="wrap">
+    <h2>Fund the next sober section.</h2>
+    <p>Monthly donors now fund 38% of our peer-training budget. Predictable giving lets us plan multi-year cohorts and put peers at events months in advance.</p>
+    <div class="btns">
+      <a class="btn btn-ink" href="https://soberafe.com/donate/">Make a donation</a>
+      <a class="btn btn-outline-ink" href="https://venmo.com/soberafe">Venmo</a>
+      <a class="btn btn-outline-ink" href="https://www.paypal.com/us/fundraiser/charity/3405995">PayPal</a>
+    </div>
+    <div class="links">
+      <a href="https://soberafe.com/become-a-member/">Become a member →</a>
+      <a href="https://soberafe.com/become-a-sponsor/">Become a sponsor →</a>
+      <a href="https://soberafe.com/contact-us/">Volunteer →</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer id="contact">
+  <div class="wrap">
+    <div class="f-grid">
+      <div>
+        <div class="logo">SOBER AF<span>.</span></div>
+        <p>Sober AF Entertainment (SAFE) is a 501(c)(3) non-profit recovery community organization. We believe connection to the community is a key part of long-term recovery, and we create Sober Sections at music festivals, concerts, and sporting events.</p>
+      </div>
+      <div>
+        <h4>Contact</h4>
+        <span>485 2nd Ave, #4204<br>Longmont, CO 80501-5962</span>
+        <a href="tel:+13038889019">(303) 888-9019</a>
+        <a href="mailto:kylan@soberafe.com">kylan@soberafe.com</a>
+      </div>
+      <div>
+        <h4>Explore</h4>
+        <a href="#events">Our events</a>
+        <a href="#training">Peer training</a>
+        <a href="https://soberafe.com/blogs/">Our blog</a>
+        <a href="https://www.facebook.com/SoberAFE/">Facebook</a>
+        <a href="https://www.instagram.com/soberafe/">Instagram</a>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© 2026 SAFE. All rights reserved.</span>
+      <div><a href="https://soberafe.com/privacy-policy/">Privacy Policy</a><a href="https://soberafe.com/terms-and-conditions/">Terms of Service</a><a href="https://soberafe.com/cookies/">Cookie settings</a></div>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
