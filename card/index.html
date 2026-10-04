@@ -62,6 +62,9 @@
   }
   .save:active { opacity: .85; }
   .save svg { width: 20px; height: 20px; }
+  .hint { margin: 0 24px; font-size: 14px; color: var(--muted); text-align: center; }
+  .hint a { color: inherit; }
+  .hint:empty { display: none; }
   ul { list-style: none; margin: 8px 0 0; padding: 0 12px 16px; }
   li a {
     display: flex; align-items: center; gap: 16px;
@@ -94,10 +97,11 @@
     <p class="tagline">Finding the extraordinary in the ordinary.</p>
   </section>
 
-  <a class="save" href="eric-roberts.vcf" download="Eric Roberts.vcf">
+  <a class="save" id="save" href="eric-roberts.vcf">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
     Save Contact
   </a>
+  <p class="hint" id="save-hint"></p>
 
   <ul>
     <li><a href="https://calendar.app.google/x5yWEzH3CooDAXXL8" target="_blank" rel="noopener">
@@ -131,5 +135,29 @@
   </ul>
 </main>
 <footer>card.positivetribes.org</footer>
+<script>
+  // Android browsers download .vcf files instead of opening them, so open the
+  // native "Create contact" screen prefilled; the .vcf stays as the fallback.
+  // iPhone shows a contact preview whose top-left checkmark only closes it.
+  (function () {
+    var ua = navigator.userAgent, save = document.getElementById('save'), hint = document.getElementById('save-hint');
+    var vcf = new URL('eric-roberts.vcf', location.href).href;
+    if (/Android/i.test(ua)) {
+      var extras = {
+        'S.name': 'Eric Roberts', 'S.phone': '+17207620570', 'i.phone_type': '2',
+        'S.email': 'eric@positivetribes.org', 'i.email_type': '2',
+        'S.company': 'Positive Tribes', 'S.job_title': 'CEO & Founder',
+        'S.notes': 'Book time: https://calendar.app.google/x5yWEzH3CooDAXXL8\nhttps://positivetribes.org',
+        'S.browser_fallback_url': vcf
+      };
+      var parts = ['action=android.intent.action.INSERT', 'type=vnd.android.cursor.dir/raw_contact'];
+      for (var k in extras) parts.push(k + '=' + encodeURIComponent(extras[k]));
+      save.href = 'intent:#Intent;' + parts.join(';') + ';end';
+      hint.innerHTML = 'Opens your Contacts app. Want my photo too? <a href="eric-roberts.vcf">Download the contact file</a>.';
+    } else if (/iPhone|iPad|iPod/i.test(ua)) {
+      hint.textContent = 'Then scroll down and tap \u201cCreate New Contact\u201d.';
+    }
+  })();
+</script>
 </body>
 </html>
