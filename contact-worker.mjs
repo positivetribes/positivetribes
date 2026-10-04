@@ -21,6 +21,11 @@ async function readBody(request) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // card.positivetribes.org serves the /card folder at its root; shared fonts and brand files pass through.
+    if (url.hostname === 'card.positivetribes.org' && !/^\/(fonts|brand)\//.test(url.pathname)) {
+      url.pathname = '/card' + url.pathname;
+      return env.ASSETS.fetch(new Request(url, request));
+    }
     if (url.pathname !== '/api/contact') return env.ASSETS.fetch(request);
     if (request.method !== 'POST') return json({ error: 'Please use the contact form.' }, 405);
     if (request.headers.get('Origin') !== url.origin || !['positivetribes.org', 'www.positivetribes.org'].includes(url.hostname)) {

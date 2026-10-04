@@ -18,11 +18,12 @@ await cp('brand', 'public/brand', { recursive: true });
 await cp('help-a-friend', 'public/help-a-friend', { recursive: true });
 await cp('coyote', 'public/coyote', { recursive: true });
 await cp('soberafe', 'public/soberafe', { recursive: true });
+await cp('card', 'public/card', { recursive: true });
 // Optional folder: git drops it when empty, so skip it rather than fail the deploy.
 if (existsSync('lutheran-hospital')) await cp('lutheran-hospital', 'public/lutheran-hospital', { recursive: true });
 await writeFile('wrangler.json', JSON.stringify({
   name: 'positivetribes', main: 'contact-worker.mjs', compatibility_date: '2026-09-11',
-  assets: { directory: './public', binding: 'ASSETS' }, observability: { enabled: true },
+  assets: { directory: './public', binding: 'ASSETS', run_worker_first: true }, observability: { enabled: true },
   vars: { CONTACT_TO: recipient },
   send_email: [{ name: 'CONTACT_MAIL', destination_address: recipient }],
   ratelimits: [{ name: 'CONTACT_LIMIT', namespace_id: '914202601', simple: { limit: 5, period: 60 } }]
