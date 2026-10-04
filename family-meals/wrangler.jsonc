@@ -12,5 +12,16 @@
     {
       "binding": "DB"
     }
-  ]
+  ],
+  // Pull request builds run `wrangler preview`, which requires this block.
+  // Previews use their own database so test edits never touch family data.
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "family-meals-preview-db",
+        "database_id": "03019dcf-c908-4734-bbc5-a0b9b98c2c0d"
+      }
+    ]
+  }
 }

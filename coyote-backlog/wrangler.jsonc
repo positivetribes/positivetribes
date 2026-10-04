@@ -14,5 +14,16 @@
       "database_name": "coyote-backlog-db",
       "database_id": "41321f8f-8e42-4eb8-b288-351226f7bd9b"
     }
-  ]
+  ],
+  // Pull request builds run `wrangler preview`, which requires this block.
+  // Previews use their own database so test edits never touch real data.
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "coyote-backlog-preview-db",
+        "database_id": "c7c4332e-c846-49ea-aa82-1af8fab82e19"
+      }
+    ]
+  }
 }
