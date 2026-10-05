@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#2f5d8a"/>
+  <!-- Rosie (left) -->
+  <g>
+    <ellipse cx="118" cy="232" rx="42" ry="92" fill="#8a4b2f" transform="rotate(12 118 232)"/>
+    <ellipse cx="238" cy="232" rx="42" ry="92" fill="#8a4b2f" transform="rotate(-12 238 232)"/>
+    <ellipse cx="178" cy="262" rx="82" ry="86" fill="#d9a066"/>
+    <ellipse cx="178" cy="304" rx="42" ry="30" fill="#f6e3c8"/>
+    <ellipse cx="178" cy="286" rx="15" ry="11" fill="#2b1b14"/>
+    <circle cx="146" cy="242" r="10" fill="#2b1b14"/><circle cx="210" cy="242" r="10" fill="#2b1b14"/>
+    <circle cx="149" cy="238" r="3.5" fill="#fff"/><circle cx="213" cy="238" r="3.5" fill="#fff"/>
+    <path d="M178 297 v12 M178 309 q-14 12 -28 2 M178 309 q14 12 28 2" stroke="#2b1b14" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="178" cy="336" rx="14" ry="22" fill="#e8708f"/>
+  </g>
+  <!-- Roxy (right) -->
+  <g>
+    <ellipse cx="274" cy="190" rx="34" ry="64" fill="#2b2f36" transform="rotate(-18 274 190)"/>
+    <ellipse cx="386" cy="190" rx="34" ry="64" fill="#2b2f36" transform="rotate(18 386 190)"/>
+    <ellipse cx="330" cy="274" rx="80" ry="84" fill="#3b4048"/>
+    <ellipse cx="330" cy="316" rx="40" ry="28" fill="#e9edf0"/>
+    <path d="M330 206 q-20 30 0 56 q20 -26 0 -56z" fill="#e9edf0"/>
+    <ellipse cx="330" cy="298" rx="15" ry="11" fill="#14161a"/>
+    <circle cx="298" cy="254" r="10" fill="#fff"/><circle cx="362" cy="254" r="10" fill="#fff"/>
+    <circle cx="300" cy="256" r="6" fill="#14161a"/><circle cx="364" cy="256" r="6" fill="#14161a"/>
+    <path d="M330 309 v10 M330 319 q-14 12 -28 2 M330 319 q14 12 28 2" stroke="#14161a" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>
