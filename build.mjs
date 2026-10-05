@@ -13,7 +13,7 @@ document.addEventListener('click',(event)=>{const link=event.target.closest('a[h
 ` : '';
 
 await mkdir('public', { recursive: true });
-for (const page of ['index.html', 'about.html', 'projects.html', 'contact.html']) {
+for (const page of ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html']) {
   const html = await readFile(page, 'utf8');
   if (!html.includes('</head>')) throw new Error(`${page} is missing </head>.`);
   await writeFile(`public/${page}`, html.replace('</head>', analytics + '</head>'));
