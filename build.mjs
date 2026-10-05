@@ -1,13 +1,22 @@
-import { mkdir, copyFile, writeFile, cp } from 'node:fs/promises';
+import { mkdir, copyFile, readFile, writeFile, cp } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 const recipient = process.env.CONTACT_TO;
 if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) throw new Error('Set CONTACT_TO to the verified email destination in Cloudflare build variables.');
 
+// Optional GA4 tag for Google Ad Grants conversion tracking; pages ship without it when unset.
+const measurementId = process.env.GA_MEASUREMENT_ID;
+if (measurementId && !/^G-[A-Z0-9]+$/.test(measurementId)) throw new Error('GA_MEASUREMENT_ID must look like G-XXXXXXXXXX.');
+const analytics = measurementId ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${measurementId}"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${measurementId}');
+document.addEventListener('click',(event)=>{const link=event.target.closest('a[href^="mailto:"]');if(link)gtag('event','contact_email_click',{link_url:link.href})});</script>
+` : '';
+
 await mkdir('public', { recursive: true });
-await copyFile('index.html', 'public/index.html');
-for (const page of ['about.html', 'projects.html', 'contact.html']) {
-  await copyFile(page, `public/${page}`);
+for (const page of ['index.html', 'about.html', 'projects.html', 'contact.html']) {
+  const html = await readFile(page, 'utf8');
+  if (!html.includes('</head>')) throw new Error(`${page} is missing </head>.`);
+  await writeFile(`public/${page}`, html.replace('</head>', analytics + '</head>'));
 }
 for (const screen of ['workouts', 'training-frequency', 'blood-pressure', 'medicine-tracker']) {
   await copyFile(`pulselift-${screen}.png`, `public/pulselift-${screen}.png`);
@@ -28,4 +37,4 @@ await writeFile('wrangler.json', JSON.stringify({
   send_email: [{ name: 'CONTACT_MAIL', destination_address: recipient }],
   ratelimits: [{ name: 'CONTACT_LIMIT', namespace_id: '914202601', simple: { limit: 5, period: 60 } }]
 }, null, 2));
-console.log('Prepared website assets and contact form configuration.');
+console.log(`Prepared website assets and contact form configuration${measurementId ? ` with GA4 ${measurementId}` : ' without analytics'}.`);
