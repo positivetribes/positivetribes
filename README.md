@@ -1,6 +1,6 @@
 # Positive Tribes
 
-Static nonprofit technology homepage, deployed from GitHub through the existing Cloudflare Workers setup.
+Static nonprofit technology homepage, deployed from the `positivetribes/positivetribes` GitHub repository through Cloudflare Workers Builds.
 
 ## Build
 
