@@ -1,0 +1,321 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rosie &amp; Roxy Shots</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a clinic chart. Summary per dog up top, then three ledgers: needs attention, coming up, history. */
+:root{
+  --bg:#eef2f5; --surface:#ffffff; --ink:#18232d; --muted:#5b6b78; --line:#d6dee5;
+  --accent:#2f5d8a; --accent-ink:#ffffff;
+  --rosie:#c2456b; --rosie-soft:#fbe7ee; --roxy:#1f8577; --roxy-soft:#dff3ef;
+  --over:#b4321f; --over-soft:#fde6e1; --soon:#9a6700; --soon-soft:#fff2cc; --ok:#2c7a3f; --ok-soft:#e1f3e5;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10171d; --surface:#18222b; --ink:#e4ebf0; --muted:#93a3b0; --line:#2a3743;
+  --accent:#7fb0e0; --accent-ink:#0d1620;
+  --rosie:#f08aa8; --rosie-soft:#3a1d27; --roxy:#5cc9b8; --roxy-soft:#13332e;
+  --over:#ff8a73; --over-soft:#3d1c16; --soon:#f0c35a; --soon-soft:#3a2f12; --ok:#79cf8d; --ok-soft:#173222;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10171d; --surface:#18222b; --ink:#e4ebf0; --muted:#93a3b0; --line:#2a3743;
+  --accent:#7fb0e0; --accent-ink:#0d1620;
+  --rosie:#f08aa8; --rosie-soft:#3a1d27; --roxy:#5cc9b8; --roxy-soft:#13332e;
+  --over:#ff8a73; --over-soft:#3d1c16; --soon:#f0c35a; --soon-soft:#3a2f12; --ok:#79cf8d; --ok-soft:#173222;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font:800 clamp(28px,6vw,40px)/1.05 var(--display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 .r{color:var(--rosie)} h1 .x{color:var(--roxy)}
+.sub{color:var(--muted);margin:4px 0 0}
+h2{font:600 13px/1 var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;display:flex;gap:8px;align-items:center}
+h2 .count{font-family:var(--mono);background:var(--line);color:var(--ink);border-radius:99px;padding:2px 8px;letter-spacing:0}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.danger{color:var(--over);border-color:var(--over)}
+.dogs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dog{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.dog-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.dog-name{font:800 24px/1 var(--display)}
+.dog.rosie .dog-name{color:var(--rosie)} .dog.roxy .dog-name{color:var(--roxy)}
+.weight{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.next{display:flex;flex-direction:column;gap:2px}
+.next-label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.next-item{font-weight:600}
+.lastgiven{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:13px;border-top:1px dashed var(--line);padding-top:8px}
+.lastgiven span:nth-child(even){font-family:var(--mono);color:var(--muted);font-size:12px;text-align:right}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{border-radius:99px;padding:6px 14px}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row{display:grid;grid-template-columns:92px 1fr auto;gap:4px 14px;padding:12px 16px;border-top:1px solid var(--line);align-items:center;cursor:pointer;text-align:left;width:100%;background:none;border-radius:0;border-left:0;border-right:0;border-bottom:0}
+.row:first-child{border-top:0}
+.row:hover{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.date{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+.date small{display:block;color:var(--muted);font-size:11px}
+.what{min-width:0}
+.what b{font-weight:600}
+.meta{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.note{font-size:13px;color:var(--ink);background:var(--soon-soft);border-radius:6px;padding:2px 8px;display:inline-block;margin-top:4px}
+.chip{display:inline-block;font-size:12px;font-weight:600;border-radius:99px;padding:1px 9px;margin-right:6px}
+.chip.Rosie{background:var(--rosie-soft);color:var(--rosie)} .chip.Roxy{background:var(--roxy-soft);color:var(--roxy)}
+.pill{font-size:12px;font-weight:600;border-radius:6px;padding:3px 8px;white-space:nowrap}
+.pill.over{background:var(--over-soft);color:var(--over)} .pill.soon{background:var(--soon-soft);color:var(--soon)}
+.pill.later{background:var(--line);color:var(--ink)} .pill.done{background:var(--ok-soft);color:var(--ok)}
+.empty{padding:18px 16px;color:var(--muted)}
+.banner{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;color:var(--muted)}
+.banner.error{color:var(--over);border-color:var(--over)}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);padding:0;width:min(520px,calc(100vw - 32px))}
+dialog::backdrop{background:rgb(10 20 30 / .45)}
+form{display:flex;flex-direction:column;gap:14px;padding:20px}
+form h3{font:800 22px/1.1 var(--display);margin:0}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.legend{font-size:13px;font-weight:600;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+textarea{min-height:60px;resize:vertical}
+.dogpick{display:flex;gap:8px}
+.dogpick label{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;padding:6px 12px;cursor:pointer;font-weight:600}
+.dogpick input{width:auto}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center}
+.actions .right{display:flex;gap:8px;margin-left:auto}
+.confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--over-soft);color:var(--over);border-radius:8px;padding:8px 10px}
+.hint{font-size:12px;color:var(--muted)}
+@media (max-width:520px){.row{grid-template-columns:80px 1fr}.row .pill{grid-column:2;justify-self:start}.grid2{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:no-preference){.row{transition:background .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="r">Rosie</span> &amp; <span class="x">Roxy</span></h1>
+      <p class="sub">Vaccines, meds and vet visits</p>
+    </div>
+    <button class="primary" id="addBtn" type="button">+ Add record</button>
+  </header>
+
+  <div id="status" class="banner">Loading your records…</div>
+  <form id="pinForm" class="banner" hidden style="display:flex;flex-direction:column;gap:10px">
+    <label for="pin" style="font-weight:600;color:var(--ink)">Enter the family PIN</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" required>
+    <button class="primary" type="submit">Open</button>
+    <span id="pinErr" class="hint" style="color:var(--over)" hidden></span>
+  </form>
+
+  <section class="dogs" id="dogs"></section>
+
+  <div class="toolbar">
+    <div class="tabs" role="group" aria-label="Show records for">
+      <button type="button" data-filter="all" aria-pressed="true">Both dogs</button>
+      <button type="button" data-filter="Rosie" aria-pressed="false">Rosie</button>
+      <button type="button" data-filter="Roxy" aria-pressed="false">Roxy</button>
+    </div>
+  </div>
+
+  <section><h2>Needs attention <span class="count" id="cAttn">0</span></h2><div class="list" id="attn"></div></section>
+  <section><h2>Coming up <span class="count" id="cLater">0</span></h2><div class="list" id="later"></div></section>
+  <section><h2>History <span class="count" id="cDone">0</span></h2><div class="list" id="done"></div></section>
+</div>
+
+<dialog id="dlg">
+  <form id="form">
+    <h3 id="formTitle">Add record</h3>
+    <div class="field">
+      <span class="legend">Dog</span>
+      <div class="dogpick">
+        <label><input type="checkbox" id="fRosie" value="Rosie"> Rosie</label>
+        <label><input type="checkbox" id="fRoxy" value="Roxy"> Roxy</label>
+      </div>
+      <span class="hint" id="dogHint">Pick both to add the same record for each dog.</span>
+    </div>
+    <div class="field"><label for="fItem">Vaccine, med or visit</label>
+      <input id="fItem" list="itemList" required placeholder="e.g. Rabies, DA2PPV, Bordetella">
+      <datalist id="itemList"></datalist></div>
+    <div class="grid2">
+      <div class="field"><label for="fDate">Date</label><input id="fDate" type="date" required></div>
+      <div class="field"><label for="fStatus">Status</label>
+        <select id="fStatus"><option value="done">Done</option><option value="scheduled">Booked</option><option value="tbd">Not booked yet</option></select></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label for="fVendor">Vet / vendor</label><input id="fVendor" list="vendorList"><datalist id="vendorList"></datalist></div>
+      <div class="field"><label for="fWeight">Weight (lb)</label><input id="fWeight" inputmode="decimal"></div>
+    </div>
+    <div class="field"><label for="fNotes">Notes</label><textarea id="fNotes"></textarea></div>
+    <div class="field" id="nextWrap"><label for="fNext">Then add the next one due in</label>
+      <select id="fNext"><option value="0">Don't add a follow-up</option><option value="0.0833">1 month</option><option value="0.5">6 months</option><option value="1">1 year</option><option value="3">3 years</option></select>
+      <span class="hint">Only applies when status is Done. Creates a "Not booked yet" record.</span></div>
+    <div id="confirmBox" class="confirm" hidden>Delete this record for good?
+      <button type="button" class="danger" id="confirmDel">Delete</button><button type="button" id="cancelDel">Keep it</button></div>
+    <div class="actions">
+      <button type="button" class="danger" id="delBtn" hidden>Delete</button>
+      <div class="right"><button type="button" id="cancelBtn">Cancel</button><button type="submit" class="primary" id="saveBtn">Save</button></div>
+    </div>
+    <div id="formErr" class="banner error" hidden></div>
+  </form>
+</dialog>
+
+<script>
+const DOGS=["Rosie","Roxy"];
+const SOON_DAYS=60;
+let pin="", records=[], filter="all", editing=null, loaded=false;
+try{pin=localStorage.getItem("rr-pin")||""}catch(e){}
+try{const f=localStorage.getItem("rr-filter"); if(f) filter=f;}catch(e){}
+
+const $=id=>document.getElementById(id);
+const todayISO=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const toDate=s=>{const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+const daysUntil=s=>Math.round((toDate(s)-toDate(todayISO()))/86400000);
+const fmt=s=>toDate(s).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const addYears=(s,y)=>{const d=toDate(s);if(y<1){d.setMonth(d.getMonth()+Math.round(y*12))}else{d.setFullYear(d.getFullYear()+y)}return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const rel=n=>n===0?"today":n>0?(n<60?`in ${n} days`:`in ${Math.round(n/30.4)} mo`):(-n<60?`${-n} days ago`:`${Math.round(-n/30.4)} mo ago`);
+
+function state(r){
+  if(r.status==="done") return "done";
+  const n=daysUntil(r.date);
+  if(n<0) return "over";
+  if(n<=SOON_DAYS) return "soon";
+  return "later";
+}
+function pill(r){
+  const s=state(r), n=daysUntil(r.date);
+  if(s==="done") return `<span class="pill done">Done</span>`;
+  const booked=r.status==="scheduled"?"Booked · ":"Not booked · ";
+  if(s==="over") return `<span class="pill over">Overdue ${-n}d</span>`;
+  if(s==="soon") return `<span class="pill soon">${booked}${rel(n)}</span>`;
+  return `<span class="pill later">${booked}${rel(n)}</span>`;
+}
+function rowHTML(r){
+  const meta=[r.vendor,r.weight?r.weight+" lb":""].filter(Boolean).map(esc).join(" · ");
+  return `<button type="button" class="row" data-id="${esc(r.id)}">
+    <span class="date">${esc(fmt(r.date))}<small>${esc(rel(daysUntil(r.date)))}</small></span>
+    <span class="what"><span class="chip ${esc(r.dog)}">${esc(r.dog)}</span><b>${esc(r.item)}</b>
+      ${meta?`<div class="meta">${meta}</div>`:""}${r.notes?`<div class="note">${esc(r.notes)}</div>`:""}</span>
+    ${pill(r)}</button>`;
+}
+function fill(el,countEl,list,emptyText){
+  countEl.textContent=list.length;
+  el.innerHTML=list.length?list.map(rowHTML).join(""):`<div class="empty">${emptyText}</div>`;
+}
+function norm(s){return String(s).toLowerCase().replace(/^\d of \d:\s*/,"").replace(/virus|vaccine/g,"").trim()}
+
+function renderDogs(){
+  $("dogs").innerHTML=DOGS.map(dog=>{
+    const mine=records.filter(r=>r.dog===dog);
+    const open=mine.filter(r=>r.status!=="done").sort((a,b)=>a.date.localeCompare(b.date));
+    const nxt=open[0];
+    const w=mine.filter(r=>r.weight&&!isNaN(parseFloat(r.weight))).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const last={};
+    mine.filter(r=>r.status==="done").sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{last[norm(r.item)]=r});
+    const lastRows=Object.values(last).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6)
+      .map(r=>`<span>${esc(r.item.replace(/^\d of \d:\s*/,""))}</span><span>${esc(fmt(r.date))}</span>`).join("");
+    return `<article class="dog ${dog.toLowerCase()}">
+      <div class="dog-head"><span class="dog-name">${dog}</span>${w?`<span class="weight">${esc(w.weight)} lb · ${esc(fmt(w.date))}</span>`:""}</div>
+      <div class="next"><span class="next-label">Next due</span>
+        ${nxt?`<span class="next-item">${esc(nxt.item)} · ${esc(fmt(nxt.date))}</span>${pill(nxt)}`:`<span class="meta">Nothing scheduled</span>`}</div>
+      ${open.length>1?`<span class="meta">${open.length-1} more after that</span>`:""}
+      ${lastRows?`<div class="lastgiven"><span class="next-label" style="grid-column:1/-1">Last given</span>${lastRows}</div>`:""}
+    </article>`;
+  }).join("");
+}
+function render(){
+  document.querySelectorAll("[data-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.filter===filter)));
+  renderDogs();
+  const vis=records.filter(r=>filter==="all"||r.dog===filter);
+  const open=vis.filter(r=>r.status!=="done").sort((a,b)=>a.date.localeCompare(b.date));
+  fill($("attn"),$("cAttn"),open.filter(r=>state(r)!=="later"),`Nothing overdue or due in the next ${SOON_DAYS} days.`);
+  fill($("later"),$("cLater"),open.filter(r=>state(r)==="later"),"Nothing on the calendar yet.");
+  fill($("done"),$("cDone"),vis.filter(r=>r.status==="done").sort((a,b)=>b.date.localeCompare(a.date)),"No history yet.");
+  const opts=(k)=>[...new Set(records.map(r=>r[k]).filter(Boolean))].sort().map(v=>`<option value="${esc(v)}">`).join("");
+  $("itemList").innerHTML=opts("item"); $("vendorList").innerHTML=opts("vendor");
+}
+
+document.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{
+  filter=b.dataset.filter; try{localStorage.setItem("rr-filter",filter)}catch(e){} render();
+}));
+
+function openForm(r){
+  editing=r||null;
+  $("formTitle").textContent=r?"Edit record":"Add record";
+  $("fRosie").checked=r?r.dog==="Rosie":filter!=="Roxy";
+  $("fRoxy").checked=r?r.dog==="Roxy":filter==="Roxy";
+  $("dogHint").hidden=!!r;
+  $("fItem").value=r?.item||""; $("fDate").value=r?.date||todayISO();
+  $("fStatus").value=r?.status||"done"; $("fVendor").value=r?.vendor||"";
+  $("fWeight").value=r?.weight||""; $("fNotes").value=r?.notes||""; $("fNext").value="0";
+  $("delBtn").hidden=!r; $("confirmBox").hidden=true; $("formErr").hidden=true;
+  $("dlg").showModal();
+}
+$("addBtn").addEventListener("click",()=>openForm());
+document.addEventListener("click",e=>{const row=e.target.closest(".row"); if(row){const r=records.find(x=>x.id===row.dataset.id); if(r) openForm(r);}});
+$("cancelBtn").addEventListener("click",()=>$("dlg").close());
+$("delBtn").addEventListener("click",()=>{$("confirmBox").hidden=false});
+$("cancelDel").addEventListener("click",()=>{$("confirmBox").hidden=true});
+$("confirmDel").addEventListener("click",async()=>{
+  try{await api("/records/"+editing.id,{method:"DELETE"}); $("dlg").close(); await load();}
+  catch(e){showErr(e)}
+});
+function showErr(e){$("formErr").hidden=false;$("formErr").textContent=(e&&e.message)||"Couldn't save. Check your connection and try again."}
+
+$("form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const dogs=editing?[$("fRosie").checked?"Rosie":$("fRoxy").checked?"Roxy":null].filter(Boolean):DOGS.filter(d=>$("f"+d).checked);
+  if(!dogs.length){$("formErr").hidden=false;$("formErr").textContent="Pick at least one dog.";return}
+  const base={item:$("fItem").value.trim(),date:$("fDate").value,status:$("fStatus").value,
+    vendor:$("fVendor").value.trim(),weight:$("fWeight").value.trim(),notes:$("fNotes").value.trim()};
+  if(!base.item||!base.date){$("formErr").hidden=false;$("formErr").textContent="Add a name and a date.";return}
+  const next=parseFloat($("fNext").value);
+  $("saveBtn").disabled=true;
+  try{
+    if(editing){await api("/records/"+editing.id,{method:"PUT",body:JSON.stringify({...base,dog:dogs[0]})})}
+    else{await api("/records",{method:"POST",body:JSON.stringify(dogs.map(dog=>({...base,dog})))})}
+    if(base.status==="done"&&next>0){
+      await api("/records",{method:"POST",body:JSON.stringify(dogs.map(dog=>({item:base.item.replace(/^\d of \d:\s*/,""),date:addYears(base.date,next),status:"tbd",vendor:base.vendor,weight:"",notes:"",dog})))});
+    }
+    $("dlg").close(); await load();
+  }catch(err){showErr(err)}
+  finally{$("saveBtn").disabled=false}
+});
+$("fRosie").addEventListener("change",()=>{if(editing&&$("fRosie").checked)$("fRoxy").checked=false});
+$("fRoxy").addEventListener("change",()=>{if(editing&&$("fRoxy").checked)$("fRosie").checked=false});
+
+async function api(path,opts={}){
+  const res=await fetch("/api"+path,{...opts,headers:{"content-type":"application/json","x-dogs-pin":pin}});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){const e=new Error(data.error||"Request failed.");e.status=res.status;throw e}
+  return data;
+}
+function needPin(msg){
+  $("status").hidden=true; $("pinForm").hidden=false; $("pinForm").style.display="flex";
+  $("pinErr").hidden=!msg; $("pinErr").textContent=msg||"";
+}
+async function load(){
+  try{
+    const data=await api("/records");
+    records=data.records; loaded=true;
+    $("pinForm").hidden=true; $("pinForm").style.display="none";
+    $("status").className="banner";
+    $("status").hidden=records.length>0;
+    if(!records.length)$("status").textContent="No records yet. Use Add record to log the first vaccine or vet visit.";
+    render();
+  }catch(e){
+    if(e.status===401){needPin(pin?"That PIN didn't work.":"");return}
+    $("status").hidden=false;$("status").className="banner error";
+    $("status").textContent="Couldn't load your records. Check your connection and reload.";
+  }
+}
+$("pinForm").addEventListener("submit",e=>{
+  e.preventDefault(); pin=$("pin").value.trim();
+  try{localStorage.setItem("rr-pin",pin)}catch(err){}
+  load();
+});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&loaded)load()});
+render();
+load();
+</script>
