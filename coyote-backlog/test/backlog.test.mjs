@@ -252,3 +252,11 @@ test('an existing database without phases is upgraded once, keeping its data and
     assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM pragma_table_info('backlog_items') WHERE name='phase'").get().n, 1);
   } finally { sqlite.close(); }
 });
+
+test('the committed backlog page has no analytics tag baked in; deploy adds it from GA_MEASUREMENT_ID', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.equal(html.includes('googletagmanager.com'), false);
+  assert.match(html, /<\/head>/);
+  assert.match(html, /typeof gtag === 'function'/);
+});
