@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Coyote">
+  <rect width="512" height="512" fill="#a2593f"/>
+  <g transform="translate(256 256) scale(.7) translate(-256 -256)">
+  <!-- head, tall ears, cheek ruff and narrow muzzle -->
+  <path fill="#f6ead9" d="M256 182 L216 158 L146 32 L98 226 L70 296 L114 302 L96 360 L152 346 L204 392 L232 466 L256 474 L280 466 L308 392 L360 346 L416 360 L398 302 L442 296 L414 226 L366 32 L296 158 Z"/>
+  <!-- inner ears -->
+  <path fill="#d9a68c" d="M148 96 L128 204 L194 170 Z"/>
+  <path fill="#d9a68c" d="M364 96 L384 204 L318 170 Z"/>
+  <!-- darker blaze from forehead to muzzle -->
+  <path fill="#d9a68c" d="M256 182 L228 200 L242 304 L256 340 L270 304 L284 200 Z"/>
+  <!-- alert eyes, outer corners lifted -->
+  <path fill="#283028" d="M162 254 Q204 246 240 272 Q196 290 162 254 Z"/>
+  <path fill="#283028" d="M350 254 Q308 246 272 272 Q316 290 350 254 Z"/>
+  <circle cx="208" cy="268" r="6" fill="#f6ead9"/>
+  <circle cx="304" cy="268" r="6" fill="#f6ead9"/>
+  <!-- nose -->
+  <path fill="#283028" d="M232 424 Q256 406 280 424 Q280 450 256 462 Q232 450 232 424 Z"/>
+
+  </g>
+</svg>
