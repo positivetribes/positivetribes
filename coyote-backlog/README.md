@@ -34,3 +34,7 @@ npm run dev -- --local --var BACKLOG_PASSCODE:local-test-only
 ```
 
 The local command uses a disposable local database and a test-only passcode. Do not add `--remote` for testing. The tests run the Worker's real SQL against SQLite and cover the passcode check, seeding, input validation, ordering, tier changes, done items, and edits.
+
+## Visitor tracking
+
+`npm run deploy` first runs `build.mjs`, which adds the Google Analytics 4 tag to the page when the `GA_MEASUREMENT_ID` build variable is set (use the same `G-` ID as the main Positive Tribes site). Add it in Cloudflare under this Worker's **Settings**, then **Build**, then **Variables and secrets**. Without it the page ships with no analytics, and the tag is never committed to GitHub. The page records `backlog_signed_in` and `backlog_item_added` (with the tier only). It never sends the passcode, names, or anything typed into a suggestion. Because both sites are on `positivetribes.org`, a person who visits both counts as one user; use the **Hostname** dimension in GA4 to tell the two apart.

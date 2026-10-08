@@ -80,6 +80,8 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
 .item.is-done h3{text-decoration:line-through;color:var(--muted)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-TEST123456"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-TEST123456');</script>
 </head>
 <body>
 <main class="wrap">
@@ -143,6 +145,10 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
   const $ = id => document.getElementById(id);
   const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
   let passcode = '', items = [], editing = null, filter = 'all';
+
+  // Visitor counting. gtag exists only when the site is deployed with the GA4 tag, so this does nothing otherwise.
+  // Events never include the passcode, names, or anything typed into a suggestion.
+  const track = (name, params) => { try { if (typeof gtag === 'function') gtag('event', name, params || {}); } catch {} };
 
   const store = {
     get(key) { try { return localStorage.getItem(key) || ''; } catch { return ''; } },
@@ -292,6 +298,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
       store.set('coyote-backlog-passcode', passcode);
       $('gate').hidden = true;
       $('app').hidden = false;
+      track('backlog_signed_in');
     } catch (error) {
       if ($('app').hidden) lock(error.message);
     }
@@ -310,8 +317,10 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     store.set('coyote-backlog-name', name);
     showError('');
     try {
-      const data = await api('/items', post({ title: $('title').value, details: $('details').value, tier: $('tier').value, added_by: name }));
+      const tier = $('tier').value;
+      const data = await api('/items', post({ title: $('title').value, details: $('details').value, tier, added_by: name }));
       items = data.items;
+      track('backlog_item_added', { tier });
       $('title').value = '';
       $('details').value = '';
       render();

@@ -443,9 +443,14 @@ let toastTimer;
 function say(msg){state.toast=msg;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{state.toast='';const t=$('.toast');if(t)t.remove()},3200)}
 
 /* Actions */
+// Visitor counting. gtag exists only when the site is built with the GA4 tag, so this does nothing otherwise.
+// Events carry no personal data: never the photo, notes, contact details or location.
+const track=(name,params)=>{try{if(typeof gtag==='function')gtag('event',name,params||{})}catch(err){}};
+const TRACKED={role:'coyote_role_view',startreport:'coyote_report_started',submit:'coyote_report_submitted',sendalert:'coyote_alert_sent',approve:'coyote_report_approved'};
 document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]'); if(!el) return;
   const a=el.dataset.act, v=el.dataset.v, id=+el.dataset.id, r=state.rep;
+  if(TRACKED[a]) track(TRACKED[a],a==='role'?{role:v}:{});
   if(a==='pin'){const b=el.getBoundingClientRect();r.pin={x:Math.round((e.clientX-b.left)/b.width*100),y:Math.round((e.clientY-b.top)/b.height*100)}}
   else if(a==='role'){state.role=v}
   else if(a==='tab'){state.tab[state.role]=v}
@@ -494,7 +499,7 @@ render();
   const btn=document.getElementById('savebtn'), dlg=document.getElementById('savedlg');
   const installed=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
   if(installed||typeof dlg.showModal!=='function'){btn.hidden=true;return}
-  btn.addEventListener('click',()=>{dlg.showModal();dlg.scrollTop=0});
+  btn.addEventListener('click',()=>{dlg.showModal();dlg.scrollTop=0;track('coyote_save_instructions_opened')});
   document.getElementById('savedone').addEventListener('click',()=>dlg.close());
   // Clicking the dimmed area outside the box closes it too.
   dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});

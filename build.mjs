@@ -26,6 +26,12 @@ await cp('fonts', 'public/fonts', { recursive: true });
 await cp('brand', 'public/brand', { recursive: true });
 await cp('help-a-friend', 'public/help-a-friend', { recursive: true });
 await cp('coyote', 'public/coyote', { recursive: true });
+// The prototype is copied as-is, so add the same GA4 tag here to count its visitors.
+if (measurementId) {
+  const coyote = await readFile('public/coyote/index.html', 'utf8');
+  if (!coyote.includes('</head>')) throw new Error('coyote/index.html is missing </head>.');
+  await writeFile('public/coyote/index.html', coyote.replace('</head>', analytics + '</head>'));
+}
 await cp('soberafe', 'public/soberafe', { recursive: true });
 await cp('card', 'public/card', { recursive: true });
 // Optional folder: git drops it when empty, so skip it rather than fail the deploy.
