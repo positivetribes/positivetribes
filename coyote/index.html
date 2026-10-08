@@ -54,6 +54,17 @@ p{margin:0}
 .mission span{color:var(--muted)}
 .top small{color:var(--muted);font-size:13px}
 .tag{font-size:13px;letter-spacing:.06em;text-transform:uppercase;background:var(--warn-bg);color:var(--warn);padding:3px 9px;border-radius:99px;font-weight:700}
+.savebtn{border:1.5px solid var(--accent);background:transparent;color:var(--accent);padding:6px 14px;border-radius:99px;font-weight:700;font-size:15px;display:inline-flex;gap:6px;align-items:center}
+.savebtn[hidden]{display:none}
+dialog.save{border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--fg);padding:0;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog.save::backdrop{background:rgba(10,14,12,.55)}
+dialog.save .in{padding:20px 22px 22px;display:flex;flex-direction:column;gap:14px}
+dialog.save h2{font-size:24px;font-weight:700}
+dialog.save h3{font-size:18px;font-weight:700;margin:0 0 4px}
+dialog.save ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px}
+dialog.save .os{border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+dialog.save .hint{color:var(--muted);font-size:15px}
+dialog.save .row{display:flex;justify-content:flex-end}
 
 .roles{display:flex;flex-wrap:wrap;gap:8px}
 .roles button{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:99px;font-weight:500}
@@ -145,6 +156,7 @@ th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute
     <h1>Project Coyote Mange App</h1>
     <div class="mission">Protecting wild carnivores <span>Fostering thriving ecosystems</span></div>
     <div><span class="tag">Clickable prototype</span> <small>Sample data only. Built by Positive Tribes.</small></div>
+    <button class="savebtn" id="savebtn" type="button" aria-haspopup="dialog">Save to your phone or computer</button>
   </div>
   <div class="roles" role="tablist" aria-label="Choose who you are viewing the app as" id="roles"></div>
   <div class="stage">
@@ -156,6 +168,45 @@ th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute
     <aside class="notes" id="notes"></aside>
   </div>
 </div>
+
+<dialog class="save" id="savedlg" aria-labelledby="savetitle">
+  <div class="in">
+    <h2 id="savetitle" tabindex="-1" autofocus>Save the app to your phone or computer</h2>
+    <p class="hint">This puts a coyote icon on your home screen, desktop or dock. It opens like an app, with no app store and nothing to download.</p>
+
+    <div class="os">
+      <h3>iPhone or iPad</h3>
+      <ol>
+        <li>Open this page in <b>Safari</b>. It will not work from inside an email or another app, so use Safari's address bar if needed.</li>
+        <li>Tap the <b>Share</b> button, the square with an arrow pointing up.</li>
+        <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+        <li>Tap <b>Add</b>. The coyote icon appears on your home screen.</li>
+      </ol>
+    </div>
+
+    <div class="os">
+      <h3>Android</h3>
+      <ol>
+        <li>Open this page in <b>Chrome</b>.</li>
+        <li>Tap the <b>three dots</b> at the top right.</li>
+        <li>Tap <b>Add to Home screen</b>, or <b>Install app</b> if you see it.</li>
+        <li>Tap <b>Install</b> or <b>Add</b>, then confirm. The coyote icon appears on your home screen.</li>
+      </ol>
+    </div>
+
+    <div class="os">
+      <h3>Computer</h3>
+      <ol>
+        <li><b>Chrome:</b> click the three dots at the top right, then <b>Cast, save and share</b>, then <b>Install page as app</b>.</li>
+        <li><b>Edge:</b> click the three dots, then <b>Apps</b>, then <b>Install this site as an app</b>.</li>
+        <li><b>Safari on a Mac:</b> choose <b>File</b>, then <b>Add to Dock</b>.</li>
+      </ol>
+    </div>
+
+    <p class="hint">Already saved it before and still see a plain icon? Delete the old one and add it again.</p>
+    <div class="row"><button class="btn" id="savedone" type="button">Done</button></div>
+  </div>
+</dialog>
 
 <script>
 const REGIONS = {
@@ -437,6 +488,18 @@ document.addEventListener('change',e=>{
   }
 });
 render();
+
+// Save-to-device instructions. Hidden when the page is already running as an installed app.
+(()=>{
+  const btn=document.getElementById('savebtn'), dlg=document.getElementById('savedlg');
+  const installed=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
+  if(installed||typeof dlg.showModal!=='function'){btn.hidden=true;return}
+  btn.addEventListener('click',()=>{dlg.showModal();dlg.scrollTop=0});
+  document.getElementById('savedone').addEventListener('click',()=>dlg.close());
+  // Clicking the dimmed area outside the box closes it too.
+  dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
+  dlg.addEventListener('close',()=>btn.focus());
+})();
 </script>
 
 </body>
