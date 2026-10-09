@@ -12,10 +12,20 @@ const analytics = measurementId ? `<script async src="https://www.googletagmanag
 document.addEventListener('click',(event)=>{const link=event.target.closest('a[href^="mailto:"]');if(link)gtag('event','contact_email_click',{link_url:link.href})});</script>
 ` : '';
 
+// Donations: "off" (default) leaves the donate page out entirely, "preview" publishes it unlinked and
+// hidden from search for testing, "on" also adds Donate to the menu and the donation note to the privacy page.
+const donations = process.env.DONATIONS || 'off';
+if (!['off', 'preview', 'on'].includes(donations)) throw new Error('DONATIONS must be off, preview or on.');
+
 await mkdir('public', { recursive: true });
-for (const page of ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html']) {
-  const html = await readFile(page, 'utf8');
+const pages = ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html'];
+if (donations !== 'off') pages.push('donate.html');
+for (const page of pages) {
+  let html = await readFile(page, 'utf8');
   if (!html.includes('</head>')) throw new Error(`${page} is missing </head>.`);
+  html = donations === 'on' ? html.replace(/<!--donations-->|<!--\/donations-->/g, '') : html.replace(/<!--donations-->[\s\S]*?<!--\/donations-->/g, '');
+  if (donations === 'on' && page !== 'donate.html') html = html.replace(/(<a href="\/volunteer\.html"[^>]*>Volunteer<\/a>)/, '$1<a href="/donate.html">Donate</a>');
+  if (donations === 'preview' && page === 'donate.html') html = html.replace('</head>', '<meta name="robots" content="noindex"></head>');
   await writeFile(`public/${page}`, html.replace('</head>', analytics + '</head>'));
 }
 for (const screen of ['workouts', 'training-frequency', 'blood-pressure', 'medicine-tracker']) {
@@ -39,8 +49,11 @@ if (existsSync('lutheran-hospital')) await cp('lutheran-hospital', 'public/luthe
 await writeFile('wrangler.json', JSON.stringify({
   name: 'positivetribes', main: 'contact-worker.mjs', compatibility_date: '2026-09-11',
   assets: { directory: './public', binding: 'ASSETS', run_worker_first: true }, observability: { enabled: true },
-  vars: { CONTACT_TO: recipient },
+  vars: { CONTACT_TO: recipient, DONATIONS: donations },
   send_email: [{ name: 'CONTACT_MAIL', destination_address: recipient }],
-  ratelimits: [{ name: 'CONTACT_LIMIT', namespace_id: '914202601', simple: { limit: 5, period: 60 } }]
+  ratelimits: [
+    { name: 'CONTACT_LIMIT', namespace_id: '914202601', simple: { limit: 5, period: 60 } },
+    { name: 'DONATE_LIMIT', namespace_id: '914202602', simple: { limit: 5, period: 60 } }
+  ]
 }, null, 2));
-console.log(`Prepared website assets and contact form configuration${measurementId ? ` with GA4 ${measurementId}` : ' without analytics'}.`);
+console.log(`Prepared website assets and contact form configuration${measurementId ? ` with GA4 ${measurementId}` : ' without analytics'}, donations ${donations}.`);

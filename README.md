@@ -15,3 +15,19 @@ The existing `contact-worker.mjs` serves static assets and handles `/api/contact
 Run `python3 -m http.server 8765 --bind 127.0.0.1` and open http://127.0.0.1:8765. This previews the static homepage; email delivery requires Cloudflare bindings. The contact dialog and browser validation can be checked locally. Do not use the static server to test real email delivery.
 
 Project examples describe potential partnerships, not completed client work. Organization and developer contact details remain available at `#developer`.
+
+## Donations
+
+`donate.html` is a Stripe Checkout donation page (one-time and monthly gifts). `donations.mjs` handles `/api/donate`, which opens a Checkout session, and `/api/stripe-webhook`, which records each paid gift in Salesforce Nonprofit Cloud as a Gift Transaction on the donor's Person Account (matched by email, created if new). The Stripe payment or invoice id is stored in `ProcessorReference`, so webhook retries never create duplicates.
+
+The `DONATIONS` build variable controls it:
+
+- `off` (default): the page is not published, `/donate` redirects home and `/api/donate` is closed.
+- `preview`: the page is published at `/donate.html` but not linked from the menu and hidden from search engines. Use it with a Stripe test key to try the full flow.
+- `on`: also adds Donate to the menu and the donations paragraph (`<!--donations-->` block) to the privacy page.
+
+The page and API also stay closed unless these Worker secrets are set in Cloudflare (Settings > Variables and Secrets, type Secret):
+
+- `STRIPE_SECRET_KEY`: Stripe secret key (`sk_test_…` for testing, `sk_live_…` for real gifts).
+- `STRIPE_WEBHOOK_SECRET`: signing secret of a Stripe webhook endpoint pointing at `https://positivetribes.org/api/stripe-webhook`, sending `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `invoice.paid`.
+- `SF_DOMAIN`, `SF_CLIENT_ID`, `SF_CLIENT_SECRET`: Salesforce My Domain URL and an External Client App with the OAuth client credentials flow enabled (run-as user needs Fundraising access). Until these are set, each gift is emailed to `CONTACT_TO` instead of being written to Salesforce. If a Salesforce write fails, the gift is also emailed and Stripe retries the webhook.
