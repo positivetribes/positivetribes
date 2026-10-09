@@ -20,6 +20,8 @@ Project examples describe potential partnerships, not completed client work. Org
 
 `donate.html` is a Stripe Checkout donation page (one-time and monthly gifts). `donations.mjs` handles `/api/donate`, which opens a Checkout session, and `/api/stripe-webhook`, which records each paid gift in Salesforce Nonprofit Cloud as a Gift Transaction on the donor's Person Account (matched by email, created if new). The Stripe payment or invoice id is stored in `ProcessorReference`, so webhook retries never create duplicates. Each newly recorded gift is also emailed to `CONTACT_TO` with a link to the Gift Transaction.
 
+With `GA_MEASUREMENT_ID` set, the thank-you page sends a GA4 `donation_complete` event with the gift amount as `value` (USD), `frequency`, and the Checkout session id as `transaction_id` so Google Ads counts each gift once. Mark it as a key event and import it into Google Ads to use gift value as the conversion value. `begin_checkout` fires when a donor opens checkout.
+
 The `DONATIONS` build variable controls it:
 
 - `off` (default): the page is not published, `/donate` redirects home and `/api/donate` is closed.

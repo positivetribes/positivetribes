@@ -29,7 +29,11 @@ form.querySelectorAll('input[name="tier"]').forEach(r=>r.addEventListener('chang
 form.querySelectorAll('input[name="frequency"]').forEach(r=>r.addEventListener('change',label));
 amount.addEventListener('input',()=>{const n=dollars();form.querySelectorAll('input[name="tier"]').forEach(r=>{r.checked=r.value==='Champion'?n>=1000:Number(r.dataset.amount)===n});label()});
 document.querySelector('#monthly-link').addEventListener('click',()=>{form.querySelector('input[value="monthly"]').checked=true;label()});
-if(new URLSearchParams(location.search).has('thanks')){const t=document.querySelector('#thanks');t.classList.add('show');t.focus();window.gtag?.('event','donation_complete')}
+const q=new URLSearchParams(location.search);
+if(q.has('thanks')){const t=document.querySelector('#thanks');t.classList.add('show');t.focus();const v=Number(q.get('amount'));const g=q.get('gift')||'';
+if(Number.isInteger(v)&&v>0&&v<=25000)window.gtag?.('event','donation_complete',{value:v,currency:'USD',frequency:q.get('frequency')==='monthly'?'monthly':'once',transaction_id:/^cs_[A-Za-z0-9_]+$/.test(g)?g:undefined});
+// Drop the gift details so a reload shows the thank-you note without counting the gift again.
+history.replaceState(null,'',location.pathname+'?thanks=1')}
 form.addEventListener('submit',async(e)=>{e.preventDefault();if(give.disabled)return;const n=dollars();
 if(!Number.isFinite(n)||n<5||n>25000){status.textContent='Please enter a whole-dollar amount between $5 and $25,000.';amount.focus();return}
 const tier=form.querySelector('input[name="tier"]:checked');status.textContent='';give.disabled=true;give.textContent='Opening secure checkout…';
