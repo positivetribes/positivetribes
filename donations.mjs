@@ -49,7 +49,9 @@ export async function createCheckout(request, env, url) {
     'line_items[0][price_data][unit_amount]': String(amount * 100),
     'line_items[0][price_data][product_data][name]': monthly ? 'Monthly gift to Positive Tribes' : 'Gift to Positive Tribes',
     billing_address_collection: 'required',
-    success_url: url.origin + '/donate.html?thanks=1',
+    // The thank-you page reports the amount to Google Ads as the conversion value; the session id
+    // lets Ads drop a repeat of the same gift (a reload or a second tab).
+    success_url: url.origin + '/donate.html?thanks=1&amount=' + amount + '&frequency=' + frequency + '&gift={CHECKOUT_SESSION_ID}',
     cancel_url: url.origin + '/donate.html',
     'custom_text[submit][message]': 'Positive Tribes is a 501(c)(3) nonprofit (EIN 99-2221407). No goods or services are provided in exchange for your gift.',
     'metadata[tier]': tierName,
