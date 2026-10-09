@@ -1,3 +1,5 @@
+import { createCheckout, stripeWebhook, donationsEnabled } from './donations.mjs';
+
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 
 async function readBody(request) {
@@ -25,6 +27,12 @@ export default {
     if (url.hostname === 'card.positivetribes.org' && !/^\/(fonts|brand)\//.test(url.pathname)) {
       url.pathname = '/card' + url.pathname;
       return env.ASSETS.fetch(new Request(url, request));
+    }
+    if (url.pathname === '/api/donate') return createCheckout(request, env, url);
+    if (url.pathname === '/api/stripe-webhook') return stripeWebhook(request, env);
+    // The donate page ships with the site but stays hidden until Stripe is connected.
+    if (url.pathname === '/donate.html' || url.pathname === '/donate') {
+      if (!donationsEnabled(env)) return Response.redirect(url.origin + '/', 302);
     }
     if (url.pathname !== '/api/contact') return env.ASSETS.fetch(request);
     if (request.method !== 'POST') return json({ error: 'Please use the contact form.' }, 405);
