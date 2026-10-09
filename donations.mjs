@@ -151,11 +151,12 @@ async function donorAccount(auth, gift) {
 }
 
 // Records the gift as a paid Gift Transaction. The Stripe payment or invoice id is stored in
-// ProcessorReference so Stripe's webhook retries never create a second record.
+// ProcessorReference so Stripe's webhook retries never create a second record. Returns the id and
+// whether this call created it, so a retried event doesn't send a second notification.
 async function recordGift(env, gift) {
   const auth = await salesforceToken(env);
   const existing = await soql(auth, 'SELECT Id FROM GiftTransaction WHERE ProcessorReference = ' + quote(gift.reference) + ' LIMIT 1');
-  if (existing.records.length) return existing.records[0].Id;
+  if (existing.records.length) return { id: existing.records[0].Id, created: false };
   const donorId = await donorAccount(auth, gift);
   const created = await sf(auth, 'POST', '/sobjects/GiftTransaction', {
     Name: (gift.recurring ? 'Monthly gift' : 'Online gift') + ' ' + gift.date,
@@ -163,7 +164,7 @@ async function recordGift(env, gift) {
     PaymentMethod: 'Credit Card', ProcessorReference: gift.reference,
     Description: 'Stripe ' + (gift.recurring ? 'monthly gift, subscription ' + gift.subscription : 'one-time gift') + ' · tier ' + gift.tier
   });
-  return created.id;
+  return { id: created.id, created: true };
 }
 
 const giftSummary = (gift) => `$${gift.amount.toFixed(2)} ${gift.recurring ? 'monthly' : 'one-time'} gift on ${gift.date}\nDonor: ${gift.name} <${gift.email}>\nTier: ${gift.tier}\nStripe reference: ${gift.reference}`;
@@ -181,8 +182,14 @@ export async function stripeWebhook(request, env) {
     return json({ received: true });
   }
   try {
-    const id = await recordGift(env, gift);
+    const { id, created } = await recordGift(env, gift);
     console.log('donation_recorded', gift.reference, id);
+    if (created) {
+      // The gift is safely in Salesforce, so a failed notification is logged rather than retried.
+      const link = env.SF_DOMAIN.replace(/\/$/, '') + '/lightning/r/GiftTransaction/' + id + '/view';
+      try { await env.CONTACT_MAIL.send({ from: 'hello@positivetribes.org', to: env.CONTACT_TO, subject: 'New donation: $' + gift.amount.toFixed(2) + (gift.recurring ? ' monthly' : ''), text: giftSummary(gift) + '\n\nIn Salesforce: ' + link }); }
+      catch (error) { console.error('donation_email_failed', gift.reference, error.message); }
+    }
     return json({ received: true });
   } catch (error) {
     // A non-2xx reply makes Stripe retry for up to three days; the email makes sure someone also hears about it.

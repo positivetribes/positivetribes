@@ -18,7 +18,7 @@ Project examples describe potential partnerships, not completed client work. Org
 
 ## Donations
 
-`donate.html` is a Stripe Checkout donation page (one-time and monthly gifts). `donations.mjs` handles `/api/donate`, which opens a Checkout session, and `/api/stripe-webhook`, which records each paid gift in Salesforce Nonprofit Cloud as a Gift Transaction on the donor's Person Account (matched by email, created if new). The Stripe payment or invoice id is stored in `ProcessorReference`, so webhook retries never create duplicates.
+`donate.html` is a Stripe Checkout donation page (one-time and monthly gifts). `donations.mjs` handles `/api/donate`, which opens a Checkout session, and `/api/stripe-webhook`, which records each paid gift in Salesforce Nonprofit Cloud as a Gift Transaction on the donor's Person Account (matched by email, created if new). The Stripe payment or invoice id is stored in `ProcessorReference`, so webhook retries never create duplicates. Each newly recorded gift is also emailed to `CONTACT_TO` with a link to the Gift Transaction.
 
 The `DONATIONS` build variable controls it:
 
@@ -30,4 +30,4 @@ The page and API also stay closed unless these Worker secrets are set in Cloudfl
 
 - `STRIPE_SECRET_KEY`: Stripe secret key (`sk_test_…` for testing, `sk_live_…` for real gifts).
 - `STRIPE_WEBHOOK_SECRET`: signing secret of a Stripe webhook endpoint pointing at `https://positivetribes.org/api/stripe-webhook`, sending `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `invoice.paid`.
-- `SF_DOMAIN`, `SF_CLIENT_ID`, `SF_CLIENT_SECRET`: Salesforce My Domain URL and an External Client App with the OAuth client credentials flow enabled (run-as user needs Fundraising access). Until these are set, each gift is emailed to `CONTACT_TO` instead of being written to Salesforce. If a Salesforce write fails, the gift is also emailed and Stripe retries the webhook.
+- `SF_DOMAIN`, `SF_CLIENT_ID`, `SF_CLIENT_SECRET`: Salesforce My Domain URL and an External Client App with the OAuth client credentials flow enabled (run-as user needs the Fundraising Access permission set, not just the license). Until these are set, each gift is emailed to `CONTACT_TO` instead of being written to Salesforce. If a Salesforce write fails, the gift is also emailed and Stripe retries the webhook.
