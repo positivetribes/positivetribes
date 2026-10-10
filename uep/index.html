@@ -115,8 +115,12 @@ textarea{min-height:80px;resize:vertical}
 .check input{margin-top:2px;width:26px;height:26px;accent-color:var(--accent);flex:none}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:420px){.grid2{grid-template-columns:1fr}}
-.waiver{max-height:190px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:12px 14px;font-size:15px;display:flex;flex-direction:column;gap:8px}
-.waiver b{font-family:var(--display);font-weight:600}
+#screen>*{flex-shrink:0}
+.waiver{max-height:min(360px,48vh);overflow-y:auto;border:1px solid var(--line);border-radius:12px;background:var(--raised);padding:16px 18px;font-size:16px;line-height:1.65;display:flex;flex-direction:column;gap:12px}
+.waiver .wt{font-family:var(--display);font-weight:800;font-size:18px;line-height:1.25}
+.waiver p{max-width:60ch}
+.waiver p b{display:block;font-family:var(--display);font-weight:600;font-size:16px;margin-bottom:2px}
+.waiver .hint{font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
 .steps{display:flex;gap:6px}
 .steps i{flex:1;height:6px;border-radius:9px;background:var(--line)}
 .steps i.on{background:var(--accent)}
@@ -353,11 +357,11 @@ function waiverFlow(){
     return steps+`
     <h2>Participant waiver</h2>
     <div class="waiver" tabindex="0" aria-label="Waiver text">
-      <b>Up ENDing Parkinson's Participant Waiver and Release of Liability</b>
-      <p><b>Acknowledgment of risk.</b> Indoor climbing carries risks such as falls, rope burns and strains, and may aggravate existing conditions.</p>
-      <p><b>Medical responsibility.</b> I have consulted my healthcare provider, or chosen not to. UEP volunteers and staff are not medical professionals.</p>
-      <p><b>Release of liability.</b> I release UEP, its officers, staff, volunteers and sponsors from claims arising from my participation.</p>
-      <p class="muted small">Prototype summary only. The full waiver text goes here, exactly as approved.</p>
+      <span class="wt">Up ENDing Parkinson's Participant Waiver and Release of Liability</span>
+      <p><b>Acknowledgment of risk</b>Indoor climbing carries risks such as falls, rope burns and strains, and may aggravate existing conditions.</p>
+      <p><b>Medical responsibility</b>I have consulted my healthcare provider, or chosen not to. UEP volunteers and staff are not medical professionals.</p>
+      <p><b>Release of liability</b>I release UEP, its officers, staff, volunteers and sponsors from claims arising from my participation.</p>
+      <p class="hint">Prototype summary only. The full waiver text goes here, exactly as approved. Scroll inside this box to read it all.</p>
     </div>
     <label class="check"><input type="checkbox" id="ack1" data-bind="ack1" ${W.ack1?'checked':''}><span>I have read the full waiver and understand I am giving up substantial rights.</span></label>
     <label class="check"><input type="checkbox" id="ack2" data-bind="ack2" ${W.ack2?'checked':''}><span>I have consulted my healthcare provider about climbing, or have chosen not to.</span></label>
