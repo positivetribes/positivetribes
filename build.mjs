@@ -18,7 +18,7 @@ const donations = process.env.DONATIONS || 'off';
 if (!['off', 'preview', 'on'].includes(donations)) throw new Error('DONATIONS must be off, preview or on.');
 
 await mkdir('public', { recursive: true });
-const pages = ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html'];
+const pages = ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html', 'support.html'];
 if (donations !== 'off') pages.push('donate.html');
 for (const page of pages) {
   let html = await readFile(page, 'utf8');
@@ -53,7 +53,8 @@ await writeFile('wrangler.json', JSON.stringify({
   send_email: [{ name: 'CONTACT_MAIL', destination_address: recipient }],
   ratelimits: [
     { name: 'CONTACT_LIMIT', namespace_id: '914202601', simple: { limit: 5, period: 60 } },
-    { name: 'DONATE_LIMIT', namespace_id: '914202602', simple: { limit: 5, period: 60 } }
+    { name: 'DONATE_LIMIT', namespace_id: '914202602', simple: { limit: 5, period: 60 } },
+    { name: 'SUPPORT_LIMIT', namespace_id: '914202603', simple: { limit: 3, period: 60 } }
   ]
 }, null, 2));
 console.log(`Prepared website assets and contact form configuration${measurementId ? ` with GA4 ${measurementId}` : ' without analytics'}, donations ${donations}.`);

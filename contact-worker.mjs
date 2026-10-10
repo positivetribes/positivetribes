@@ -1,4 +1,5 @@
 import { createCheckout, stripeWebhook, donationsEnabled, salesforceToken, sf, soql, quote } from './donations.mjs';
+import { handleSupport } from './support.mjs';
 
 // Why someone filled out the contact form. Only these values are accepted; anything else counts as general.
 const REASONS = { general: 'General question or idea', project: 'A nonprofit project idea', pulselift: 'PulseLift tester request', volunteer: 'Volunteering' };
@@ -60,6 +61,7 @@ export default {
       url.pathname = '/card' + url.pathname;
       return env.ASSETS.fetch(new Request(url, request));
     }
+    if (url.pathname === '/api/support') return handleSupport(request, env, url);
     if (url.pathname === '/api/donate') return createCheckout(request, env, url);
     if (url.pathname === '/api/stripe-webhook') return stripeWebhook(request, env);
     // The donate page ships with the site but stays hidden until Stripe is connected.
