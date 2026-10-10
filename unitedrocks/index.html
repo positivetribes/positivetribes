@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>United Rocks Scheduler</title>
+<meta name="theme-color" content="#127057">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23127057'/%3E%3Cpath d='M5 25l8-12 5 7 4-5 6 10z' fill='none' stroke='white' stroke-width='2.6' stroke-linejoin='round'/%3E%3Ccircle cx='22' cy='8' r='2.2' fill='white'/%3E%3C/svg%3E" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* Layout: a phone-sized app (wide desk for admin) with a guided tour and notes beside it.
+   Plain words, big type and 48px+ touch targets throughout: climbers and parents of every ability use it. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --raised:#f6f8fa; --fg:#16222e; --muted:#566575; --line:#d3dbe3;
+  --accent:#127057; --accent-fg:#ffffff; --accent-soft:#d9efe6;
+  --sun:#9a6a00; --sun-bg:#fbefcf;
+  --ok:#22693f; --ok-bg:#dbefe2; --warn:#8a5a00; --warn-bg:#f8ebc9; --bad:#a3283a; --bad-bg:#f7dde1;
+  --bar1:#127057; --bar2:#93cdb7;
+  --display:'Archivo','Helvetica Neue',Arial,sans-serif;
+  --body:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f171f; --surface:#17222d; --raised:#1d2a37; --fg:#e7edf3; --muted:#9cadbd; --line:#2d3c4b;
+  --accent:#6fd0ad; --accent-fg:#062118; --accent-soft:#163a2e;
+  --sun:#f0c45e; --sun-bg:#3a2f14;
+  --ok:#8fd1a6; --ok-bg:#183223; --warn:#efc36a; --warn-bg:#3a2f15; --bad:#f39aa7; --bad-bg:#3e1f27;
+  --bar1:#6fd0ad; --bar2:#2f6b55; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171f; --surface:#17222d; --raised:#1d2a37; --fg:#e7edf3; --muted:#9cadbd; --line:#2d3c4b;
+  --accent:#6fd0ad; --accent-fg:#062118; --accent-soft:#163a2e;
+  --sun:#f0c45e; --sun-bg:#3a2f14;
+  --ok:#8fd1a6; --ok-bg:#183223; --warn:#efc36a; --warn-bg:#3a2f15; --bad:#f39aa7; --bad-bg:#3e1f27;
+  --bar1:#6fd0ad; --bar2:#2f6b55; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:17px/1.5 var(--body);padding-inline:16px;padding-block:20px 48px;margin:0}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);font-weight:800;line-height:1.15;margin:0;text-wrap:balance}
+h2{font-size:22px} h3{font-size:17px;font-weight:600}
+p{margin:0}
+.wrap{max-width:1120px;margin-inline:auto;display:flex;flex-direction:column;gap:18px}
+
+.top{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;justify-content:space-between}
+.top h1{font-size:30px;letter-spacing:-.01em}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.tag{font-size:12px;letter-spacing:.06em;text-transform:uppercase;background:var(--sun-bg);color:var(--sun);padding:4px 10px;border-radius:99px;font-weight:700}
+.top small{color:var(--muted);font-size:14px}
+
+.fb{display:inline-flex;align-items:center;min-height:44px;padding:8px 16px;border-radius:12px;border:2px solid var(--accent);color:var(--accent);font-weight:700;text-decoration:none}
+.fb:hover{background:var(--accent-soft)}
+
+.stage{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:28px;align-items:start}
+.stage.wide{grid-template-columns:minmax(0,1fr)}
+@media (max-width:860px){.stage{grid-template-columns:minmax(0,1fr)}}
+
+.device{background:var(--surface);border:1px solid var(--line);border-radius:28px;overflow:hidden;display:flex;flex-direction:column;height:800px;max-height:calc(100vh - 120px);min-height:620px;position:relative;box-shadow:0 14px 40px rgba(16,34,52,.12)}
+.stage.wide .device{border-radius:18px;height:auto;max-height:none;min-height:0}
+@media (max-width:860px){.device{max-height:none;height:760px}}
+.appbar{padding:14px 18px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.appbar .brand{display:flex;align-items:center;gap:10px}
+.appbar .brand b{font-family:var(--display);font-size:19px;font-weight:800}
+.mark{width:30px;height:30px;border-radius:9px;background:var(--accent);display:grid;place-items:center}
+.mark svg{width:18px;height:18px}
+.who{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:700;padding:6px 2px;font-size:14px}
+.switch{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.switch button{border:0;background:var(--surface);padding:6px 10px;font-size:13px;font-weight:700;color:var(--muted)}
+.switch button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+#screen{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:16px}
+.stage.wide #screen{overflow:visible}
+.tabbar{display:flex;border-top:1px solid var(--line);background:var(--raised)}
+.stage.wide .tabbar{order:-1;border-top:0;border-bottom:1px solid var(--line)}
+.tabbar button{flex:1;border:0;background:none;padding:14px 6px;font-size:15px;font-weight:700;color:var(--muted);min-height:52px}
+.tabbar button[aria-current="page"]{color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
+.stage.wide .tabbar button{flex:0 0 auto;padding-inline:20px}
+.stage.wide .tabbar button[aria-current="page"]{box-shadow:inset 0 -3px 0 var(--accent)}
+
+.card{background:var(--raised);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.muted{color:var(--muted);font-size:15px}
+.small{font-size:14px}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.stack{display:flex;flex-direction:column;gap:12px}
+.btn{border:0;background:var(--accent);color:var(--accent-fg);padding:13px 18px;border-radius:12px;font-weight:700;text-align:center;min-height:50px}
+.btn.ghost{background:transparent;color:var(--accent);border:2px solid var(--accent)}
+.btn.quiet{background:var(--surface);color:var(--fg);border:1px solid var(--line)}
+.btn.sm{padding:9px 14px;min-height:44px;font-size:15px;border-radius:10px}
+.btn.full{width:100%}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.pill{font-size:13px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.pill.sun{background:var(--sun-bg);color:var(--sun)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.plain{background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+.notice{border-radius:12px;padding:12px 14px;font-size:15px;background:var(--warn-bg);border-left:5px solid var(--warn)}
+.notice.ok{background:var(--ok-bg);border-color:var(--ok)}
+.notice.info{background:var(--accent-soft);border-color:var(--accent)}
+.notice b{display:block;margin-bottom:2px}
+.hero{background:var(--accent);color:var(--accent-fg);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:10px}
+.hero .big{font-family:var(--display);font-size:26px;font-weight:800;line-height:1.1}
+.hero .btn{background:var(--accent-fg);color:var(--accent)}
+.hero .btn.ghost{background:transparent;color:var(--accent-fg);border-color:var(--accent-fg)}
+
+label.f{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:15px}
+input[type=text],input[type=email],input[type=tel],input[type=time],input[type=number],input[type=date],textarea,select{font:inherit;font-weight:400;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;width:100%;min-height:50px}
+textarea{min-height:80px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:9px 14px;font-size:15px;min-height:44px}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+.check{display:flex;gap:12px;align-items:flex-start;font-size:16px;cursor:pointer}
+.check input{margin-top:2px;width:26px;height:26px;accent-color:var(--accent);flex:none}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.grid2{grid-template-columns:1fr}}
+#screen>*{flex-shrink:0}
+.waiver{max-height:min(360px,48vh);overflow-y:auto;border:1px solid var(--line);border-radius:12px;background:var(--raised);padding:16px 18px;font-size:16px;line-height:1.65;display:flex;flex-direction:column;gap:12px}
+.waiver .wt{font-family:var(--display);font-weight:800;font-size:18px;line-height:1.25}
+.waiver p{max-width:60ch}
+.waiver p b{display:block;font-family:var(--display);font-weight:600;font-size:16px;margin-bottom:2px}
+.waiver .hint{font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.steps{display:flex;gap:6px}
+.steps i{flex:1;height:6px;border-radius:9px;background:var(--line)}
+.steps i.on{background:var(--accent)}
+.code{font-family:var(--display);letter-spacing:.4em;font-size:24px;text-align:center}
+
+/* roster */
+.roster{display:flex;flex-direction:column;gap:8px}
+.person{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--surface);min-height:64px;width:100%;text-align:left}
+.person[aria-pressed="true"]{background:var(--ok-bg);border-color:var(--ok)}
+.tick{width:36px;height:36px;border-radius:50%;border:2px solid var(--line);flex:none;display:grid;place-items:center;background:var(--surface)}
+.person[aria-pressed="true"] .tick{background:var(--ok);border-color:var(--ok)}
+.tick svg{width:20px;height:20px;opacity:0}
+.person[aria-pressed="true"] .tick svg{opacity:1}
+.person .nm{font-weight:700;font-size:17px}
+.person .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.tally{font-family:var(--display);font-size:40px;font-weight:800;line-height:1}
+.tally span{font-size:18px;color:var(--muted);font-weight:600}
+
+/* dashboard */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--raised);display:flex;flex-direction:column;gap:4px}
+.kpi .n{font-family:var(--display);font-size:32px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:14px;color:var(--muted)}
+.kpi.flag{border-color:var(--warn);background:var(--warn-bg)}
+.split{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px}
+@media (max-width:860px){.split{grid-template-columns:minmax(0,1fr)}}
+.scroll-x{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:15px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
+td.num,th.num{text-align:right}
+.meter{height:8px;border-radius:9px;background:var(--line);overflow:hidden;min-width:70px}
+.meter i{display:block;height:100%;background:var(--ok)}
+.meter.low i{background:var(--bad)}
+.meter.mid i{background:var(--warn)}
+.legend{display:flex;gap:14px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+svg text{fill:var(--muted);font-family:var(--body);font-size:12px}
+
+/* schedule builder */
+.datechips{display:flex;flex-wrap:wrap;gap:8px}
+.datechip{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;font-size:15px;min-height:44px}
+.datechip[aria-pressed="true"]{text-decoration:line-through;color:var(--muted);background:var(--raised)}
+
+/* notes and backlog */
+.notes{display:flex;flex-direction:column;gap:14px;min-width:0}
+.notes h2{font-size:24px}
+.notes ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.try{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.try ul{margin:0}
+.tour{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;counter-reset:stop}
+.tour li{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;counter-increment:stop}
+.tour li.here{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+.tour .who{font-weight:700;font-size:17px}
+.tour .who::before{content:counter(stop) ". ";color:var(--accent)}
+.tour ul{margin:0;padding-left:20px;font-size:15px;display:flex;flex-direction:column;gap:4px}
+.stage.wide .notes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px 28px;align-items:start}
+.stage.wide .notes > .intro{display:flex;flex-direction:column;gap:12px}
+@media (max-width:860px){.stage.wide .notes{grid-template-columns:minmax(0,1fr)}}
+.try h3{margin-bottom:6px}
+.foot{font-size:14px;color:var(--muted)}
+.req{font-size:14px;color:var(--muted)}
+.req b{color:var(--fg)}
+
+
+.toast{position:absolute;left:16px;right:16px;bottom:78px;background:var(--fg);color:var(--bg);padding:13px 16px;border-radius:12px;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:5}
+.stage.wide .toast{position:fixed;left:50%;right:auto;bottom:24px;transform:translateX(-50%);max-width:min(560px,calc(100vw - 32px))}
+@media (prefers-reduced-motion:no-preference){.card,.hero,.q{animation:rise .2s ease-out}@keyframes rise{from{opacity:.5;transform:translateY(3px)}}}
+</style>
+<style>[hidden]{display:none!important} img{max-width:100%}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="stack" style="gap:4px">
+      <span class="eyebrow">United Rocks</span>
+      <h1>Climb Scheduler</h1>
+    </div>
+    <div class="row" style="justify-content:flex-start"><span class="tag">Clickable prototype</span> <small>Sample data only. Built by Positive Tribes.</small></div>
+  </header>
+  <div id="main"></div>
+</div>
+
+<script>
+/* ---------- Dates and recurrence ---------- */
+const DAY = 864e5;
+const DOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DOWS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const NTH = {1:'First',2:'Second',3:'Third',4:'Fourth','-1':'Last'};
+const today = (()=>{const d=new Date();d.setHours(0,0,0,0);return d})();
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const fromIso=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const fmt=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+const fmtLong=d=>d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+const weekStart=d=>addDays(d,-d.getDay());
+function t12(t){if(!t)return'';let [h,m]=t.split(':').map(Number);const ap=h>=12?'pm':'am';h=h%12||12;return `${h}:${String(m).padStart(2,'0')}${ap}`}
+
+function matches(r,d){
+  if(r.skip&&r.skip.includes(iso(d)))return false;
+  if(r.freq==='once')return iso(d)===r.date;
+  if(r.freq==='weekly'){
+    if(!r.days.includes(d.getDay()))return false;
+    const weeks=Math.round((weekStart(d)-weekStart(fromIso(r.start)))/(7*DAY));
+    return weeks>=0&&weeks%(r.interval||1)===0;
+  }
+  if(r.freq==='monthly'){
+    if(d.getDay()!==r.day)return false;
+    if(+r.nth===-1)return addDays(d,7).getMonth()!==d.getMonth();
+    return Math.ceil(d.getDate()/7)===+r.nth;
+  }
+  return false;
+}
+function nextDates(r,n,from=today,includeSkipped=false){
+  const out=[];const rr=includeSkipped?{...r,skip:[]}:r;
+  for(let i=0;i<500&&out.length<n;i++){const d=addDays(from,i);if(matches(rr,d))out.push(d)}
+  return out;
+}
+function ruleText(r){
+  if(r.freq==='once')return 'One time, '+fmt(fromIso(r.date));
+  if(r.freq==='monthly')return `${NTH[r.nth]} ${DOW[r.day]} of each month`;
+  const ds=r.days.slice().sort().map(x=>DOW[x]);
+  const list=ds.length>1?ds.slice(0,-1).join(', ')+' and '+ds.at(-1):ds[0];
+  return (r.interval===2?'Every other ':'Every ')+list;
+}
+
+/* ---------- Sample data ---------- */
+const SITES=[
+  {id:'pla',city:'Plano, TX',gym:'Partner gym',region:'Texas',lead:'Riley Park',sessions:8,rec:7,booked:72,checked:58},
+  {id:'dal',city:'Dallas, TX',gym:'Partner gym',region:'Texas',lead:'Andre Wills',sessions:8,rec:8,booked:64,checked:57},
+  {id:'aus',city:'Austin, TX',gym:'Partner gym',region:'Texas',lead:'Mei Chen',sessions:4,rec:2,booked:22,checked:10},
+  {id:'fri',city:'Frisco, TX',gym:'Partner gym',region:'Texas',lead:'Tara Bell',sessions:4,rec:4,booked:28,checked:24},
+  {id:'den',city:'Denver, CO',gym:'Partner gym',region:'Colorado',lead:'Sam Ortiz',sessions:8,rec:6,booked:46,checked:35},
+  {id:'cos',city:'Colorado Springs, CO',gym:'Partner gym',region:'Colorado',lead:'Lee Grant',sessions:4,rec:1,booked:18,checked:4},
+  {id:'ric',city:'Richmond, VA',gym:'Partner gym',region:'Virginia',lead:'Nia Brooks',sessions:4,rec:3,booked:26,checked:19},
+  {id:'arl',city:'Arlington, VA',gym:'Partner gym',region:'Virginia',lead:'Omar Haddad',sessions:4,rec:0,booked:20,checked:0},
+  {id:'sdg',city:'San Diego, CA',gym:'Partner gym',region:'California',lead:'Jess Romero',sessions:8,rec:7,booked:52,checked:44},
+  {id:'sac',city:'Sacramento, CA',gym:'Partner gym',region:'California',lead:'Ben Ito',sessions:4,rec:0,booked:14,checked:0},
+  {id:'bal',city:'Baltimore, MD',gym:'Partner gym',region:'Maryland',lead:'Kim Dorsey',sessions:4,rec:3,booked:24,checked:18}
+];
+const site=id=>SITES.find(s=>s.id===id);
+const start0=iso(weekStart(addDays(today,-60)));
+const S=(id,siteId,name,rule,from,to,cap,booked,tbc=false)=>({id,site:siteId,name,rule:{start:start0,skip:[],...rule},from,to,cap,booked,tbc});
+
+const state={
+  user:null, mode:null, tab:{}, toast:'',
+  login:{step:1,email:'',code:'',sent:''},
+  waiver:{step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Parent',dob:'',ecName:'',ecPhone:''},
+  findSite:'pla',
+  sessions:[
+    S('s1','pla','Youth team practice',{freq:'weekly',days:[3],interval:1},'17:30','19:00',12,9),
+    S('s2','pla','Adult team practice',{freq:'weekly',days:[6],interval:1},'10:00','11:30',12,10),
+    S('s3','pla','Outdoor climbing day',{freq:'monthly',nth:1,day:6},'09:00','13:00',10,6,true),
+    S('s4','dal','Youth team practice',{freq:'weekly',days:[2],interval:1},'17:00','18:30',12,12),
+    S('s5','dal','Adult team practice',{freq:'weekly',days:[0],interval:1},'13:00','14:30',12,8),
+    S('s6','den','Youth team practice',{freq:'weekly',days:[4],interval:1},'17:30','19:00',10,6),
+    S('s7','sdg','Adult team practice',{freq:'weekly',days:[1],interval:2},'18:00','19:30',12,7)
+  ],
+  people:{
+    'marcus@example.org':{name:'Marcus Lee',roles:['climber'],home:'pla',waiver:'2026-02-08',ec:'Grace Lee (mom), (972) 555-0142',standing:['s2'],once:[],missed:[]},
+    'ava@example.org':{name:'Ava Moreno',roles:['climber'],home:'pla',waiver:null,ec:'',standing:[],once:[],missed:[]},
+    'riley@example.org':{name:'Riley Park',roles:['climber','lead'],lead:'pla',home:'pla',waiver:'2025-09-20',ec:'Sam Park, (469) 555-0177',standing:['s3'],once:[],missed:[]},
+    'mariana@example.org':{name:'Mariana (sample admin)',roles:['admin'],home:null,waiver:null,standing:[],once:[],missed:[]}
+  },
+  roster:[
+    {n:'Marcus Lee',w:true,cp:false},{n:'Jaden Brooks',w:true,cp:false},{n:'Sofia Ramirez',w:true,cp:true},
+    {n:'Eli Turner',w:true,cp:false},{n:'Noah Kim',w:false,cp:false},{n:'Maya Patel',w:true,cp:false},
+    {n:'Liam Foster',w:true,cp:false},{n:'Zoe Adams',w:true,cp:true},{n:'Caleb Wright',w:true,cp:false},
+    {n:'Grace Huang',w:true,cp:false},{n:'Owen Davis',w:true,cp:false}
+  ],
+  checked:new Set(), walkin:'', rosterDone:false,
+  draft:null,
+  drift:[
+    {n:'Tyler Brooks',site:'dal',last:'5 weeks ago',was:'Every Tuesday'},
+    {n:'Emma Ruiz',site:'pla',last:'4 weeks ago',was:'Every Wednesday'},
+    {n:'Isaac Hall',site:'den',last:'4 weeks ago',was:'Every Thursday'},
+    {n:'Leah Moss',site:'sdg',last:'3 weeks ago',was:'Every other Monday'},
+    {n:'Ben Carter',site:'bal',last:'3 weeks ago',was:'Every Saturday'}
+  ],
+  nudged:new Set(), siteFilter:'All'
+};
+const WEEKS=[[78,52],[82,55],[80,51],[88,60],[86,59],[90,62],[94,65],[96,68]];
+
+
+/* ---------- Helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const me=()=>state.people[state.user];
+const sess=id=>state.sessions.find(s=>s.id===id);
+const nextOf=s=>nextDates(s.rule,1)[0];
+const spots=s=>Math.max(0,s.cap-s.booked);
+const CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-fg)"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+let toastTimer;
+function say(m){state.toast=m;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{state.toast='';const t=$('.toast');if(t)t.remove()},3400)}
+
+/* ---------- Screens: sign in ---------- */
+const ACCOUNTS=[
+  ['marcus@example.org','Marcus, climber'],
+  ['ava@example.org','Ava, new climber'],
+  ['riley@example.org','Riley, coach who also climbs'],
+  ['mariana@example.org','Mariana, admin']
+];
+function signIn(){
+  const L=state.login;
+  if(L.step===1)return `
+    <div class="stack" style="gap:6px"><h2>Sign in</h2><p class="muted">One sign-in for everyone. No password to remember.</p></div>
+    <label class="f" for="email">Email or mobile number<input type="email" id="email" data-bind="email" value="${esc(L.email)}" autocomplete="email" placeholder="you@example.org"></label>
+    <button class="btn full" data-act="sendcode" ${L.email.trim()?'':'disabled'}>Send me a code</button>
+    <div class="card"><h3>Try a sample account</h3><p class="muted small">The app works out who you are from your account. There is no climber, coach or staff choice. New here? Follow the five-minute tour beside or below this screen.</p>
+      <div class="stack" style="gap:8px">${ACCOUNTS.map(([e,l])=>`<button class="btn quiet sm full" data-act="fill" data-v="${e}" style="text-align:left">${esc(l)}<br><span class="muted small">${e}</span></button>`).join('')}</div></div>`;
+  return `
+    <div class="stack" style="gap:6px"><h2>Check your messages</h2><p class="muted">We sent a 6-digit code to <b>${esc(L.sent)}</b>. It works for 10 minutes.</p></div>
+    <label class="f" for="code">Code<input type="text" id="code" class="code" inputmode="numeric" maxlength="6" data-bind="code" value="${esc(L.code)}"></label>
+    <p class="muted small">In this prototype the code is filled in for you.</p>
+    <button class="btn full" data-act="verify" ${L.code.length===6?'':'disabled'}>Sign in</button>
+    <button class="linkbtn" data-act="back1">Use a different email</button>`;
+}
+
+/* ---------- Screens: waiver ---------- */
+function waiverFlow(){
+  const W=state.waiver,p=me();
+  const steps=`<div class="steps" aria-label="Step ${W.step} of 3">${[1,2,3].map(i=>`<i class="${i<=W.step?'on':''}"></i>`).join('')}</div>`;
+  if(W.step===1)return steps+`
+    <h2>Welcome, ${esc(p.name.split(' ')[0])}</h2>
+    <p>Before the first practice, we need a signed waiver and an emergency contact. You only do this once, and it covers every United Rocks location. A parent or guardian can do this for a climber.</p>
+    <div class="grid2">
+      <label class="f" for="dob">Date of birth<input type="date" id="dob" data-bind="dob" value="${esc(W.dob)}"></label>
+      <label class="f" for="home">Home location<select id="home" data-bind="home">${SITES.map(s=>`<option value="${s.id}" ${p.home===s.id?'selected':''}>${esc(s.city)}</option>`).join('')}</select></label>
+    </div>
+    <label class="f" for="ecName">Emergency contact name<input type="text" id="ecName" data-bind="ecName" value="${esc(W.ecName)}"></label>
+    <label class="f" for="ecPhone">Emergency contact phone<input type="tel" id="ecPhone" data-bind="ecPhone" value="${esc(W.ecPhone)}"></label>
+    <button class="btn full" data-act="wstep" data-v="2" ${W.ecName.trim()&&W.ecPhone.trim()?'':'disabled'}>Continue</button>`;
+  if(W.step===2){
+    const ok=W.ack1&&W.ack2&&W.name.trim()&&(!W.proxy||W.proxyName.trim());
+    return steps+`
+    <h2>Participant waiver</h2>
+    <div class="waiver" tabindex="0" aria-label="Waiver text">
+      <span class="wt">United Rocks Participant Waiver and Release of Liability</span>
+      <p><b>Acknowledgment of risk</b>Climbing carries risks such as falls, rope burns and strains.</p>
+      <p><b>Health and support needs</b>Coaches and volunteers are not medical professionals. Families share any medical, behavioral or communication needs the coaches should know about.</p>
+      <p><b>Release of liability</b>I release United Rocks, its staff, coaches, volunteers and partner gyms from claims arising from participation.</p>
+      <p class="hint">Placeholder written for this prototype. United Rocks' own waiver text goes here, exactly as approved. Scroll inside this box to read it all.</p>
+    </div>
+    <label class="check"><input type="checkbox" id="ack1" data-bind="ack1" ${W.ack1?'checked':''}><span>I have read the full waiver and understand I am giving up substantial rights.</span></label>
+    <label class="check"><input type="checkbox" id="ack2" data-bind="ack2" ${W.ack2?'checked':''}><span>I have shared any medical, behavioral or communication needs the coaches should know about.</span></label>
+    <label class="check"><input type="checkbox" id="proxy" data-bind="proxy" ${W.proxy?'checked':''}><span>I am a parent or guardian signing for this climber.</span></label>
+    ${W.proxy?`<div class="grid2"><label class="f" for="proxyName">Your name<input type="text" id="proxyName" data-bind="proxyName" value="${esc(W.proxyName)}"></label>
+      <label class="f" for="proxyRel">Relationship<select id="proxyRel" data-bind="proxyRel">${['Parent','Legal guardian','Other caregiver'].map(o=>`<option ${W.proxyRel===o?'selected':''}>${o}</option>`).join('')}</select></label></div>`:''}
+    <label class="f" for="sig">Type ${W.proxy?'the climber\'s':'your'} full name to sign<input type="text" id="sig" data-bind="name" value="${esc(W.name)}" placeholder="${esc(p.name)}" autocomplete="off"></label>
+    <p class="muted small">Signed ${esc(fmtLong(today))}. Waiver version 2026-1. No drawing needed.</p>
+    <div class="row"><button class="btn ghost" data-act="wstep" data-v="1">Back</button><button class="btn" style="flex:1" data-act="sign" ${ok?'':'disabled'}>Sign waiver</button></div>`;
+  }
+  return '';
+}
+
+/* ---------- Screens: climber ---------- */
+function myUpcoming(p){
+  const items=[];
+  p.standing.forEach(id=>{const s=sess(id);nextDates(s.rule,3).forEach(d=>items.push({s,d,standing:true}))});
+  p.once.forEach(o=>{const s=sess(o.id);items.push({s,d:fromIso(o.date),standing:false})});
+  return items.filter(x=>x.d>=today).sort((a,b)=>a.d-b.d);
+}
+function climberHome(){
+  const p=me(),up=myUpcoming(p),nx=up[0];
+  const missing=nx&&p.missed.includes(nx.s.id+'|'+iso(nx.d));
+  let html='';
+  if(nx){
+    html+=`<div class="hero">
+      <span class="small" style="opacity:.85">${missing?'You said you can\'t make it':'Your next climb'}</span>
+      <div class="big">${esc(fmtLong(nx.d))}</div>
+      <div>${nx.s.tbc?'Time to be confirmed':t12(nx.s.from)+' to '+t12(nx.s.to)} · ${esc(nx.s.name)} · ${esc(site(nx.s.site).city)}</div>
+      ${missing?`<button class="btn" data-act="undomiss" data-v="${nx.s.id}|${iso(nx.d)}">I can come after all</button>`
+        :`<button class="btn ghost" data-act="miss" data-v="${nx.s.id}|${iso(nx.d)}">I can't make it this time</button>`}
+    </div>`;
+  }else{
+    html+=`<div class="hero"><div class="big">No climbs booked yet</div><p>Pick a regular practice and you'll be signed up every week.</p><button class="btn" data-act="tab" data-v="find">Find a session</button></div>`;
+  }
+  if(p.standing.length){
+    html+=`<div class="card"><h3>Your weekly practices</h3><p class="muted small">You stay signed up automatically. We remind you the day before.</p>
+      ${p.standing.map(id=>{const s=sess(id);return `<div class="row" style="border-top:1px solid var(--line);padding-top:10px"><div><b>${esc(s.name)}</b><div class="muted small">${esc(ruleText(s.rule))} · ${esc(site(s.site).city)}</div></div><button class="btn quiet sm" data-act="unstand" data-v="${id}">Stop</button></div>`}).join('')}</div>`;
+  }
+  if(up.length>1){
+    html+=`<div class="card"><h3>Coming up</h3>${up.slice(1,5).map(x=>{const m=p.missed.includes(x.s.id+'|'+iso(x.d));return `<div class="row small"><span>${esc(fmt(x.d))} · ${esc(x.s.name)}</span>${m?'<span class="pill plain">Not coming</span>':x.standing?'<span class="pill">Weekly</span>':'<span class="pill sun">One time</span>'}</div>`}).join('')}</div>`;
+  }
+  if(nx&&!missing){
+    html+=`<div class="card"><h3>Reminder you'll get</h3><p class="small" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px">United Rocks: See you tomorrow, ${esc(fmt(nx.d))}, at ${nx.s.tbc?'(time to be confirmed)':t12(nx.s.from)} at ${esc(site(nx.s.site).gym)}. Can't make it? Tap here and we'll free your spot.</p><p class="muted small">Sent by text or email the day before. One tap frees your spot for someone on the waitlist.</p></div>`;
+  }
+  return html;
+}
+function climberFind(){
+  const p=me(),sid=state.findSite;
+  const list=state.sessions.filter(s=>s.site===sid);
+  return `<h2>Find a session</h2>
+    <p class="muted">Your home location is ${esc(site(p.home).city)}. You can also join practices at other locations.</p>
+    <label class="f" for="findSite">Location<select id="findSite" data-bind="findSite">${SITES.map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.city)}${s.id===p.home?' (home)':''}</option>`).join('')}</select></label>
+    ${list.length?list.map(s=>{
+      const nx=nextOf(s),full=spots(s)===0,stand=p.standing.includes(s.id),once=p.once.find(o=>o.id===s.id);
+      return `<div class="card">
+        <div class="row"><h3>${esc(s.name)}</h3>${full?'<span class="pill bad">Full</span>':`<span class="pill ok">${spots(s)} spots</span>`}</div>
+        <div class="muted small">${esc(ruleText(s.rule))} · ${s.tbc?'Time to be confirmed':t12(s.from)+' to '+t12(s.to)}</div>
+        <div class="small">Next: <b>${esc(fmtLong(nx))}</b></div>
+        ${stand?'<span class="pill">You\'re booked every week</span>':once?'<span class="pill sun">Booked for '+esc(fmt(fromIso(once.date)))+'</span>':
+          full?`<button class="btn ghost sm" data-act="waitlist" data-v="${s.id}">Join the waitlist</button>`:
+          `<div class="row"><button class="btn sm" style="flex:1" data-act="stand" data-v="${s.id}">Book every week</button><button class="btn ghost sm" data-act="once" data-v="${s.id}">Just this once</button></div>`}
+      </div>`}).join(''):`<div class="notice info"><b>No practices posted yet</b>This location hasn't set up its schedule in the prototype.</div>`}`;
+}
+function climberProfile(){
+  const p=me();
+  return `<h2>My details</h2>
+    <div class="card"><div class="row"><b>Waiver</b>${p.waiver?'<span class="pill ok">Signed</span>':'<span class="pill bad">Not signed</span>'}</div>
+      <p class="muted small">${p.waiver?'Signed '+esc(fmt(fromIso(p.waiver)))+', version 2026-1. Covers every United Rocks location.':'Needed before booking.'}</p></div>
+    <div class="card"><b>Home location</b><p>${esc(site(p.home).city)} · ${esc(site(p.home).gym)}</p></div>
+    <div class="card"><b>Emergency contact</b><p>${esc(p.ec||'Not added')}</p></div>
+    <div class="card"><b>Reminders</b><div class="chips"><button class="chip" aria-pressed="true">Text</button><button class="chip" aria-pressed="false">Email</button></div><p class="muted small">Text or email is still an open question.</p></div>`;
+}
+
+/* ---------- Screens: site lead ---------- */
+function leadSessions(){return state.sessions.filter(s=>s.site===me().lead)}
+function nextLeadSession(){
+  const all=leadSessions().map(s=>({s,d:nextOf(s)})).filter(x=>x.d).sort((a,b)=>a.d-b.d);return all[0];
+}
+function leadCheckin(){
+  const x=nextLeadSession(),R=state.roster,n=state.checked.size;
+  if(!x)return `<div class="notice info"><b>No sessions scheduled</b>Add one in the Schedule tab.</div>`;
+  const isToday=iso(x.d)===iso(today);
+  return `<div class="row"><div><h2>${esc(x.s.name)}</h2><div class="muted">${isToday?'Today':esc(fmtLong(x.d))} · ${t12(x.s.from)} · ${esc(site(x.s.site).city)}</div></div>
+      <div style="text-align:right"><div class="tally">${n}<span> / ${R.length}</span></div><div class="muted small">here / booked</div></div></div>
+    ${isToday?'':'<p class="muted small">Check-in normally opens on the day. It\'s open now so you can try it.</p>'}
+    ${state.rosterDone?`<div class="notice ok"><b>Attendance saved</b>${n} of ${R.length} checked in. It now shows on the program dashboard.</div>`:''}
+    <p class="small">Tap each climber as they arrive.</p>
+    <div class="roster">${R.map((r,i)=>`<button class="person" data-act="toggle" data-v="${i}" aria-pressed="${state.checked.has(i)}">
+        <span class="tick">${CHECK}</span>
+        <span style="min-width:0"><span class="nm">${esc(r.n)}</span>
+          <span class="meta">${r.cp?'<span class="pill plain">Parent stays</span>':''}${r.w?'':'<span class="pill bad">Waiver not signed</span>'}${r.walk?'<span class="pill sun">Walk-in</span>':''}</span></span>
+      </button>`).join('')}</div>
+    <div class="card"><label class="f" for="walkin">Someone here who didn't book?<input type="text" id="walkin" data-bind="walkin" value="${esc(state.walkin)}" placeholder="Their name"></label>
+      <button class="btn ghost sm" data-act="addwalk" ${state.walkin.trim()?'':'disabled'}>Add walk-in and check in</button>
+      <p class="muted small">If a walk-in has no waiver yet, their parent or guardian gets a text link to sign it.</p></div>
+    <button class="btn full" data-act="finish">Save attendance</button>`;
+}
+function newDraft(){return {name:'',freq:'weekly',days:[3],interval:1,nth:1,mday:6,date:iso(addDays(today,14)),from:'10:00',to:'11:30',cap:12,tbc:false,skip:[]}}
+function draftRule(D){
+  if(D.freq==='once')return {freq:'once',date:D.date,skip:[]};
+  if(D.freq==='monthly')return {freq:'monthly',nth:D.nth,day:D.mday,skip:D.skip};
+  const days=D.days.length?D.days:[3];let first=today;
+  for(let i=0;i<7;i++){const d=addDays(today,i);if(days.includes(d.getDay())){first=d;break}}
+  return {freq:'weekly',days,interval:D.interval,start:iso(first),skip:D.skip};
+}
+function leadSchedule(){
+  const D=state.draft;
+  let html=`<div class="row"><h2>Schedule</h2>${D?'':'<button class="btn sm" data-act="newsess">New session</button>'}</div>`;
+  if(D){
+    const r=draftRule(D),prev=nextDates(r,8,today,true);
+    html+=`<div class="card">
+      <h3>New session</h3>
+      <label class="f" for="dname">Name<input type="text" id="dname" data-bind="d.name" value="${esc(D.name)}" placeholder="e.g. Youth team practice"></label>
+      <div><div class="small" style="font-weight:700;margin-bottom:6px">Repeats</div>
+        <div class="chips">${[['weekly','Weekly'],['biweekly','Every other week'],['monthly','Monthly'],['once','One time']].map(([k,l])=>{
+          const on=(k==='biweekly'&&D.freq==='weekly'&&D.interval===2)||(k==='weekly'&&D.freq==='weekly'&&D.interval===1)||(k===D.freq&&k!=='weekly');
+          return `<button class="chip" data-act="dfreq" data-v="${k}" aria-pressed="${on}">${l}</button>`}).join('')}</div></div>
+      ${D.freq==='weekly'?`<div><div class="small" style="font-weight:700;margin-bottom:6px">On</div><div class="chips">${DOWS.map((n,i)=>`<button class="chip" data-act="dday" data-v="${i}" aria-pressed="${D.days.includes(i)}">${n}</button>`).join('')}</div></div>`:''}
+      ${D.freq==='monthly'?`<div class="grid2">
+        <label class="f" for="dnth">Which<select id="dnth" data-bind="d.nth">${[1,2,3,4,-1].map(k=>`<option value="${k}" ${+D.nth===k?'selected':''}>${NTH[k]}</option>`).join('')}</select></label>
+        <label class="f" for="dmday">Day<select id="dmday" data-bind="d.mday">${DOW.map((n,i)=>`<option value="${i}" ${+D.mday===i?'selected':''}>${n}</option>`).join('')}</select></label></div>`:''}
+      ${D.freq==='once'?`<label class="f" for="ddate">Date<input type="date" id="ddate" data-bind="d.date" value="${esc(D.date)}"></label>`:''}
+      <label class="check"><input type="checkbox" id="dtbc" data-bind="d.tbc" ${D.tbc?'checked':''}><span>Time to be confirmed</span></label>
+      ${D.tbc?'':`<div class="grid2"><label class="f" for="dfrom">Starts<input type="time" id="dfrom" data-bind="d.from" value="${esc(D.from)}"></label><label class="f" for="dto">Ends<input type="time" id="dto" data-bind="d.to" value="${esc(D.to)}"></label></div>`}
+      <label class="f" for="dcap">Spots<input type="number" id="dcap" min="1" max="60" data-bind="d.cap" value="${esc(D.cap)}"></label>
+      <div class="notice info"><b>${esc(ruleText(r))}</b>${D.freq==='once'?'':'Tap a date to skip it, for a holiday or gym closure.'}</div>
+      <div class="datechips">${prev.map(d=>`<button class="datechip" data-act="dskip" data-v="${iso(d)}" aria-pressed="${D.skip.includes(iso(d))}">${esc(fmt(d))}</button>`).join('')||'<span class="muted small">Pick at least one day.</span>'}</div>
+      <div class="row"><button class="btn ghost" data-act="cancelsess">Cancel</button><button class="btn" style="flex:1" data-act="savesess" ${D.name.trim()&&prev.length?'':'disabled'}>Save session</button></div>
+    </div>`;
+  }
+  html+=leadSessions().map(s=>`<div class="card">
+    <div class="row"><h3>${esc(s.name)}</h3><span class="pill">${s.booked} / ${s.cap} booked</span></div>
+    <div class="muted small">${esc(ruleText(s.rule))} · ${s.tbc?'Time to be confirmed':t12(s.from)+' to '+t12(s.to)}</div>
+    <div class="small">Next: ${nextDates(s.rule,3).map(d=>esc(fmt(d))).join(' · ')}</div>
+  </div>`).join('');
+  return html;
+}
+
+/* ---------- Screens: admin ---------- */
+function sitesView(){return state.siteFilter==='All'?SITES:SITES.filter(s=>s.region===state.siteFilter)}
+function adminOverview(){
+  const ss=sitesView();
+  const sum=k=>ss.reduce((a,s)=>a+s[k],0);
+  const booked=sum('booked'),checked=sum('checked'),sessions=sum('sessions'),rec=sum('rec');
+  const dark=ss.filter(s=>s.rec/s.sessions<.5).length;
+  const max=100,W=560,H=200,pad=34,bw=(W-pad-10)/WEEKS.length;
+  const y=v=>H-24-(v/max)*(H-40);
+  const bars=WEEKS.map(([b,c],i)=>{const x=pad+i*bw+bw*.16,w=bw*.32;return `<rect x="${x.toFixed(1)}" y="${y(b).toFixed(1)}" width="${w.toFixed(1)}" height="${(H-24-y(b)).toFixed(1)}" rx="3" fill="var(--bar2)"><title>Booked ${b}</title></rect><rect x="${(x+w+2).toFixed(1)}" y="${y(c).toFixed(1)}" width="${w.toFixed(1)}" height="${(H-24-y(c)).toFixed(1)}" rx="3" fill="var(--bar1)"><title>Checked in ${c}</title></rect><text x="${(x+w).toFixed(1)}" y="${H-6}" text-anchor="middle">${esc(fmt(addDays(weekStart(today),-(7*(WEEKS.length-1-i)))).replace(/^\w+, /,''))}</text>`}).join('');
+  const grid=[0,25,50,75,100].map(v=>`<line x1="${pad}" x2="${W-6}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pad-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`).join('');
+  return `<div class="row"><div><h2>All locations, last 4 weeks</h2><p class="muted">Showing ${ss.length} of 11 locations (sample cities and figures).</p></div>
+    <div class="chips">${['All','Texas','Colorado','Virginia','California','Maryland'].map(r=>`<button class="chip" data-act="region" data-v="${r}" aria-pressed="${state.siteFilter===r}">${r}</button>`).join('')}</div></div>
+  <div class="kpis">
+    <div class="kpi"><span class="n">${booked}</span><span class="l">Bookings</span></div>
+    <div class="kpi"><span class="n">${checked}</span><span class="l">Check-ins recorded</span></div>
+    <div class="kpi"><span class="n">${Math.round(rec/sessions*100)}%</span><span class="l">Sessions with attendance taken</span></div>
+    <div class="kpi ${dark?'flag':''}"><span class="n">${dark}</span><span class="l">Locations rarely taking attendance</span></div>
+  </div>
+  <div class="split">
+    <div class="card"><div class="row"><h3>Weekly bookings and check-ins</h3><div class="legend"><span><i style="background:var(--bar2)"></i>Booked</span><span><i style="background:var(--bar1)"></i>Checked in</span></div></div>
+      <div class="scroll-x"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar chart of weekly bookings and check-ins across all locations, last 8 weeks" style="width:100%;min-width:460px;height:auto">${grid}${bars}</svg></div>
+      <p class="muted small">All locations combined, sample figures. Check-ins trail sign-ups partly because some locations don't record attendance.</p></div>
+    <div class="card"><h3>Climbers drifting away</h3><p class="muted small">Had a weekly habit, no visit in 3+ weeks.</p>
+      ${state.drift.map((d,i)=>`<div class="row" style="border-top:1px solid var(--line);padding-top:8px"><div style="min-width:0"><b>${esc(d.n)}</b><div class="muted small">${esc(site(d.site).city)} · last came ${esc(d.last)}</div></div>
+        ${state.nudged.has(i)?'<span class="pill ok">Note sent</span>':`<button class="btn quiet sm" data-act="nudge" data-v="${i}">Send a note</button>`}</div>`).join('')}</div>
+  </div>
+  <div class="card"><h3>By location</h3>
+    <div class="scroll-x"><table><thead><tr><th>Location</th><th>Coach</th><th class="num">Sessions</th><th class="num">Booked</th><th class="num">Checked in</th><th>Attendance taken</th><th></th></tr></thead><tbody>
+    ${ss.map(s=>{const pct=s.rec/s.sessions,cls=pct<.5?'low':pct<.8?'mid':'';
+      return `<tr><td><b>${esc(s.city)}</b><div class="muted small">${esc(s.gym)}</div></td><td>${esc(s.lead)}</td><td class="num">${s.sessions}</td><td class="num">${s.booked}</td><td class="num">${s.checked}</td>
+      <td><div class="row" style="flex-wrap:nowrap"><div class="meter ${cls}" style="flex:1"><i style="width:${Math.round(pct*100)}%"></i></div><span class="small" style="width:48px;text-align:right">${s.rec} of ${s.sessions}</span></div></td>
+      <td>${pct<.5?'<span class="pill bad">Follow up</span>':pct<.8?'<span class="pill warn">Patchy</span>':'<span class="pill ok">Good</span>'}</td></tr>`}).join('')}
+    </tbody></table></div></div>`;
+}
+function adminSites(){
+  return `<h2>Locations</h2><p class="muted">One list for every location, with its coach and practices.</p>
+  <div class="kpis">${SITES.map(s=>`<div class="kpi"><b>${esc(s.city)}</b><span class="l">${esc(s.gym)}</span><span class="small">Coach: ${esc(s.lead)}</span><span class="small">${state.sessions.filter(x=>x.site===s.id).length||'No'} regular practices</span></div>`).join('')}</div>
+  <p class="muted small">Adding a location, assigning its coach and copying a schedule template are planned for the full build.</p>`;
+}
+
+/* ---------- Notes beside the app ---------- */
+const TOUR=[
+  {k:'ava@example.org',who:'Ava, a new climber, with her parent',do:['Add an emergency contact. On the waiver, tick "I am a parent or guardian," then sign with a typed name.','Book a weekly practice at Plano.']},
+  {k:'marcus@example.org',who:'Marcus, an adult climber',do:['Tap "I can\'t make it this time" on his next practice.','Open Find a session, pick another location, and book just this once.']},
+  {k:'riley@example.org',who:'Riley, the Plano coach',do:['Check in a few climbers, add a walk-in, and save attendance.','Open Schedule, tap New session, choose Monthly and First Saturday, skip one date, and save.']},
+  {k:'mariana@example.org',who:'Mariana, the admin',do:['Find Plano in the By location table. Riley\'s check-in is now counted.','Filter to Texas, then send a note to a family whose climber has stopped coming.']}
+];
+const NOTES={
+  out:{h:'One sign-in, no role picker',p:'Climbers, parents, coaches and staff all sign in the same way. The system looks up the account and opens the right view.',
+    b:['A code by email or text replaces passwords, so nobody has to remember or reset one.','A parent can handle sign-ups and the waiver for their climber.','A coach who also climbs gets one account with a simple switch.','Coaches only see their own location.'],
+    t:'Sign in as Ava to see the waiver step. Then sign out and try Riley, the coach.',r:'Sign-in'},
+  climber:{h:'Sign up once, stay on the team',p:'A climber or their parent picks a regular practice once and stays signed up every week, instead of signing up week by week.',
+    b:['A reminder goes out the day before, with one tap to say they can\'t make it.','Climbers can join a practice at another location too.','The waiver is signed once with checkboxes and a typed name, and a parent or guardian can sign for a climber.','Plain words, large text and big tap targets throughout.'],
+    t:'Tap "I can\'t make it this time" on the next practice, then open Find a session and book a one-time visit at another location.',r:'Sign-up and waiver'},
+  lead:{h:'Check-in in under a minute',p:'The coach sees who is expected, taps each climber as they arrive, and attendance is recorded for the whole program.',
+    b:['The roster is ready before practice, because sign-ups carry over every week.','Missing waivers are flagged at the door.','Walk-ins are added in one step.','Schedules support every other week, first Saturday of the month, and skipped dates.'],
+    t:'Check in a few climbers and save. Then open Schedule, create a practice on the first Saturday of each month, and skip one date.',r:'Check-in and schedule'},
+  admin:{h:'Every location in one view',p:'Staff see sign-ups and attendance across all eleven locations in one place, and can spot locations that aren\'t taking attendance.',
+    b:['Filter by state.','Locations that rarely record attendance are flagged for follow-up.','Climbers who stopped coming are listed so someone can reach out to the family.','Exports for board and funder reports come in the full build.'],
+    t:'Filter to Texas, then send a note to a family whose climber has stopped coming.',r:'Program view'}
+};
+
+/* ---------- Render ---------- */
+function role(){
+  if(!state.user)return 'out';
+  const p=me();
+  if(p.roles.includes('admin'))return 'admin';
+  if(!p.waiver)return 'waiver';
+  if(p.roles.includes('lead'))return state.mode||'lead';
+  return 'climber';
+}
+const TABS={climber:[['home','Home'],['find','Find a session'],['me','My details']],lead:[['checkin','Check-in'],['schedule','Schedule']],admin:[['overview','Overview'],['sites','Locations']]};
+function notesHtml(r,n){
+  const foot=`<p class="foot">Everything is sample data. Changes carry from one person to the next while the page is open. Reload to start over.</p>`;
+  const intro=`<div class="intro"><span class="req">${esc(n.r)}</span><h2>${esc(n.h)}</h2><p>${esc(n.p)}</p><ul>${n.b.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  if(r==='out'){
+    return `<aside class="notes"><div class="intro"><span class="req">Start here</span><h2>A five-minute tour</h2>
+      <p>Sign in as four sample people in this order. Each stop takes a minute or two, and what you do carries into the next one.</p></div>
+      <ol class="tour">${TOUR.map(t=>`<li><span class="who">${esc(t.who)}</span><ul>${t.do.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+        <button class="btn sm ghost" data-act="tourgo" data-v="${t.k}" style="align-self:flex-start">Sign in as ${esc(t.who.split(',')[0])}</button></li>`).join('')}</ol>
+      ${intro}${foot}</aside>`;
+  }
+  const i=TOUR.findIndex(t=>t.k===state.user);
+  let tryBox;
+  if(i<0){tryBox=`<div class="try"><h3>Try this</h3><p>${esc(n.t)}</p></div>`}
+  else{
+    const t=TOUR[i],nx=TOUR[i+1];
+    tryBox=`<div class="try"><span class="req">Tour stop ${i+1} of ${TOUR.length}</span><h3>Try this as ${esc(t.who.split(',')[0])}</h3>
+      <ul>${t.do.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+      ${nx?`<button class="btn sm" data-act="tourgo" data-v="${nx.k}" style="align-self:flex-start">Next: ${esc(nx.who)}</button>`
+        :`<p><b>That's the tour.</b> Questions or ideas? Send them to Eric at Positive Tribes.</p><button class="btn sm ghost" data-act="signout" style="align-self:flex-start">Back to the start</button>`}</div>`;
+  }
+  return `<aside class="notes">${tryBox}${intro}${foot}</aside>`;
+}
+function render(){
+  const r=role(),p=state.user?me():null,wide=r==='admin';
+  let body='',tabs='';
+  if(r==='out')body=signIn();
+  else if(r==='waiver')body=waiverFlow();
+  else{
+    const T=TABS[r],cur=state.tab[r]||T[0][0];
+    tabs=`<nav class="tabbar" aria-label="App sections">${T.map(([id,l])=>`<button data-act="tab" data-v="${id}" ${id===cur?'aria-current="page"':''}>${l}</button>`).join('')}</nav>`;
+    if(r==='climber')body=cur==='home'?climberHome():cur==='find'?climberFind():climberProfile();
+    if(r==='lead')body=cur==='checkin'?leadCheckin():leadSchedule();
+    if(r==='admin')body=cur==='overview'?adminOverview():adminSites();
+  }
+  const sw=p&&p.roles.includes('lead')&&p.waiver?`<div class="switch" role="group" aria-label="Switch view"><button data-act="mode" data-v="climber" aria-pressed="${r==='climber'}">My climbing</button><button data-act="mode" data-v="lead" aria-pressed="${r==='lead'}">My team</button></div>`:'';
+  const n=NOTES[r==='waiver'?'climber':r];
+  const notes=notesHtml(r,n);
+  const sc=$('#screen'),top=sc?sc.scrollTop:0;
+  $('#main').innerHTML=`<div class="stage ${wide?'wide':''}">
+    <div class="device" id="device">
+      <div class="appbar"><div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-9 4 5 3-4 5 8z"/><circle cx="16" cy="5" r="1.6"/></svg></span><b>United Rocks</b></div>
+        <div class="who">${sw}${p?`<span>${esc(p.name)}</span><button class="linkbtn" data-act="signout">Sign out</button>`:'<span>Signed out</span>'}</div></div>
+      <div id="screen">${body}</div>${tabs}
+    </div>${notes}</div>`;
+  const ns=$('#screen');if(ns&&!wide)ns.scrollTop=top;
+  if(state.toast){const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent=state.toast;$('#device').appendChild(t)}
+}
+
+/* ---------- Actions ---------- */
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  const a=el.dataset.act,v=el.dataset.v,L=state.login,W=state.waiver;
+  if(a==='fill'){L.email=v;L.step=2;L.sent=v;L.code='123456'}
+  else if(a==='sendcode'){L.sent=L.email.trim();L.step=2;L.code='123456'}
+  else if(a==='back1'){L.step=1;L.code=''}
+  else if(a==='tourgo'){state.user=null;state.mode=null;state.tab={};state.draft=null;L.sent=v;L.code='123456';doVerify();window.scrollTo(0,0)}
+  else if(a==='verify')doVerify();
+  else if(a==='signout'){state.user=null;state.mode=null;state.tab={};state.draft=null}
+  else if(a==='mode'){state.mode=v}
+  else if(a==='tab'){state.tab[role()]=v}
+  else if(a==='wstep')W.step=+v;
+  else if(a==='sign'){const p=me();p.waiver=iso(today);p.ec=`${W.ecName}, ${W.ecPhone}`;say('Waiver signed. You can book any session now.');state.tab.climber='find'}
+  else if(a==='miss'){me().missed.push(v);say('Got it. Your spot is free for someone on the waitlist.')}
+  else if(a==='undomiss'){const p=me();p.missed=p.missed.filter(x=>x!==v);say('Great, you\'re back on the list.')}
+  else if(a==='stand'){const p=me(),s=sess(v);p.standing.push(v);s.booked++;say(`Booked every week: ${ruleText(s.rule)}.`)}
+  else if(a==='once'){const p=me(),s=sess(v);p.once.push({id:v,date:iso(nextOf(s))});s.booked++;say('Booked for '+fmt(nextOf(s))+'.')}
+  else if(a==='unstand'){const p=me(),s=sess(v);p.standing=p.standing.filter(x=>x!==v);s.booked=Math.max(0,s.booked-1);say('Weekly booking stopped.')}
+  else if(a==='waitlist'){say('You\'re on the waitlist. We\'ll text you if a spot opens.')}
+  else if(a==='toggle'){const i=+v;state.checked.has(i)?state.checked.delete(i):state.checked.add(i);state.rosterDone=false}
+  else if(a==='addwalk'){state.roster.push({n:state.walkin.trim(),w:false,cp:false,walk:true});state.checked.add(state.roster.length-1);state.walkin='';state.rosterDone=false}
+  else if(a==='finish'){
+    const g=site('pla');if(!state.rosterDone){g.rec=Math.min(g.sessions,g.rec+1);g.checked+=state.checked.size}
+    state.rosterDone=true;say('Attendance saved. The program dashboard now includes it.');
+  }
+  else if(a==='newsess')state.draft=newDraft();
+  else if(a==='cancelsess')state.draft=null;
+  else if(a==='dfreq'){const D=state.draft;D.skip=[];if(v==='biweekly'){D.freq='weekly';D.interval=2}else if(v==='weekly'){D.freq='weekly';D.interval=1}else D.freq=v}
+  else if(a==='dday'){const D=state.draft,i=+v;D.days=D.days.includes(i)?D.days.filter(x=>x!==i):[...D.days,i];D.skip=[]}
+  else if(a==='dskip'){const D=state.draft;D.skip=D.skip.includes(v)?D.skip.filter(x=>x!==v):[...D.skip,v]}
+  else if(a==='savesess'){const D=state.draft;state.sessions.push({id:'n'+Date.now(),site:me().lead,name:D.name.trim(),rule:draftRule(D),from:D.from,to:D.to,cap:+D.cap||12,booked:0,tbc:D.tbc});state.draft=null;say('Session saved. Climbers can book it now.')}
+  else if(a==='region')state.siteFilter=v;
+  else if(a==='nudge'){state.nudged.add(+v);say('Note sent: "We miss you at climbing. Want to come back this week?"')}
+  render();
+  if(['tab','verify','signout','mode','wstep','sign','fill','sendcode','tourgo'].includes(a)){const s=$('#screen');if(s)s.scrollTop=0}
+});
+function doVerify(){
+  const L=state.login,k=L.sent.toLowerCase();
+  if(!state.people[k]){state.people[k]={name:k.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),roles:['climber'],home:'pla',waiver:null,ec:'',standing:[],once:[],missed:[]}}
+  state.user=k;state.mode=null;L.step=1;L.email='';L.code='';
+  state.waiver={step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Parent',dob:'',ecName:'',ecPhone:''};
+  state.findSite=me().home||'pla';
+  const r=role();say(r==='admin'?'Signed in. You have admin access to every location.':r==='lead'?'Signed in. You coach at Plano and also climb there.':r==='waiver'?'Signed in. One quick step before the first practice.':'Signed in.');
+}
+document.addEventListener('input',e=>{
+  const k=e.target.dataset&&e.target.dataset.bind;if(!k)return;
+  const val=e.target.type==='checkbox'?e.target.checked:e.target.value,W=state.waiver,D=state.draft;
+  if(k==='email'){state.login.email=val;const b=$('[data-act="sendcode"]');if(b)b.disabled=!val.trim();return}
+  if(k==='code'){state.login.code=val.replace(/\D/g,'').slice(0,6);const b=$('[data-act="verify"]');if(b)b.disabled=state.login.code.length!==6;return}
+  if(k==='walkin'){state.walkin=val;const b=$('[data-act="addwalk"]');if(b)b.disabled=!val.trim();return}
+  if(k==='findSite'){state.findSite=val;render();return}
+  if(k==='home'){me().home=val;return}
+  if(k in W){W[k]=val;if(e.target.type==='checkbox'||e.target.tagName==='SELECT')render();else{
+      const b=$('[data-act="wstep"][data-v="2"]');if(b)b.disabled=!(W.ecName.trim()&&W.ecPhone.trim());
+      const s=$('[data-act="sign"]');if(s)s.disabled=!(W.ack1&&W.ack2&&W.name.trim()&&(!W.proxy||W.proxyName.trim()));}
+    return}
+  if(k.startsWith('d.')&&D){const f=k.slice(2);D[f]=e.target.type==='checkbox'?val:(f==='nth'||f==='mday'?+val:val);
+    if(f==='name'){const b=$('[data-act="savesess"]');if(b)b.disabled=!val.trim();return}
+    if(f==='nth'||f==='mday'||f==='date'||f==='tbc')D.skip=[];
+    if(e.target.tagName==='SELECT'||e.target.type==='checkbox'||f==='date')render();}
+});
+document.addEventListener('change',e=>{const k=e.target.dataset&&e.target.dataset.bind;if(k==='d.date'||k==='d.cap'||k==='d.from'||k==='d.to')render()});
+render();
+</script>
+</body>
+</html>

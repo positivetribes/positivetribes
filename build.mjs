@@ -49,6 +49,13 @@ if (measurementId) {
   if (!uep.includes('</head>')) throw new Error('uep/index.html is missing </head>.');
   await writeFile('public/uep/index.html', uep.replace('</head>', analytics + '</head>'));
 }
+// United Rocks copy of the same scheduling prototype, with the same GA4 tag.
+await cp('unitedrocks', 'public/unitedrocks', { recursive: true });
+if (measurementId) {
+  const ur = await readFile('public/unitedrocks/index.html', 'utf8');
+  if (!ur.includes('</head>')) throw new Error('unitedrocks/index.html is missing </head>.');
+  await writeFile('public/unitedrocks/index.html', ur.replace('</head>', analytics + '</head>'));
+}
 await cp('soberafe', 'public/soberafe', { recursive: true });
 await cp('card', 'public/card', { recursive: true });
 // Optional folder: git drops it when empty, so skip it rather than fail the deploy.
