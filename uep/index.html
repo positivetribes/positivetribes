@@ -166,7 +166,17 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:12px}
 .notes{display:flex;flex-direction:column;gap:14px;min-width:0}
 .notes h2{font-size:24px}
 .notes ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
-.try{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.try{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.try ul{margin:0}
+.tour{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;counter-reset:stop}
+.tour li{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;counter-increment:stop}
+.tour li.here{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+.tour .who{font-weight:700;font-size:17px}
+.tour .who::before{content:counter(stop) ". ";color:var(--accent)}
+.tour ul{margin:0;padding-left:20px;font-size:15px;display:flex;flex-direction:column;gap:4px}
+.stage.wide .notes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px 28px;align-items:start}
+.stage.wide .notes > .intro{display:flex;flex-direction:column;gap:12px}
+@media (max-width:860px){.stage.wide .notes{grid-template-columns:minmax(0,1fr)}}
 .try h3{margin-bottom:6px}
 .foot{font-size:14px;color:var(--muted)}
 .req{font-size:14px;color:var(--muted)}
@@ -314,7 +324,7 @@ function signIn(){
     <div class="stack" style="gap:6px"><h2>Sign in</h2><p class="muted">One sign-in for everyone. No password to remember.</p></div>
     <label class="f" for="email">Email or mobile number<input type="email" id="email" data-bind="email" value="${esc(L.email)}" autocomplete="email" placeholder="you@example.org"></label>
     <button class="btn full" data-act="sendcode" ${L.email.trim()?'':'disabled'}>Send me a code</button>
-    <div class="card"><h3>Try a sample account</h3><p class="muted small">The app works out who you are from your account. There is no climber or manager choice.</p>
+    <div class="card"><h3>Try a sample account</h3><p class="muted small">The app works out who you are from your account. There is no climber or manager choice. New here? Follow the five-minute tour beside or below this screen.</p>
       <div class="stack" style="gap:8px">${ACCOUNTS.map(([e,l])=>`<button class="btn quiet sm full" data-act="fill" data-v="${e}" style="text-align:left">${esc(l)}<br><span class="muted small">${e}</span></button>`).join('')}</div></div>`;
   return `
     <div class="stack" style="gap:6px"><h2>Check your messages</h2><p class="muted">We sent a 6-digit code to <b>${esc(L.sent)}</b>. It works for 10 minutes.</p></div>
@@ -529,6 +539,12 @@ function adminSites(){
 }
 
 /* ---------- Notes beside the app ---------- */
+const TOUR=[
+  {k:'sam@example.org',who:'Sam, a new climber',do:['Add an emergency contact, then sign the waiver with two checkboxes and a typed name.','Book a weekly session at Golden.']},
+  {k:'ruth@example.org',who:'Ruth, a regular climber',do:['Tap "I can\'t make it this time" on her next climb.','Open Find a session, pick another site, and book just this once.']},
+  {k:'pat@example.org',who:'Pat, the Golden site lead',do:['Check in a few people, add a walk-in, and save attendance.','Open Schedule, tap New session, choose Monthly and First Tuesday, skip one date, and save.']},
+  {k:'molly@example.org',who:'Molly, the admin',do:['Find Golden in the By site table. Pat\'s check-in is now counted.','Filter to East, then send a note to a climber who has stopped coming.']}
+];
 const NOTES={
   out:{h:'One sign-in, no role picker',p:'Climbers, site leads and staff all sign in the same way. The system looks up the account and opens the right view.',
     b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Someone with two roles, like a lead who also climbs, gets one account with a simple switch.','A site lead only sees their own site.'],
@@ -554,6 +570,28 @@ function role(){
   return 'climber';
 }
 const TABS={climber:[['home','Home'],['find','Find a session'],['me','My details']],lead:[['checkin','Check-in'],['schedule','Schedule']],admin:[['overview','Overview'],['sites','Sites']]};
+function notesHtml(r,n){
+  const foot=`<p class="foot">Everything is sample data. Changes carry from one person to the next while the page is open. Reload to start over.</p>`;
+  const intro=`<div class="intro"><span class="req">${esc(n.r)}</span><h2>${esc(n.h)}</h2><p>${esc(n.p)}</p><ul>${n.b.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
+  if(r==='out'){
+    return `<aside class="notes"><div class="intro"><span class="req">Start here</span><h2>A five-minute tour</h2>
+      <p>Sign in as four sample people in this order. Each stop takes a minute or two, and what you do carries into the next one.</p></div>
+      <ol class="tour">${TOUR.map(t=>`<li><span class="who">${esc(t.who)}</span><ul>${t.do.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+        <button class="btn sm ghost" data-act="tourgo" data-v="${t.k}" style="align-self:flex-start">Sign in as ${esc(t.who.split(',')[0])}</button></li>`).join('')}</ol>
+      ${intro}${foot}</aside>`;
+  }
+  const i=TOUR.findIndex(t=>t.k===state.user);
+  let tryBox;
+  if(i<0){tryBox=`<div class="try"><h3>Try this</h3><p>${esc(n.t)}</p></div>`}
+  else{
+    const t=TOUR[i],nx=TOUR[i+1];
+    tryBox=`<div class="try"><span class="req">Tour stop ${i+1} of ${TOUR.length}</span><h3>Try this as ${esc(t.who.split(',')[0])}</h3>
+      <ul>${t.do.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+      ${nx?`<button class="btn sm" data-act="tourgo" data-v="${nx.k}" style="align-self:flex-start">Next: ${esc(nx.who)}</button>`
+        :`<p><b>That's the tour.</b> Questions or ideas? Use Questions and feedback at the top of the page.</p><button class="btn sm ghost" data-act="signout" style="align-self:flex-start">Back to the start</button>`}</div>`;
+  }
+  return `<aside class="notes">${tryBox}${intro}${foot}</aside>`;
+}
 function render(){
   const r=role(),p=state.user?me():null,wide=r==='admin';
   let body='',tabs='';
@@ -568,7 +606,7 @@ function render(){
   }
   const sw=p&&p.roles.includes('lead')&&p.waiver?`<div class="switch" role="group" aria-label="Switch view"><button data-act="mode" data-v="climber" aria-pressed="${r==='climber'}">My climbing</button><button data-act="mode" data-v="lead" aria-pressed="${r==='lead'}">My site</button></div>`:'';
   const n=NOTES[r==='waiver'?'climber':r];
-  const notes=wide?'':`<aside class="notes"><span class="req">${esc(n.r)}</span><h2>${esc(n.h)}</h2><p>${esc(n.p)}</p><ul>${n.b.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><div class="try"><h3>Try this</h3><p>${esc(n.t)}</p></div><p class="foot">Everything is sample data. Changes carry across accounts while the page is open, so a check-in shows up for the admin. Reload to reset.</p></aside>`;
+  const notes=notesHtml(r,n);
   const sc=$('#screen'),top=sc?sc.scrollTop:0;
   $('#main').innerHTML=`<div class="stage ${wide?'wide':''}">
     <div class="device" id="device">
@@ -587,14 +625,8 @@ document.addEventListener('click',e=>{
   if(a==='fill'){L.email=v;L.step=2;L.sent=v;L.code='123456'}
   else if(a==='sendcode'){L.sent=L.email.trim();L.step=2;L.code='123456'}
   else if(a==='back1'){L.step=1;L.code=''}
-  else if(a==='verify'){
-    const k=L.sent.toLowerCase();
-    if(!state.people[k]){state.people[k]={name:k.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),roles:['climber'],home:'gol',waiver:null,ec:'',standing:[],once:[],missed:[]}}
-    state.user=k;state.mode=null;L.step=1;L.email='';L.code='';
-    state.waiver={step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dob:'',ecName:'',ecPhone:''};
-    state.findSite=me().home||'gol';
-    const r=role();say(r==='admin'?'Signed in. You have admin access to every site.':r==='lead'?'Signed in. You lead the Golden site and also climb there.':r==='waiver'?'Signed in. One quick step before your first climb.':'Signed in.');
-  }
+  else if(a==='tourgo'){state.user=null;state.mode=null;state.tab={};state.draft=null;L.sent=v;L.code='123456';doVerify();window.scrollTo(0,0)}
+  else if(a==='verify')doVerify();
   else if(a==='signout'){state.user=null;state.mode=null;state.tab={};state.draft=null}
   else if(a==='mode'){state.mode=v}
   else if(a==='tab'){state.tab[role()]=v}
@@ -621,8 +653,16 @@ document.addEventListener('click',e=>{
   else if(a==='region')state.siteFilter=v;
   else if(a==='nudge'){state.nudged.add(+v);say('Note sent: "We miss you at climbing. Want to come back this week?"')}
   render();
-  if(['tab','verify','signout','mode','wstep','sign','fill','sendcode'].includes(a)){const s=$('#screen');if(s)s.scrollTop=0}
+  if(['tab','verify','signout','mode','wstep','sign','fill','sendcode','tourgo'].includes(a)){const s=$('#screen');if(s)s.scrollTop=0}
 });
+function doVerify(){
+  const L=state.login,k=L.sent.toLowerCase();
+  if(!state.people[k]){state.people[k]={name:k.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),roles:['climber'],home:'gol',waiver:null,ec:'',standing:[],once:[],missed:[]}}
+  state.user=k;state.mode=null;L.step=1;L.email='';L.code='';
+  state.waiver={step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dob:'',ecName:'',ecPhone:''};
+  state.findSite=me().home||'gol';
+  const r=role();say(r==='admin'?'Signed in. You have admin access to every site.':r==='lead'?'Signed in. You lead the Golden site and also climb there.':r==='waiver'?'Signed in. One quick step before your first climb.':'Signed in.');
+}
 document.addEventListener('input',e=>{
   const k=e.target.dataset&&e.target.dataset.bind;if(!k)return;
   const val=e.target.type==='checkbox'?e.target.checked:e.target.value,W=state.waiver,D=state.draft;
