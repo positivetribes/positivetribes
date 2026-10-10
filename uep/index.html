@@ -50,11 +50,8 @@ p{margin:0}
 .tag{font-size:12px;letter-spacing:.06em;text-transform:uppercase;background:var(--sun-bg);color:var(--sun);padding:4px 10px;border-radius:99px;font-weight:700}
 .top small{color:var(--muted);font-size:14px}
 
-.views{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:5px;width:fit-content;max-width:100%;flex-wrap:wrap}
-.views button{border:0;background:none;padding:10px 16px;border-radius:10px;font-weight:700;min-height:44px}
-.views button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg)}
-.count{display:inline-block;min-width:22px;padding:0 6px;margin-left:6px;border-radius:99px;background:var(--sun-bg);color:var(--sun);font-size:13px;line-height:22px;text-align:center}
-.views button[aria-selected="true"] .count{background:var(--accent-fg);color:var(--accent)}
+.fb{display:inline-flex;align-items:center;min-height:44px;padding:8px 16px;border-radius:12px;border:2px solid var(--accent);color:var(--accent);font-weight:700;text-decoration:none}
+.fb:hover{background:var(--accent-soft)}
 
 .stage{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:28px;align-items:start}
 .stage.wide{grid-template-columns:minmax(0,1fr)}
@@ -175,17 +172,6 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:12px}
 .req{font-size:14px;color:var(--muted)}
 .req b{color:var(--fg)}
 
-.bl{display:flex;flex-direction:column;gap:18px}
-.bl-head{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end}
-.bl-group{display:flex;flex-direction:column;gap:10px}
-.bl-group h2{font-size:19px;padding-bottom:6px;border-bottom:2px solid var(--line)}
-.q{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:4px 14px;align-items:start}
-.q .id{font-family:var(--display);font-weight:600;color:var(--muted);font-size:15px;padding-top:2px}
-.q .qt{font-weight:700;font-size:17px}
-.q .why{color:var(--muted);font-size:15px;grid-column:2}
-.q .ans{grid-column:2;font-size:15px;background:var(--ok-bg);border-radius:8px;padding:6px 10px}
-.q .tags{display:flex;flex-direction:column;gap:6px;align-items:flex-end;grid-row:1 / span 3;grid-column:3}
-@media (max-width:560px){.q{grid-template-columns:minmax(0,1fr)}.q .id,.q .why,.q .ans{grid-column:1}.q .tags{grid-column:1;grid-row:auto;flex-direction:row;flex-wrap:wrap;align-items:center}}
 
 .toast{position:absolute;left:16px;right:16px;bottom:78px;background:var(--fg);color:var(--bg);padding:13px 16px;border-radius:12px;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:5}
 .stage.wide .toast{position:fixed;left:50%;right:auto;bottom:24px;transform:translateX(-50%);max-width:min(560px,calc(100vw - 32px))}
@@ -201,9 +187,8 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:12px}
       <span class="eyebrow">Up ENDing Parkinson's</span>
       <h1>Climb Scheduler</h1>
     </div>
-    <div><span class="tag">Clickable prototype</span> <small>Sample data only. Built by Positive Tribes.</small></div>
+    <div class="row" style="justify-content:flex-start"><span class="tag">Clickable prototype</span> <small>Sample data only. Built by Positive Tribes.</small> <a class="fb" href="https://uep.positivetribes.org/" target="_blank" rel="noopener">Questions and feedback &#8599;</a></div>
   </header>
-  <div class="views" role="tablist" aria-label="Choose a view" id="views"></div>
   <div id="main"></div>
 </div>
 
@@ -266,7 +251,7 @@ const start0=iso(weekStart(addDays(today,-60)));
 const S=(id,siteId,name,rule,from,to,cap,booked,tbc=false)=>({id,site:siteId,name,rule:{start:start0,skip:[],...rule},from,to,cap,booked,tbc});
 
 const state={
-  view:'proto', user:null, mode:null, tab:{}, toast:'',
+  user:null, mode:null, tab:{}, toast:'',
   login:{step:1,email:'',code:'',sent:''},
   waiver:{step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dob:'',ecName:'',ecPhone:''},
   findSite:'gol',
@@ -300,37 +285,10 @@ const state={
     {n:'Alice Burke',site:'bou',last:'3 weeks ago',was:'Every other Thursday'},
     {n:'Tom Greer',site:'chi',last:'3 weeks ago',was:'Every Monday'}
   ],
-  nudged:new Set(), siteFilter:'All', blFilter:'All'
+  nudged:new Set(), siteFilter:'All'
 };
 const WEEKS=[[96,61],[104,66],[99,58],[112,72],[108,70],[118,74],[121,79],[126,82]];
 
-/* ---------- Open questions backlog ---------- */
-const BACKLOG=[
-  {id:'Q1',area:'Accounts and data',q:'Are all 84 locations separate Gymdesk accounts?',why:'Each account means a separate login and a separate export. This sets how much migration work there is.',owner:'Molly',status:'Likely',ans:'Screens show "Movement Climbing Gyms (East)" as its own account with 71 members. Confirm the full list of accounts.',poc:true},
-  {id:'Q2',area:'Accounts and data',q:'Can every Gymdesk account export members, attendance and signed waivers as CSV?',why:'Real data from a few sites would make the demo far more convincing, and decides how the switch-over works.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q3',area:'Accounts and data',q:'Of the roughly 1,500 climbers, how many are currently active?',why:'Tells us whether the gap to about 400 weekly sign-ups is a retention problem or a stale list.',owner:'Molly',status:'Open',poc:false},
-  {id:'Q4',area:'Accounts and data',q:'Some partner gyms use their own registration pages. Should those sites move to this system too?',why:'Those sites send no climber data or waivers to UEP today, so they are invisible in reports.',owner:'Molly',status:'Open',poc:false},
-  {id:'Q5',area:'Accounts and data',q:'Which CRM does UEP use, and what should flow into it?',why:'Gymdesk does not connect to it today. A nightly sync of new climbers may be enough.',owner:'Molly',status:'Open',poc:false},
-  {id:'Q6',area:'People and roles',q:'What does "FREE - PD Climber" mean compared with the site options like "Movement - Timonium"?',why:'People appear twice, once under each. The prototype treats them as one person with a home site.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q7',area:'People and roles',q:'Do care partners need their own accounts, or are they attached to a climber?',why:'The "Family" option suggests care partners attend. They may also sign or book for a climber.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q8',area:'People and roles',q:'Who creates and changes each site\'s schedule: site leads or UEP staff?',why:'Sets what a site lead is allowed to do in the app.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q9',area:'People and roles',q:'Besides the lead, do other volunteer roles need sign-ups, such as belayers?',why:'Volunteer coordination came up early. It could be a later phase.',owner:'Molly',status:'Open',poc:false},
-  {id:'Q10',area:'Waiver',q:'Is a checkbox plus typed name an acceptable way to sign the waiver?',why:'Drawing a signature is hard with tremor. Needs sign-off from whoever wrote the waiver.',owner:'UEP counsel',status:'Open',poc:true},
-  {id:'Q11',area:'Waiver',q:'May a care partner sign on a climber\'s behalf, and what proof is needed?',why:'Common in this group. Usually requires legal authority, such as power of attorney.',owner:'UEP counsel',status:'Open',poc:true},
-  {id:'Q12',area:'Waiver',q:'Does the waiver expire or need yearly renewal?',why:'Decides when climbers are asked to sign again.',owner:'Molly',status:'Open',poc:false},
-  {id:'Q13',area:'Waiver',q:'Is there one waiver for all sites, or do host gyms require their own as well?',why:'One UEP waiver covers "gyms affiliated with UEP". Host gyms usually have their own release too.',owner:'Molly',status:'Likely',ans:'Eric believes there is one UEP waiver. Confirm whether host gym waivers are tracked.',poc:true},
-  {id:'Q14',area:'Waiver',q:'Is medical clearance required, or is the self-certification in the waiver enough?',why:'The waiver lets climbers certify they consulted a provider or declined to.',owner:'Molly',status:'Open',poc:false},
-  {id:'Q15',area:'Scheduling and booking',q:'Is the 2 sessions per week limit on free climbers deliberate?',why:'If it reflects a host gym agreement, it becomes a per-site setting. Otherwise drop it.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q16',area:'Scheduling and booking',q:'When a session is full, should the waitlist promote people automatically?',why:'Molly asked for capacity limits and waitlists. Auto-promotion needs a notice that reaches people in time.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q17',area:'Scheduling and booking',q:'Should reminders go by email, text, or both?',why:'Texts reach more people in this age group but cost a little per message.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q18',area:'Scheduling and booking',q:'Do the optional donation tiers ($10, $25, $40) unlock anything?',why:'None have members today. If they are only donations, they become a "Support UEP" link and leave booking.',owner:'Molly',status:'Open',poc:false},
-  {id:'Q19',area:'Reporting',q:'Which reports matter most, and for whom: board, funders, grant applications, site leads?',why:'Decides what the admin dashboard shows first.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q20',area:'Reporting',q:'What counts as an "active" climber for reports?',why:'For example, attended at least once in the last 30 days. Needs to be consistent across sites.',owner:'Molly',status:'Open',poc:true},
-  {id:'Q21',area:'Project',q:'Where does the climber-facing link live: upendingparkinsons.org or a separate address?',why:'Affects sign-in emails and how climbers find it.',owner:'Eric and Molly',status:'Open',poc:false},
-  {id:'Q22',area:'Project',q:'Who looks after the system after launch: updates, fixes and support for site leads?',why:'A live booking system needs ongoing care. Agree on how that is handled before climbers depend on it.',owner:'Eric and Molly',status:'Open',poc:false},
-  {id:'Q23',area:'Project',q:'Confirm the target timeline and monthly budget for running costs.',why:'Earlier notes: early 2027 and under $700 per month.',owner:'Molly',status:'Likely',ans:'From the earlier email exchange. Confirm both still hold.',poc:false},
-  {id:'Q24',area:'Privacy',q:'What privacy notice do climbers see, given the program implies a Parkinson\'s diagnosis?',why:'Membership alone is sensitive. Data should stay minimal, access limited by site, and never sold or shared.',owner:'Eric and Molly',status:'Open',poc:false}
-];
 
 /* ---------- Helpers ---------- */
 const $=s=>document.querySelector(s);
@@ -461,7 +419,7 @@ function climberProfile(){
       <p class="muted small">${p.waiver?'Signed '+esc(fmt(fromIso(p.waiver)))+', version 2026-1. Covers every UEP site.':'Needed before booking.'}</p></div>
     <div class="card"><b>Home site</b><p>${esc(site(p.home).city)} · ${esc(site(p.home).gym)}</p></div>
     <div class="card"><b>Emergency contact</b><p>${esc(p.ec||'Not added')}</p></div>
-    <div class="card"><b>Reminders</b><div class="chips"><button class="chip" aria-pressed="true">Text</button><button class="chip" aria-pressed="false">Email</button></div><p class="muted small">Choice of channel is an open question (Q17).</p></div>`;
+    <div class="card"><b>Reminders</b><div class="chips"><button class="chip" aria-pressed="true">Text</button><button class="chip" aria-pressed="false">Email</button></div><p class="muted small">Text or email is still an open question.</p></div>`;
 }
 
 /* ---------- Screens: site lead ---------- */
@@ -597,9 +555,6 @@ function role(){
 }
 const TABS={climber:[['home','Home'],['find','Find a session'],['me','My details']],lead:[['checkin','Check-in'],['schedule','Schedule']],admin:[['overview','Overview'],['sites','Sites']]};
 function render(){
-  const openQ=BACKLOG.filter(b=>b.status!=='Answered').length;
-  $('#views').innerHTML=`<button role="tab" aria-selected="${state.view==='proto'}" data-act="view" data-v="proto">Prototype</button><button role="tab" aria-selected="${state.view==='backlog'}" data-act="view" data-v="backlog">Open questions<span class="count">${openQ}</span></button>`;
-  if(state.view==='backlog'){$('#main').innerHTML=backlog();return}
   const r=role(),p=state.user?me():null,wide=r==='admin';
   let body='',tabs='';
   if(r==='out')body=signIn();
@@ -624,30 +579,12 @@ function render(){
   const ns=$('#screen');if(ns&&!wide)ns.scrollTop=top;
   if(state.toast){const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent=state.toast;$('#device').appendChild(t)}
 }
-function backlog(){
-  const f=state.blFilter,items=BACKLOG.filter(b=>f==='All'||(f==='POC'?b.poc:b.owner===f));
-  const owners=['All','POC','Molly','UEP counsel','Eric and Molly'];
-  const areas=[...new Set(BACKLOG.map(b=>b.area))];
-  const cnt=s=>BACKLOG.filter(b=>b.status===s).length;
-  return `<div class="bl">
-    <div class="bl-head"><div class="stack" style="gap:6px"><h2 style="font-size:26px">Open questions</h2>
-      <p class="muted">What we still need to learn before the full build. ${cnt('Open')} open, ${cnt('Likely')} likely but unconfirmed. Questions marked "Shapes POC" change how the prototype works.</p>
-      <p class="small">This is a snapshot. Answer questions and suggest changes in the <a href="https://uep.positivetribes.org/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">shared backlog</a> (passcode needed).</p></div>
-      <div class="chips" role="group" aria-label="Filter questions">${owners.map(o=>`<button class="chip" data-act="blf" data-v="${o}" aria-pressed="${f===o}">${o==='POC'?'Shapes POC':o==='All'?'All':'For '+o}</button>`).join('')}</div></div>
-    ${areas.map(a=>{const g=items.filter(b=>b.area===a);if(!g.length)return '';return `<section class="bl-group"><h2>${esc(a)}</h2>${g.map(b=>`<div class="q">
-      <span class="id">${b.id}</span><span class="qt">${esc(b.q)}</span>
-      <span class="tags"><span class="pill ${b.status==='Likely'?'sun':b.status==='Answered'?'ok':'plain'}">${b.status==='Likely'?'Likely, confirm':b.status}</span><span class="small muted">${esc(b.owner)}</span>${b.poc?'<span class="pill">Shapes POC</span>':''}</span>
-      <span class="why">${esc(b.why)}</span>${b.ans?`<span class="ans">${esc(b.ans)}</span>`:''}
-    </div>`).join('')}</section>`}).join('')}
-    <p class="foot">Last updated ${esc(fmtLong(today))}. Answers go here as they come in.</p></div>`;
-}
 
 /* ---------- Actions ---------- */
 document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');if(!el)return;
   const a=el.dataset.act,v=el.dataset.v,L=state.login,W=state.waiver;
-  if(a==='view')state.view=v;
-  else if(a==='fill'){L.email=v;L.step=2;L.sent=v;L.code='123456'}
+  if(a==='fill'){L.email=v;L.step=2;L.sent=v;L.code='123456'}
   else if(a==='sendcode'){L.sent=L.email.trim();L.step=2;L.code='123456'}
   else if(a==='back1'){L.step=1;L.code=''}
   else if(a==='verify'){
@@ -683,9 +620,8 @@ document.addEventListener('click',e=>{
   else if(a==='savesess'){const D=state.draft;state.sessions.push({id:'n'+Date.now(),site:me().lead,name:D.name.trim(),rule:draftRule(D),from:D.from,to:D.to,cap:+D.cap||12,booked:0,tbc:D.tbc});state.draft=null;say('Session saved. Climbers can book it now.')}
   else if(a==='region')state.siteFilter=v;
   else if(a==='nudge'){state.nudged.add(+v);say('Note sent: "We miss you at climbing. Want to come back this week?"')}
-  else if(a==='blf')state.blFilter=v;
   render();
-  if(['view','tab','verify','signout','mode','wstep','sign','fill','sendcode'].includes(a)){const s=$('#screen');if(s)s.scrollTop=0;if(a==='view')window.scrollTo(0,0)}
+  if(['tab','verify','signout','mode','wstep','sign','fill','sendcode'].includes(a)){const s=$('#screen');if(s)s.scrollTop=0}
 });
 document.addEventListener('input',e=>{
   const k=e.target.dataset&&e.target.dataset.bind;if(!k)return;
