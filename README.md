@@ -10,7 +10,7 @@ Set the optional `GA_MEASUREMENT_ID` build variable (for example `G-XXXXXXXXXX`)
 
 The Up ENDing Parkinson's scheduling prototype is at `/uep/` (`uep/index.html`, one self-contained page with sample data, hidden from search engines). It gets the same GA4 tag as Coyote but sends no custom events. Its shared backlog of open questions and suggestions is the separate Worker in `uep-backlog/`.
 
-A copy of the same prototype adapted for United Rocks (climbing teams for people with intellectual and developmental disabilities) is at `/unitedrocks/` (`unitedrocks/index.html`, fictional sample data, hidden from search engines).
+A copy of the same prototype adapted for United Rocks (climbing teams for people with intellectual and developmental disabilities) is at `/unitedrocks/` (`unitedrocks/index.html`, fictional sample data, hidden from search engines). Its shared backlog is the separate Worker in `unitedrocks-backlog/`, served at `unitedrocks.positivetribes.org`.
 
 The existing `contact-worker.mjs` serves static assets and handles `/api/contact`, including validation, origin checks, rate limiting, and email delivery. This redesign preserves that integration and requires no new dependencies or hosting configuration.
 

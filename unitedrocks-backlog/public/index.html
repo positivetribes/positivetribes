@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>United Rocks Backlog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --fg:#16222e; --muted:#566575; --line:#d3dbe3;
+  --accent:#127057; --accent-fg:#ffffff; --accent-soft:#d9efe6;
+  --must:#a3283a; --must-bg:#f7dde1; --nice:#8a5a00; --nice-bg:#f8ebc9; --idea:#3d5a80; --idea-bg:#dde6f1;
+  --ok:#22693f; --ok-bg:#dbefe2;
+  --display:'Archivo','Helvetica Neue',Arial,sans-serif;
+  --font:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f171f; --surface:#17222d; --fg:#e7edf3; --muted:#9cadbd; --line:#2d3c4b;
+  --accent:#6fd0ad; --accent-fg:#062118; --accent-soft:#163a2e;
+  --must:#f39aa7; --must-bg:#3e1f27; --nice:#efc36a; --nice-bg:#3a2f15; --idea:#9dbbe0; --idea-bg:#1f2b3a;
+  --ok:#8fd1a6; --ok-bg:#183223; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.5 var(--font);padding:20px 16px 48px}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3{margin:0;line-height:1.15;text-wrap:balance;font-family:var(--display)}
+.wrap{max-width:780px;margin-inline:auto;display:flex;flex-direction:column;gap:18px}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:30px;font-weight:800}
+.lede{color:var(--muted);margin:0}
+.proto{margin:0;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+a.btn{text-decoration:none;display:inline-block}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.legend{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.legend li{display:flex;gap:10px;align-items:baseline}
+.pill{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.pill.must{background:var(--must-bg);color:var(--must)}
+.pill.nice{background:var(--nice-bg);color:var(--nice)}
+.pill.idea{background:var(--idea-bg);color:var(--idea)}
+.pill.done{background:var(--ok-bg);color:var(--ok)}
+.pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400}
+.pill.phase.prototype{border-color:var(--accent);color:var(--accent)}
+.pill.phase.full{border-color:var(--idea);color:var(--idea)}
+.kinds{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:5px;width:fit-content;max-width:100%;flex-wrap:wrap}
+.kinds button{border:0;background:none;padding:9px 16px;border-radius:9px;font-weight:700}
+.kinds button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.filters button{border:1px solid var(--line);background:var(--surface);padding:5px 12px;border-radius:99px;font-size:15px}
+.filters button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+.phase-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.phase-row .meta{margin-right:2px}
+label{display:block;font-weight:700;font-size:15px;margin-bottom:4px}
+input[type=text],input[type=password],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+textarea{min-height:76px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1 1 160px}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);padding:10px 16px;border-radius:10px;font-weight:700}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.small{padding:5px 10px;font-size:15px}
+.btn.danger{border-color:var(--must);color:var(--must)}
+.btn:disabled{opacity:.5;cursor:default}
+.stack{display:flex;flex-direction:column;gap:12px}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.muted{color:var(--muted)}
+.error{background:var(--must-bg);color:var(--must);border-radius:10px;padding:9px 12px;font-weight:700}
+section.tier{display:flex;flex-direction:column;gap:10px}
+section.tier h2{font-size:21px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.count{font-size:15px;color:var(--muted);font-weight:400;font-family:var(--font)}
+.item{display:flex;flex-direction:column;gap:8px}
+.item h3{font-size:19px;font-weight:600}
+.item p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.answer{background:var(--ok-bg);border-radius:10px;padding:8px 12px}
+.answer b{display:block;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ok)}
+.meta{font-size:14px;color:var(--muted)}
+.tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tools .spacer{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.seg button{background:transparent;border:0;padding:5px 10px;font-size:15px}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);font-weight:700}
+.empty{color:var(--muted);font-style:italic;margin:0}
+details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
+.item.is-done h3{color:var(--muted)}
+.confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--must-bg);border-radius:10px;padding:8px 10px}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="stack">
+    <div class="eyebrow">Positive Tribes &middot; United Rocks</div>
+    <h1>Scheduler backlog</h1>
+    <p class="lede">Open questions about the United Rocks team scheduling app, and every suggested change to the prototype. Answer a question, add your own suggestions, and move items up or down to show what comes first.</p>
+    <p class="proto"><a class="btn" href="https://positivetribes.org/unitedrocks/" target="_blank" rel="noopener">Try the prototype</a> <span class="muted">Opens in a new tab. Have it open while you add suggestions.</span></p>
+  </header>
+
+  <div id="gate" class="card stack" hidden>
+    <div><label for="passcode">Passcode</label>
+      <input id="passcode" type="password" autocomplete="current-password" aria-describedby="gate-msg"></div>
+    <div><label for="who">Your name</label>
+      <input id="who" type="text" maxlength="40" autocomplete="name" placeholder="So we know who added what"></div>
+    <div class="row"><button class="btn" id="enter" type="button">Open the backlog</button></div>
+    <div id="gate-msg" class="error" role="alert" hidden></div>
+  </div>
+
+  <div id="app" hidden class="stack">
+    <div class="kinds" id="kinds" role="group" aria-label="Show questions or suggestions"></div>
+
+    <ul class="legend card" id="tier-legend"></ul>
+
+    <ul class="legend card">
+      <li><span class="pill phase review">To review</span><span>New and not sorted yet. Eric will place it.</span></li>
+      <li><span class="pill phase prototype">Prototype</span><span>Needed for the next round of the clickable prototype.</span></li>
+      <li><span class="pill phase full">Full build</span><span>Part of the real app after the prototype is approved.</span></li>
+      <li><span class="pill phase later">Later</span><span>Parked for a future version.</span></li>
+    </ul>
+
+    <form id="add" class="card stack">
+      <h2 id="add-heading">Ask a question</h2>
+      <div><label for="title" id="title-label">What do we need to know?</label>
+        <input id="title" type="text" maxlength="160" required></div>
+      <div><label for="details">Why it matters, or any detail <span class="muted">(optional)</span></label>
+        <textarea id="details" maxlength="2000"></textarea></div>
+      <div class="row">
+        <div><label for="tier">How much does it matter?</label><select id="tier"></select></div>
+        <div id="owner-field"><label for="owner">Who can answer?</label><input id="owner" type="text" maxlength="60" placeholder="Mariana, Eric, counsel"></div>
+        <div><label for="name">Your name</label><input id="name" type="text" maxlength="40" autocomplete="name"></div>
+      </div>
+      <div class="row"><button class="btn" type="submit" id="add-btn">Add question</button></div>
+    </form>
+
+    <div class="bar">
+      <span class="muted" id="summary" aria-live="polite"></span>
+      <span class="tools"><button class="btn ghost small" id="refresh" type="button">Refresh</button><button class="btn ghost small" id="lock" type="button">Sign out</button></span>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="Show items by phase"></div>
+    <div id="error" class="error" role="alert" hidden></div>
+    <div id="lists" class="stack"></div>
+  </div>
+</main>
+
+<script>
+(() => {
+  // The same three tiers in the database, named for what they mean to each kind of item.
+  const TIER_NAMES = {
+    question: [['must', 'Answer first', 'The prototype or the plan changes depending on the answer.'],
+      ['nice', 'Answer before the full build', 'Needed before the real app, not for the prototype.'],
+      ['idea', 'Can wait', 'Worth asking eventually. Nothing depends on it yet.']],
+    change: [['must', 'Must have', 'The app does not work for its purpose without it.'],
+      ['nice', 'Nice to have', 'Makes it better and we would like it in the first release if there is room.'],
+      ['idea', 'Idea for now', 'Worth remembering. Not decided, not promised.']]
+  };
+  const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
+  const $ = id => document.getElementById(id);
+  let passcode = '', items = [], editing = null, filter = 'all', kind = 'question', confirming = null;
+
+  // Visitor counting. gtag exists only when the site is deployed with the GA4 tag, so this does nothing otherwise.
+  // Events never include the passcode, names, or anything typed into an item.
+  const track = (name, params) => { try { if (typeof gtag === 'function') gtag('event', name, params || {}); } catch {} };
+
+  const store = {
+    get(key) { try { return localStorage.getItem(key) || ''; } catch { return ''; } },
+    set(key, value) { try { value ? localStorage.setItem(key, value) : localStorage.removeItem(key); } catch {} }
+  };
+
+  function h(tag, attrs = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(attrs)) {
+      if (value === false || value == null) continue;
+      if (key === 'class') node.className = value;
+      else if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+      else node.setAttribute(key, value === true ? '' : value);
+    }
+    for (const child of children.flat()) if (child != null && child !== false) node.append(child);
+    return node;
+  }
+
+  async function api(path, options = {}) {
+    let response;
+    try {
+      response = await fetch('/api' + path, {
+        ...options,
+        headers: { 'content-type': 'application/json', 'x-backlog-passcode': passcode }
+      });
+    } catch { throw new Error('Could not reach the server. Check your connection and try again.'); }
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401) { lock('That passcode was not right.'); throw new Error(data.error || 'Incorrect passcode.'); }
+    if (!response.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+    return data;
+  }
+
+  function showError(message) {
+    const box = $('error');
+    box.textContent = message || '';
+    box.hidden = !message;
+  }
+
+  function lock(message) {
+    passcode = '';
+    store.set('ur-backlog-passcode', '');
+    $('app').hidden = true;
+    $('gate').hidden = false;
+    const box = $('gate-msg');
+    box.textContent = message || '';
+    box.hidden = !message;
+  }
+
+  async function load() {
+    const data = await api('/items');
+    items = data.items;
+    render();
+  }
+
+  async function act(path, options) {
+    showError('');
+    try {
+      const data = await api(path, options);
+      if (data.items) { items = data.items; render(); }
+    } catch (error) { showError(error.message); }
+  }
+
+  const post = body => ({ method: 'POST', body: JSON.stringify(body) });
+  const patch = body => ({ method: 'PATCH', body: JSON.stringify(body) });
+  const isQ = item => item.kind === 'question';
+
+  function card(item, group) {
+    if (editing === item.id) return editor(item);
+    const tiers = TIER_NAMES[item.kind];
+    const tierName = tiers.find(t => t[0] === item.tier)[1];
+    const open = group.filter(i => !i.done);
+    const position = open.indexOf(item);
+    const moveBody = direction => post({ direction, ...(filter === 'all' ? {} : { phase: filter }) });
+    const meta = isQ(item)
+      ? (item.owner ? 'For ' + item.owner + ' · ' : '') + 'Asked by ' + (item.added_by || 'someone') + ' on ' + item.created_at.slice(0, 10)
+      : (item.added_by ? 'Suggested by ' + item.added_by : 'Suggested') + ' on ' + item.created_at.slice(0, 10);
+    return h('article', { class: 'card item' + (item.done ? ' is-done' : '') },
+      h('div', { class: 'tools' },
+        h('span', { class: 'pill ' + (item.done ? 'done' : item.tier) }, item.done ? (isQ(item) ? 'Answered' : 'Done') : tierName),
+        h('span', { class: 'pill phase ' + item.phase }, PHASES.find(p => p[0] === item.phase)[1])),
+      h('h3', {}, item.title),
+      item.details && h('p', { class: 'muted' }, item.details),
+      isQ(item) && item.answer && h('div', { class: 'answer' }, h('b', {}, item.done ? 'Answer' : 'What we know so far'), h('p', {}, item.answer)),
+      h('div', { class: 'meta' }, meta),
+      !item.done && h('div', { class: 'phase-row' }, h('span', { class: 'meta' }, 'When:'),
+        h('span', { class: 'seg', role: 'group', 'aria-label': 'Phase for ' + item.title },
+          PHASES.map(([key, label]) => h('button', { type: 'button', 'aria-pressed': String(item.phase === key),
+            onclick: () => item.phase !== key && act('/items/' + item.id, patch({ phase: key })) }, label)))),
+      h('div', { class: 'tools' },
+        !item.done && h('span', { class: 'seg', role: 'group', 'aria-label': 'Priority for ' + item.title },
+          tiers.map(([key, label]) => h('button', { type: 'button', 'aria-pressed': String(item.tier === key),
+            onclick: () => item.tier !== key && act('/items/' + item.id, patch({ tier: key })) }, label))),
+        !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position <= 0,
+          'aria-label': 'Move up: ' + item.title, onclick: () => act('/items/' + item.id + '/move', moveBody('up')) }, 'Up'),
+        !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open.length - 1,
+          'aria-label': 'Move down: ' + item.title, onclick: () => act('/items/' + item.id + '/move', moveBody('down')) }, 'Down'),
+        h('span', { class: 'spacer' }),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { editing = item.id; render(); } }, isQ(item) && !item.done ? 'Answer or edit' : 'Edit'),
+        h('button', { class: 'btn ghost small', type: 'button',
+          onclick: () => act('/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : (isQ(item) ? 'Mark answered' : 'Mark done')),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { confirming = item.id; render(); } }, 'Delete')),
+      confirming === item.id && h('div', { class: 'confirm', role: 'alert' },
+        h('span', {}, 'Delete this for everyone? This cannot be undone.'),
+        h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { confirming = null; act('/items/' + item.id, { method: 'DELETE' }); } }, 'Delete'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { confirming = null; render(); } }, 'Keep it')));
+  }
+
+  function editor(item) {
+    const title = h('input', { type: 'text', maxlength: 160, value: item.title, id: 'edit-title' });
+    const details = h('textarea', { maxlength: 2000, id: 'edit-details' }, item.details);
+    const owner = isQ(item) && h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'edit-owner' });
+    const answer = isQ(item) && h('textarea', { maxlength: 2000, id: 'edit-answer', placeholder: 'What did we learn?' }, item.answer);
+    const answered = isQ(item) && h('input', { type: 'checkbox', id: 'edit-answered', ...(item.done ? { checked: true } : {}) });
+    return h('form', { class: 'card stack', onsubmit: async event => {
+      event.preventDefault();
+      editing = null;
+      const changes = { title: title.value, details: details.value };
+      if (isQ(item)) Object.assign(changes, { owner: owner.value, answer: answer.value, done: answered.checked });
+      await act('/items/' + item.id, patch(changes));
+      render();
+    } },
+      h('div', {}, h('label', { for: 'edit-title' }, isQ(item) ? 'Question' : 'What should change?'), title),
+      h('div', {}, h('label', { for: 'edit-details' }, isQ(item) ? 'Why it matters' : 'Details'), details),
+      isQ(item) && h('div', {}, h('label', { for: 'edit-owner' }, 'Who can answer?'), owner),
+      isQ(item) && h('div', {}, h('label', { for: 'edit-answer' }, 'Answer'), answer),
+      isQ(item) && h('label', { for: 'edit-answered', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, answered, 'This question is answered'),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', type: 'submit' }, 'Save'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { editing = null; render(); } }, 'Cancel')));
+  }
+
+  function renderForm() {
+    const q = kind === 'question';
+    $('add-heading').textContent = q ? 'Ask a question' : 'Suggest a change';
+    $('title-label').textContent = q ? 'What do we need to know?' : 'What should change?';
+    $('add-btn').textContent = q ? 'Add question' : 'Add suggestion';
+    $('owner-field').hidden = !q;
+    const current = $('tier').value || 'must';
+    $('tier').replaceChildren(...TIER_NAMES[kind].map(([key, label]) => h('option', { value: key, ...(key === current ? { selected: true } : {}) }, label)));
+    $('tier-legend').replaceChildren(...TIER_NAMES[kind].map(([key, label, meaning]) => h('li', {}, h('span', { class: 'pill ' + key }, label), h('span', {}, meaning))));
+  }
+
+  function render() {
+    const mine = items.filter(i => i.kind === kind);
+    $('kinds').replaceChildren(...[['question', 'Open questions'], ['change', 'Suggested changes']].map(([key, label]) => {
+      const n = items.filter(i => i.kind === key && !i.done).length;
+      return h('button', { type: 'button', 'aria-pressed': String(kind === key), onclick: () => { kind = key; filter = 'all'; editing = null; renderForm(); render(); } }, label + ' (' + n + ')');
+    }));
+    const open = mine.filter(i => !i.done).length;
+    $('summary').textContent = open + ' open, ' + (mine.length - open) + (kind === 'question' ? ' answered' : ' done');
+    $('filters').replaceChildren(h('span', { class: 'meta' }, 'Show:'),
+      ...[['all', 'All'], ...PHASES].map(([key, label]) => {
+        const n = key === 'all' ? mine.filter(i => !i.done).length : mine.filter(i => !i.done && i.phase === key).length;
+        return h('button', { type: 'button', 'aria-pressed': String(filter === key), onclick: () => { filter = key; render(); } }, label + ' (' + n + ')');
+      }));
+    const lists = $('lists');
+    lists.replaceChildren();
+    for (const [key, label] of TIER_NAMES[kind]) {
+      const group = mine.filter(i => i.tier === key && (filter === 'all' || i.phase === filter));
+      const active = group.filter(i => !i.done), finished = group.filter(i => i.done);
+      lists.append(h('section', { class: 'tier' },
+        h('h2', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'count' }, active.length + (active.length === 1 ? ' item' : ' items'))),
+        active.length ? active.map(item => card(item, group)) : h('p', { class: 'empty' }, 'Nothing here yet.'),
+        finished.length > 0 && h('details', { class: 'done-list' },
+          h('summary', {}, finished.length + (kind === 'question' ? ' answered' : ' done')),
+          h('div', { class: 'stack' }, finished.map(item => card(item, group))))));
+    }
+  }
+
+  async function enter() {
+    const value = $('passcode').value.trim();
+    if (!value) { $('gate-msg').textContent = 'Enter the passcode.'; $('gate-msg').hidden = false; return; }
+    passcode = value;
+    store.set('ur-backlog-name', $('who').value.trim());
+    $('name').value = $('who').value.trim();
+    try {
+      await load();
+      store.set('ur-backlog-passcode', passcode);
+      $('gate').hidden = true;
+      $('app').hidden = false;
+      track('backlog_signed_in');
+    } catch (error) {
+      if ($('app').hidden) lock(error.message);
+    }
+  }
+
+  $('enter').addEventListener('click', enter);
+  $('passcode').addEventListener('keydown', event => { if (event.key === 'Enter') enter(); });
+  $('lock').addEventListener('click', () => lock(''));
+  $('refresh').addEventListener('click', () => act('/items'));
+  $('name').addEventListener('change', () => store.set('ur-backlog-name', $('name').value.trim()));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && passcode && editing === null) load().catch(() => {}); });
+
+  $('add').addEventListener('submit', async event => {
+    event.preventDefault();
+    const name = $('name').value.trim();
+    store.set('ur-backlog-name', name);
+    showError('');
+    try {
+      const tier = $('tier').value;
+      const payload = { kind, title: $('title').value, details: $('details').value, tier, added_by: name };
+      if (kind === 'question') payload.owner = $('owner').value;
+      const data = await api('/items', post(payload));
+      items = data.items;
+      track('backlog_item_added', { tier, kind });
+      $('title').value = '';
+      $('details').value = '';
+      $('owner').value = '';
+      render();
+    } catch (error) { showError(error.message); }
+  });
+
+  renderForm();
+  const savedName = store.get('ur-backlog-name');
+  $('who').value = savedName;
+  $('name').value = savedName;
+  const saved = store.get('ur-backlog-passcode');
+  if (saved) { $('passcode').value = saved; enter(); } else { $('gate').hidden = false; }
+})();
+</script>
+</body>
+</html>

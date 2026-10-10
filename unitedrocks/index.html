@@ -201,7 +201,7 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:12px}
       <span class="eyebrow">United Rocks</span>
       <h1>Climb Scheduler</h1>
     </div>
-    <div class="row" style="justify-content:flex-start"><span class="tag">Clickable prototype</span> <small>Sample data only. Built by Positive Tribes.</small></div>
+    <div class="row" style="justify-content:flex-start"><span class="tag">Clickable prototype</span> <small>Sample data only. Built by Positive Tribes.</small> <a class="fb" href="https://unitedrocks.positivetribes.org/" target="_blank" rel="noopener">Questions and feedback &#8599;</a></div>
   </header>
   <div id="main"></div>
 </div>
@@ -515,7 +515,7 @@ function adminOverview(){
   const y=v=>H-24-(v/max)*(H-40);
   const bars=WEEKS.map(([b,c],i)=>{const x=pad+i*bw+bw*.16,w=bw*.32;return `<rect x="${x.toFixed(1)}" y="${y(b).toFixed(1)}" width="${w.toFixed(1)}" height="${(H-24-y(b)).toFixed(1)}" rx="3" fill="var(--bar2)"><title>Booked ${b}</title></rect><rect x="${(x+w+2).toFixed(1)}" y="${y(c).toFixed(1)}" width="${w.toFixed(1)}" height="${(H-24-y(c)).toFixed(1)}" rx="3" fill="var(--bar1)"><title>Checked in ${c}</title></rect><text x="${(x+w).toFixed(1)}" y="${H-6}" text-anchor="middle">${esc(fmt(addDays(weekStart(today),-(7*(WEEKS.length-1-i)))).replace(/^\w+, /,''))}</text>`}).join('');
   const grid=[0,25,50,75,100].map(v=>`<line x1="${pad}" x2="${W-6}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pad-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`).join('');
-  return `<div class="row"><div><h2>All locations, last 4 weeks</h2><p class="muted">Showing ${ss.length} of 11 locations (sample cities and figures).</p></div>
+  return `<div class="row"><div><h2>All locations, last 4 weeks</h2><p class="muted">Showing ${ss.length} sample locations. Cities and figures are made up.</p></div>
     <div class="chips">${['All','Texas','Colorado','Virginia','California','Maryland'].map(r=>`<button class="chip" data-act="region" data-v="${r}" aria-pressed="${state.siteFilter===r}">${r}</button>`).join('')}</div></div>
   <div class="kpis">
     <div class="kpi"><span class="n">${booked}</span><span class="l">Bookings</span></div>
@@ -556,13 +556,13 @@ const NOTES={
   out:{h:'One sign-in, no role picker',p:'Climbers, parents, coaches and staff all sign in the same way. The system looks up the account and opens the right view.',
     b:['A code by email or text replaces passwords, so nobody has to remember or reset one.','A parent can handle sign-ups and the waiver for their climber.','A coach who also climbs gets one account with a simple switch.','Coaches only see their own location.'],
     t:'Sign in as Ava to see the waiver step. Then sign out and try Riley, the coach.',r:'Sign-in'},
-  climber:{h:'Sign up once, stay on the team',p:'A climber or their parent picks a regular practice once and stays signed up every week, instead of signing up week by week.',
+  climber:{h:'Sign up once, stay on the team',p:'An athlete or their parent picks a regular practice once and stays signed up every week, instead of signing up week by week.',
     b:['A reminder goes out the day before, with one tap to say they can\'t make it.','Climbers can join a practice at another location too.','The waiver is signed once with checkboxes and a typed name, and a parent or guardian can sign for a climber.','Plain words, large text and big tap targets throughout.'],
     t:'Tap "I can\'t make it this time" on the next practice, then open Find a session and book a one-time visit at another location.',r:'Sign-up and waiver'},
   lead:{h:'Check-in in under a minute',p:'The coach sees who is expected, taps each climber as they arrive, and attendance is recorded for the whole program.',
     b:['The roster is ready before practice, because sign-ups carry over every week.','Missing waivers are flagged at the door.','Walk-ins are added in one step.','Schedules support every other week, first Saturday of the month, and skipped dates.'],
     t:'Check in a few climbers and save. Then open Schedule, create a practice on the first Saturday of each month, and skip one date.',r:'Check-in and schedule'},
-  admin:{h:'Every location in one view',p:'Staff see sign-ups and attendance across all eleven locations in one place, and can spot locations that aren\'t taking attendance.',
+  admin:{h:'Every location in one view',p:'Staff see sign-ups and attendance across every location in one place, and can spot locations that aren\'t taking attendance.',
     b:['Filter by state.','Locations that rarely record attendance are flagged for follow-up.','Climbers who stopped coming are listed so someone can reach out to the family.','Exports for board and funder reports come in the full build.'],
     t:'Filter to Texas, then send a note to a family whose climber has stopped coming.',r:'Program view'}
 };
@@ -595,7 +595,7 @@ function notesHtml(r,n){
     tryBox=`<div class="try"><span class="req">Tour stop ${i+1} of ${TOUR.length}</span><h3>Try this as ${esc(t.who.split(',')[0])}</h3>
       <ul>${t.do.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
       ${nx?`<button class="btn sm" data-act="tourgo" data-v="${nx.k}" style="align-self:flex-start">Next: ${esc(nx.who)}</button>`
-        :`<p><b>That's the tour.</b> Questions or ideas? Send them to Eric at Positive Tribes.</p><button class="btn sm ghost" data-act="signout" style="align-self:flex-start">Back to the start</button>`}</div>`;
+        :`<p><b>That's the tour.</b> Questions or ideas? Use Questions and feedback at the top of the page.</p><button class="btn sm ghost" data-act="signout" style="align-self:flex-start">Back to the start</button>`}</div>`;
   }
   return `<aside class="notes">${tryBox}${intro}${foot}</aside>`;
 }

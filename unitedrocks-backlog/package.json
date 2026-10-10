@@ -1,0 +1,15 @@
+{
+  "name": "unitedrocks-backlog",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "node build.mjs && wrangler deploy",
+    "test": "node --test test/*.test.mjs",
+    "build": "wrangler deploy --dry-run --outdir dist"
+  },
+  "devDependencies": {
+    "wrangler": "4.141.0"
+  },
+  "type": "module"
+}
