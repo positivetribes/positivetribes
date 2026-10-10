@@ -631,7 +631,8 @@ function backlog(){
   const cnt=s=>BACKLOG.filter(b=>b.status===s).length;
   return `<div class="bl">
     <div class="bl-head"><div class="stack" style="gap:6px"><h2 style="font-size:26px">Open questions</h2>
-      <p class="muted">What we still need to learn before the full build. ${cnt('Open')} open, ${cnt('Likely')} likely but unconfirmed. Questions marked "Shapes POC" change how the prototype works.</p></div>
+      <p class="muted">What we still need to learn before the full build. ${cnt('Open')} open, ${cnt('Likely')} likely but unconfirmed. Questions marked "Shapes POC" change how the prototype works.</p>
+      <p class="small">This is a snapshot. Answer questions and suggest changes in the <a href="https://uep.positivetribes.org/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">shared backlog</a> (passcode needed).</p></div>
       <div class="chips" role="group" aria-label="Filter questions">${owners.map(o=>`<button class="chip" data-act="blf" data-v="${o}" aria-pressed="${f===o}">${o==='POC'?'Shapes POC':o==='All'?'All':'For '+o}</button>`).join('')}</div></div>
     ${areas.map(a=>{const g=items.filter(b=>b.area===a);if(!g.length)return '';return `<section class="bl-group"><h2>${esc(a)}</h2>${g.map(b=>`<div class="q">
       <span class="id">${b.id}</span><span class="qt">${esc(b.q)}</span>

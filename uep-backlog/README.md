@@ -14,7 +14,7 @@ This is a separate Cloudflare Worker with its own D1 database, like the Coyote b
 1. In Cloudflare, create a Worker from this repository with root directory `/uep-backlog`, build command `npm ci`, and deploy command `npm run deploy`.
 2. The D1 databases already exist and are named in `wrangler.jsonc`: `uep-backlog-db` for the live list and `uep-backlog-preview-db` for pull request previews.
 3. Add a Worker secret named `BACKLOG_PASSCODE` with the passcode to share. Do not put it in GitHub.
-4. Share the Worker URL and the passcode with Molly. The page is marked noindex so search engines skip it.
+4. Share the address and the passcode with Molly. It is live at https://uep.positivetribes.org (custom domain), with https://uep-backlog.traveleric.workers.dev as a backup. The page is marked noindex so search engines skip it.
 
 Tables are created on the first authenticated request. The first request also adds the 24 open questions from the Oct 9 call and the Gymdesk walkthrough, once. Deleted starter items do not come back.
 
