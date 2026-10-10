@@ -41,3 +41,5 @@ The local command uses a disposable local database and a test-only passcode. Do 
 ## Visitor tracking
 
 `npm run deploy` first runs `build.mjs`, which adds the Google Analytics 4 tag to the page when the `GA_MEASUREMENT_ID` build variable is set (use the same `G-` ID as the main Positive Tribes site). Without it the page ships with no analytics, and the tag is never committed to GitHub. The page records `backlog_signed_in` and `backlog_item_added` (with the tier and kind only). It never sends the passcode, names, or anything typed into an item.
+
+If the live Worker ever shows "Hello world" instead of the backlog, the GitHub build has not deployed yet. Check the build log under Deployments, or push any commit to rebuild.
