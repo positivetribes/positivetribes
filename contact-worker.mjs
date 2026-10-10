@@ -3,11 +3,12 @@ import { handleSupport } from './support.mjs';
 
 // Why someone filled out the contact form. Only these values are accepted; anything else counts as general.
 const REASONS = { general: 'General question or idea', project: 'A nonprofit project idea', pulselift: 'PulseLift tester request', volunteer: 'Volunteering' };
-const TESTER_CAMPAIGN = 'PulseLift Testers';
+// Reasons whose Leads also join a campaign (found by name, so keep these names in Salesforce).
+const CAMPAIGNS = { pulselift: 'PulseLift Testers', volunteer: 'Volunteers' };
 const salesforceReady = (env) => !!(env.SF_DOMAIN && env.SF_CLIENT_ID && env.SF_CLIENT_SECRET);
 
 // Saves the message as a Lead (Lead Source = Web). A returning person with an open Lead gets the new
-// message added to that Lead instead of a duplicate. PulseLift tester requests join the PulseLift Testers campaign.
+// message added to that Lead instead of a duplicate. PulseLift tester requests and volunteers join their campaigns.
 async function saveLead(env, { name, email, message, reason }) {
   const auth = await salesforceToken(env);
   const stamp = new Date().toISOString().slice(0, 10);
@@ -24,8 +25,8 @@ async function saveLead(env, { name, email, message, reason }) {
     const firstName = parts.join(' ').slice(0, 40) || undefined;
     id = (await sf(auth, 'POST', '/sobjects/Lead', { FirstName: firstName, LastName: lastName.slice(0, 80), Email: email, LeadSource: 'Web', Description: entry })).id;
   }
-  if (reason === 'pulselift') {
-    const campaign = await soql(auth, 'SELECT Id FROM Campaign WHERE Name = ' + quote(TESTER_CAMPAIGN) + ' LIMIT 1');
+  if (CAMPAIGNS[reason]) {
+    const campaign = await soql(auth, 'SELECT Id FROM Campaign WHERE Name = ' + quote(CAMPAIGNS[reason]) + ' LIMIT 1');
     if (!campaign.records.length) throw new Error('campaign_missing');
     try { await sf(auth, 'POST', '/sobjects/CampaignMember', { CampaignId: campaign.records[0].Id, LeadId: id, Status: 'Responded' }); }
     catch (error) { if (!/DUPLICATE_VALUE|already a member/i.test(error.message)) throw error; }
@@ -97,7 +98,7 @@ export default {
         from: 'hello@positivetribes.org',
         to: env.CONTACT_TO,
         replyTo: cleanEmail,
-        subject: reason === 'pulselift' ? 'PulseLift tester request from the website' : 'Positive Tribes website message',
+        subject: reason === 'pulselift' ? 'PulseLift tester request from the website' : reason === 'volunteer' ? 'New volunteer from the website' : 'Positive Tribes website message',
         text: 'New message from the Positive Tribes contact form.\n\nReason: ' + REASONS[reason] + '\nName: ' + cleanName + '\nEmail: ' + cleanEmail + '\n\n' + cleanMessage + salesforceNote
       });
       return json({ ok: true });
