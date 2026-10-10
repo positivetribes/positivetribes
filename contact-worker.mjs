@@ -1,4 +1,36 @@
-import { createCheckout, stripeWebhook, donationsEnabled } from './donations.mjs';
+import { createCheckout, stripeWebhook, donationsEnabled, salesforceToken, sf, soql, quote } from './donations.mjs';
+
+// Why someone filled out the contact form. Only these values are accepted; anything else counts as general.
+const REASONS = { general: 'General question or idea', project: 'A nonprofit project idea', pulselift: 'PulseLift tester request', volunteer: 'Volunteering' };
+const TESTER_CAMPAIGN = 'PulseLift Testers';
+const salesforceReady = (env) => !!(env.SF_DOMAIN && env.SF_CLIENT_ID && env.SF_CLIENT_SECRET);
+
+// Saves the message as a Lead (Lead Source = Web). A returning person with an open Lead gets the new
+// message added to that Lead instead of a duplicate. PulseLift tester requests join the PulseLift Testers campaign.
+async function saveLead(env, { name, email, message, reason }) {
+  const auth = await salesforceToken(env);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const entry = '[' + stamp + '] ' + REASONS[reason] + '\n' + message;
+  const found = await soql(auth, 'SELECT Id, Description FROM Lead WHERE Email = ' + quote(email) + ' AND IsConverted = false ORDER BY CreatedDate DESC LIMIT 1');
+  let id;
+  if (found.records.length) {
+    id = found.records[0].Id;
+    const description = (entry + '\n\n' + (found.records[0].Description || '')).slice(0, 32000);
+    await sf(auth, 'PATCH', '/sobjects/Lead/' + id, { Description: description });
+  } else {
+    const parts = name.split(/\s+/);
+    const lastName = parts.pop();
+    const firstName = parts.join(' ').slice(0, 40) || undefined;
+    id = (await sf(auth, 'POST', '/sobjects/Lead', { FirstName: firstName, LastName: lastName.slice(0, 80), Email: email, LeadSource: 'Web', Description: entry })).id;
+  }
+  if (reason === 'pulselift') {
+    const campaign = await soql(auth, 'SELECT Id FROM Campaign WHERE Name = ' + quote(TESTER_CAMPAIGN) + ' LIMIT 1');
+    if (!campaign.records.length) throw new Error('campaign_missing');
+    try { await sf(auth, 'POST', '/sobjects/CampaignMember', { CampaignId: campaign.records[0].Id, LeadId: id, Status: 'Responded' }); }
+    catch (error) { if (!/DUPLICATE_VALUE|already a member/i.test(error.message)) throw error; }
+  }
+  return env.SF_DOMAIN.replace(/\/$/, '') + '/lightning/r/Lead/' + id + '/view';
+}
 
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 
@@ -47,17 +79,24 @@ export default {
       try { data = await readBody(request); } catch { return json({ error: 'Please check your message and try again.' }, 400); }
       if (!data || typeof data !== 'object' || Array.isArray(data)) return json({ error: 'Invalid form data.' }, 400);
       const { name, email, message, website } = data;
+      const reason = Object.hasOwn(REASONS, data.reason) ? data.reason : 'general';
       if (typeof name !== 'string' || typeof email !== 'string' || typeof message !== 'string' || website) return json({ error: 'Please check the form and try again.' }, 400);
       const cleanName = name.trim(), cleanEmail = email.trim(), cleanMessage = message.trim();
       if (!cleanName || cleanName.length > 100 || /[\r\n\x00-\x1f]/.test(cleanName) || cleanEmail.length > 254 || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(cleanEmail) || /[\x00-\x1f\x7f]/.test(cleanEmail) || cleanMessage.length < 10 || cleanMessage.length > 5000) {
         return json({ error: 'Please enter your name, a valid email, and a message of 10–5,000 characters.' }, 400);
       }
+      // Salesforce first, then the email. If Salesforce fails, the email still goes out and says so, so nothing is lost.
+      let salesforceNote = '\n\nSalesforce is not connected, so this was not saved as a Lead.';
+      if (salesforceReady(env)) {
+        try { salesforceNote = '\n\nIn Salesforce: ' + await saveLead(env, { name: cleanName, email: cleanEmail, message: cleanMessage, reason }); }
+        catch (error) { console.error('contact_salesforce_failed', error.message); salesforceNote = '\n\nThis could not be saved to Salesforce (' + error.message.slice(0, 200) + '). Please add it by hand.'; }
+      }
       await env.CONTACT_MAIL.send({
         from: 'hello@positivetribes.org',
         to: env.CONTACT_TO,
         replyTo: cleanEmail,
-        subject: 'Positive Tribes website message',
-        text: 'New message from the Positive Tribes contact form.\n\nName: ' + cleanName + '\nEmail: ' + cleanEmail + '\n\n' + cleanMessage
+        subject: reason === 'pulselift' ? 'PulseLift tester request from the website' : 'Positive Tribes website message',
+        text: 'New message from the Positive Tribes contact form.\n\nReason: ' + REASONS[reason] + '\nName: ' + cleanName + '\nEmail: ' + cleanEmail + '\n\n' + cleanMessage + salesforceNote
       });
       return json({ ok: true });
     } catch (error) {

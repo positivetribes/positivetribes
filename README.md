@@ -16,6 +16,12 @@ Run `python3 -m http.server 8765 --bind 127.0.0.1` and open http://127.0.0.1:876
 
 Project examples describe potential partnerships, not completed client work. Organization and developer contact details remain available at `#developer`.
 
+## Contact form and Salesforce
+
+When the Salesforce secrets below (`SF_DOMAIN`, `SF_CLIENT_ID`, `SF_CLIENT_SECRET`) are set, every contact form message is saved as a Lead with Lead Source `Web`, and the reason the person picked ("What's this about?") is written at the top of the Lead description. If that email already has an open (unconverted) Lead, the new message is added to it instead of creating a duplicate. Messages with the reason "Testing PulseLift" are also added to the `PulseLift Testers` campaign (status Responded); the campaign is found by name, so keep that name. The notification email still goes out every time, with a link to the Lead, or a note if Salesforce could not be reached so the message can be added by hand.
+
+The "Join the testing" button on the homepage and the `/?reason=pulselift` link open the form with "Testing PulseLift" already chosen.
+
 ## Donations
 
 `donate.html` is a Stripe Checkout donation page (one-time and monthly gifts). `donations.mjs` handles `/api/donate`, which opens a Checkout session, and `/api/stripe-webhook`, which records each paid gift in Salesforce Nonprofit Cloud as a Gift Transaction on the donor's Person Account (matched by email, created if new). The Stripe payment or invoice id is stored in `ProcessorReference`, so webhook retries never create duplicates. Each newly recorded gift is also emailed to `CONTACT_TO` with a link to the Gift Transaction.

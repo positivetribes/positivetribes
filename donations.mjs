@@ -112,7 +112,7 @@ function giftFromEvent(event) {
   return null;
 }
 
-async function salesforceToken(env) {
+export async function salesforceToken(env) {
   const response = await fetch(env.SF_DOMAIN.replace(/\/$/, '') + '/services/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -123,7 +123,7 @@ async function salesforceToken(env) {
   return data;
 }
 
-async function sf(auth, method, path, body) {
+export async function sf(auth, method, path, body) {
   const response = await fetch(auth.instance_url + '/services/data/v62.0' + path, {
     method, headers: { Authorization: 'Bearer ' + auth.access_token, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined
   });
@@ -131,8 +131,8 @@ async function sf(auth, method, path, body) {
   if (!response.ok) throw new Error('sf_' + response.status + ' ' + JSON.stringify(data).slice(0, 300));
   return data;
 }
-const soql = (auth, q) => sf(auth, 'GET', '/query?q=' + encodeURIComponent(q));
-const quote = (s) => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+export const soql = (auth, q) => sf(auth, 'GET', '/query?q=' + encodeURIComponent(q));
+export const quote = (s) => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
 
 // Finds the donor's Person Account by email, or creates one. Individuals are Person Accounts in this org.
 async function donorAccount(auth, gift) {
