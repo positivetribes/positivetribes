@@ -42,6 +42,13 @@ if (measurementId) {
   if (!coyote.includes('</head>')) throw new Error('coyote/index.html is missing </head>.');
   await writeFile('public/coyote/index.html', coyote.replace('</head>', analytics + '</head>'));
 }
+// Up ENDing Parkinson's scheduling prototype, copied as-is with the same GA4 tag as Coyote.
+await cp('uep', 'public/uep', { recursive: true });
+if (measurementId) {
+  const uep = await readFile('public/uep/index.html', 'utf8');
+  if (!uep.includes('</head>')) throw new Error('uep/index.html is missing </head>.');
+  await writeFile('public/uep/index.html', uep.replace('</head>', analytics + '</head>'));
+}
 await cp('soberafe', 'public/soberafe', { recursive: true });
 await cp('card', 'public/card', { recursive: true });
 // Optional folder: git drops it when empty, so skip it rather than fail the deploy.

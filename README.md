@@ -8,6 +8,8 @@ Run `CONTACT_TO=<verified email destination> node build.mjs`. The build copies t
 
 Set the optional `GA_MEASUREMENT_ID` build variable (for example `G-XXXXXXXXXX`) to add the Google Analytics 4 tag to the main pages. It records `generate_lead` when the contact form sends and `contact_email_click` when someone clicks an email link; mark both as key events in GA4 and import them into Google Ads for Ad Grants conversion tracking. The tag is also added to the Coyote prototype at `/coyote/`, which sends `coyote_role_view`, `coyote_report_started`, `coyote_report_submitted`, `coyote_alert_sent`, `coyote_report_approved` and `coyote_save_instructions_opened` with no personal data. Without the variable the pages ship with no analytics. The production GA4 property is the "positivetribes.org" property under eric@positivetribes.org; changing the variable only takes effect on the next build.
 
+The Up ENDing Parkinson's scheduling prototype is at `/uep/` (`uep/index.html`, one self-contained page with sample data, hidden from search engines). It gets the same GA4 tag as Coyote but sends no custom events. Its shared backlog of open questions and suggestions is the separate Worker in `uep-backlog/`.
+
 The existing `contact-worker.mjs` serves static assets and handles `/api/contact`, including validation, origin checks, rate limiting, and email delivery. This redesign preserves that integration and requires no new dependencies or hosting configuration.
 
 ## Preview
