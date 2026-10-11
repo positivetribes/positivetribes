@@ -1,5 +1,6 @@
 import { createCheckout, stripeWebhook, donationsEnabled, salesforceToken, sf, soql, quote } from './donations.mjs';
 import { handleSupport } from './support.mjs';
+import { handleCardShare } from './card-share.mjs';
 
 // Why someone filled out the contact form. Only these values are accepted; anything else counts as general.
 const REASONS = { general: 'General question or idea', project: 'A nonprofit project idea', pulselift: 'PulseLift tester request', volunteer: 'Volunteering' };
@@ -62,6 +63,7 @@ async function readBody(request) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/api/card-share') return handleCardShare(request, env, url, readBody);
     // card.positivetribes.org serves the /card folder at its root; shared fonts and brand files pass through.
     if (url.hostname === 'card.positivetribes.org' && !/^\/(fonts|brand)\//.test(url.pathname)) {
       url.pathname = '/card' + url.pathname;
