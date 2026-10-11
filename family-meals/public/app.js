@@ -24,7 +24,10 @@ const NO_STORE = '__none__';
 // Lists tab: the weekly Grocery List plus any lists the family creates. Remember the last one opened on this device.
 const GROCERY = 'grocery';
 const PENCIL = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-let currentList = (() => { try { return localStorage.getItem('familyMealsList') || GROCERY; } catch { return GROCERY; } })();
+// Custom lists belong to the profile using this phone; remember the last list per person.
+const listKey = () => 'familyMealsList:' + member.toLowerCase();
+const savedList = () => { try { return localStorage.getItem(listKey()) || GROCERY; } catch { return GROCERY; } };
+let currentList = savedList(), listsOwner = member, needsName = false;
 let lists = [], customState = null, customFilter = '', customRequest = 0, listsRequest = 0, knownStores = [], editingList = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const iso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -67,7 +70,7 @@ function toast(message) {
   toast.timer = setTimeout(() => $('#toast').classList.remove('show'), 5000);
 }
 async function api(path, options = {}) {
-  const response = await fetch('/api' + path, { ...options, headers: { 'content-type': 'application/json', 'x-family-pin': pin } });
+  const response = await fetch('/api' + path, { ...options, headers: { 'content-type': 'application/json', 'x-family-pin': pin, 'x-family-member': encodeURIComponent(member) } });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) { $('#locked').hidden = false; $('#app').hidden = true; }
@@ -550,27 +553,37 @@ $('#clearStore').onclick = () => { $('#storeInput').value = ''; $('#storeForm').
 // ---- Lists tab ----
 function setCurrentList(id) {
   currentList = String(id);
-  try { localStorage.setItem('familyMealsList', currentList); } catch {}
+  try { localStorage.setItem(listKey(), currentList); } catch {}
 }
 async function loadLists() {
   const requestId = ++listsRequest;
-  showList();
+  // Switching profiles on this phone shows that person's lists, starting where they left off.
+  if (!sameName(listsOwner, member)) { listsOwner = member; lists = []; customState = null; customFilter = ''; currentList = savedList(); }
+  renderListPicker(); showList();
   try {
     const result = await api('/lists');
     if (requestId !== listsRequest) return;
+    needsName = false;
     lists = result.lists;
     // A list deleted on another phone falls back to the Grocery List.
     if (currentList !== GROCERY && !lists.some(l => String(l.id) === currentList)) { setCurrentList(GROCERY); showList(); }
     renderListPicker();
-  } catch (error) { if (requestId === listsRequest) toast(error.message); }
+  } catch (error) {
+    if (requestId !== listsRequest) return;
+    if (error.status !== 403) return toast(error.message);
+    // No family name on this phone yet: the shared Grocery List still works.
+    needsName = true; lists = [];
+    if (currentList !== GROCERY) { currentList = GROCERY; showList(); }
+    renderListPicker();
+  }
 }
 function renderListPicker() {
   const chip = (id, name, extra = '') => `<button type="button" class="list-chip${currentList === String(id) ? ' active' : ''}" data-list="${id}" aria-pressed="${currentList === String(id)}"><span class="name">${esc(name)}</span>${extra}</button>`;
   $('#listPicker').innerHTML = chip(GROCERY, 'Grocery List') +
     lists.map(l => { const left = l.item_count - l.checked_count; return chip(l.id, l.name, left ? `<span class="count" aria-label="${left} to go">${left}</span>` : ''); }).join('') +
-    '<button type="button" class="list-chip new" id="newList">+ New list</button>';
+    `<button type="button" class="list-chip new" id="newList">${needsName ? 'Pick your name' : '+ New list'}</button>`;
   $$('[data-list]').forEach(button => button.onclick = () => selectList(button.dataset.list));
-  $('#newList').onclick = () => openListDialog(null);
+  $('#newList').onclick = () => needsName ? openProfile() : openListDialog(null);
   $('#listPicker .active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 function selectList(id) {

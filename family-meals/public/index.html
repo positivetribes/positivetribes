@@ -87,7 +87,7 @@
 </form></dialog>
 <dialog id="itemDialog"><form id="itemForm" class="modal"><h2>Edit item</h2><label>Item<input id="itemInput" maxlength="200" autocomplete="off" required></label><p id="itemNote" class="hint help"></p><div class="actions"><button type="button" class="ghost danger" id="deleteItem">Delete</button><button type="button" class="ghost" id="resetItem">Use original</button><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Save</button></div></form></dialog>
 <dialog id="listDialog"><form id="listForm" class="modal"><h2 id="listDialogTitle">New list</h2>
-  <label>List name<input id="listName" maxlength="40" autocomplete="off" placeholder="Costco run, Camping, Hardware store…" required></label>
+  <label>List name<input id="listName" maxlength="40" autocomplete="off" placeholder="Costco run, Camping, Hardware store…" required><small class="hint">Only you see this list. The Grocery List stays shared with the whole family.</small></label>
   <fieldset class="setting"><legend>Type</legend><div class="segmented two" role="radiogroup"><label><input type="radio" name="listKind" value="grocery" checked><span>Grocery list</span></label><label><input type="radio" name="listKind" value="basic"><span>Basic list</span></label></div><small class="hint" id="listKindHint"></small></fieldset>
   <div class="actions"><button type="button" class="ghost danger" id="deleteList">Delete list</button><button type="button" class="ghost close-dialog">Cancel</button><button class="primary" id="saveList">Create list</button></div>
 </form></dialog>

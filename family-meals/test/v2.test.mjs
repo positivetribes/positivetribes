@@ -7,9 +7,9 @@ import { validDate, addDays, recommendMeal, proposeWeek, weekDates } from '../pu
 const start = '2026-09-28';
 async function fixture() {
   const { db, sqlite } = database();
-  const call = async (path, method = 'GET', payload, authorized = true) => {
+  const call = async (path, method = 'GET', payload, authorized = true, member = 'Alex') => {
     const response = await worker.fetch(new Request('https://test.invalid/api' + path, {
-      method, headers: { 'content-type': 'application/json', ...(authorized ? { 'x-family-pin': 'test-only-pin' } : {}) },
+      method, headers: { 'content-type': 'application/json', ...(authorized ? { 'x-family-pin': 'test-only-pin' } : {}), ...(member ? { 'x-family-member': encodeURIComponent(member) } : {}) },
       ...(payload === undefined ? {} : { body: JSON.stringify(payload) })
     }), { DB: db, FAMILY_PIN: 'test-only-pin' });
     return { status: response.status, body: await response.json() };
@@ -350,6 +350,7 @@ test('grocery items can be renamed: manual items directly, meal ingredients per 
 test('custom lists: create grocery and basic lists, manage items, share store spelling, and validate', async () => {
   const { call, sqlite } = await fixture();
   try {
+    await call('/members', 'POST', { name: 'Alex' });
     assert.deepEqual((await call('/lists')).body.lists, []);
     const costco = await call('/lists', 'POST', { name: '  Costco   run ', kind: 'grocery' });
     const packing = await call('/lists', 'POST', { name: 'Camping packing', kind: 'basic' });
@@ -363,7 +364,7 @@ test('custom lists: create grocery and basic lists, manage items, share store sp
     assert.deepEqual(detail.list, { id: costco.body.id, name: 'Costco run', kind: 'grocery' });
     assert.deepEqual(detail.items.map(i => [i.label, i.store, i.checked]), [['Paper towels', 'Whole Foods', false], ['Coffee', 'Costco', false]]);
     assert.deepEqual(detail.stores, ['Costco', 'Whole Foods']);
-    assert.deepEqual((await call('/groceries?week=' + start)).body.stores, ['Costco', 'Whole Foods']);
+    assert.deepEqual((await call('/groceries?week=' + start)).body.stores, ['Whole Foods']);  // private list stores stay private
     // Basic lists ignore stores.
     const tent = await call('/lists/items', 'POST', { list_id: packing.body.id, label: 'Tent', store: 'REI' });
     await call('/lists/items', 'POST', { list_id: packing.body.id, label: 'Headlamps' });
@@ -396,5 +397,57 @@ test('custom lists: create grocery and basic lists, manage items, share store sp
       assert.equal((await call(path, method, payload)).status, 404);
     assert.equal((await call('/lists', 'GET', undefined, false)).status, 401);
     assert.equal((await call('/lists/items', 'POST', { list_id: packing.body.id, label: 'x' }, false)).status, 401);
+  } finally { sqlite.close(); }
+});
+
+test('custom lists belong to one profile; the weekly grocery list stays shared', async () => {
+  const { call, sqlite } = await fixture();
+  try {
+    await call('/members', 'POST', { name: 'Alex' });
+    await call('/members', 'POST', { name: 'Sam' });
+    const as = (who) => (path, method = 'GET', payload) => call(path, method, payload, true, who);
+    const alex = as('Alex'), sam = as('sam'), nobody = as(''), stranger = as('Pat');
+    const mine = await alex('/lists', 'POST', { name: 'Hardware', kind: 'grocery' });
+    const item = await alex('/lists/items', 'POST', { list_id: mine.body.id, label: 'Gift', store: 'Secret Shop' });
+    await sam('/lists', 'POST', { name: 'Sam stuff', kind: 'basic' });
+    assert.deepEqual((await alex('/lists')).body.lists.map(l => l.name), ['Hardware']);
+    assert.deepEqual((await sam('/lists')).body.lists.map(l => l.name), ['Sam stuff']);  // names match case-insensitively
+    // Sam cannot read, change, or delete Alex's list or items.
+    assert.equal((await sam('/lists/items?list=' + mine.body.id)).status, 404);
+    assert.equal((await sam('/lists/items', 'POST', { list_id: mine.body.id, label: 'x' })).status, 404);
+    assert.equal((await sam('/lists/items', 'PATCH', { list_id: mine.body.id, id: item.body.id, checked: true })).status, 404);
+    assert.equal((await sam('/lists', 'PUT', { id: mine.body.id, name: 'Mine now', kind: 'basic' })).status, 404);
+    assert.equal((await sam('/lists', 'DELETE', { id: mine.body.id })).status, 404);
+    assert.equal((await alex('/lists/items?list=' + mine.body.id)).body.items[0].checked, false);
+    // Store names from a private list do not show up for anyone else, or on the shared grocery list.
+    assert.deepEqual((await alex('/lists/items?list=' + mine.body.id)).body.stores, ['Secret Shop']);
+    const samList = (await sam('/lists')).body.lists[0];
+    assert.deepEqual((await sam('/lists/items?list=' + samList.id)).body.stores, []);
+    assert.deepEqual((await sam('/groceries?week=' + start)).body.stores, []);
+    assert.equal((await sam('/groceries', 'POST', { week_start: start, label: 'Milk', store: 'secret shop' })).status, 201);
+    assert.equal((await alex('/groceries?week=' + start)).body.manual.find(i => i.label === 'Milk').store, 'secret shop');
+    // Everyone sees the same weekly grocery list; lists need a known family name.
+    assert.deepEqual((await sam('/groceries?week=' + start)).body.manual.map(i => i.label), (await alex('/groceries?week=' + start)).body.manual.map(i => i.label));
+    assert.equal((await nobody('/lists')).status, 403);
+    assert.equal((await stranger('/lists')).status, 403);
+    assert.equal((await nobody('/groceries?week=' + start)).status, 200);
+    // Lists made before owners existed are adopted by the first person to open their lists.
+    sqlite.prepare("INSERT INTO lists (owner,name,kind) VALUES ('','Old list','basic')").run();
+    assert.deepEqual((await sam('/lists')).body.lists.map(l => l.name), ['Sam stuff', 'Old list']);
+    assert.deepEqual((await alex('/lists')).body.lists.map(l => l.name), ['Hardware']);
+  } finally { sqlite.close(); }
+});
+
+test('an existing lists table without owners is upgraded in place', async () => {
+  const { database } = await import('./helpers.mjs');
+  const { db, sqlite } = database();
+  try {
+    sqlite.exec("CREATE TABLE lists (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('grocery','basic')),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+    sqlite.exec("INSERT INTO lists (name,kind) VALUES ('Before owners','grocery')");
+    const call = async (path, member) => (await worker.fetch(new Request('https://test.invalid/api' + path, { headers: { 'x-family-pin': 'test-only-pin', 'x-family-member': member } }), { DB: db, FAMILY_PIN: 'test-only-pin' }));
+    assert.equal((await call('/summary', 'Alex')).status, 200);
+    sqlite.exec("INSERT INTO family_members (name) VALUES ('Alex')");
+    assert.deepEqual((await (await call('/lists', 'Alex')).json()).lists.map(l => l.name), ['Before owners']);
+    assert.equal((await call('/summary', 'Alex')).status, 200);  // migration runs once, then is skipped
   } finally { sqlite.close(); }
 });
