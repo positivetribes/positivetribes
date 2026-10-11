@@ -65,6 +65,33 @@
   .hint { margin: 0 24px; font-size: 14px; color: var(--muted); text-align: center; }
   .hint a { color: inherit; }
   .hint:empty { display: none; }
+  .share-toggle {
+    display: flex; align-items: center; justify-content: center; gap: 10px; width: calc(100% - 48px);
+    margin: 12px 24px 0; padding: 14px; border-radius: 14px; border: 2px solid var(--green);
+    background: #fff; color: var(--green); font: inherit; font-weight: 600; font-size: 17px; cursor: pointer;
+  }
+  .share-toggle svg { width: 20px; height: 20px; }
+  .share-toggle[hidden] { display: none; }
+  .share { margin: 12px 24px 0; padding: 18px; border-radius: 14px; background: #f6f5f1; }
+  .share[hidden] { display: none; }
+  .share p { margin: 0 0 14px; font-size: 15px; color: var(--muted); }
+  .share label { display: block; font-size: 14px; font-weight: 600; margin: 10px 0 4px; }
+  .share input, .share textarea {
+    width: 100%; padding: 12px; border: 1px solid #d9d5cc; border-radius: 10px; background: #fff;
+    font: inherit; font-size: 16px; color: var(--ink);
+  }
+  .share textarea { min-height: 72px; resize: vertical; }
+  .share .trap { position: absolute; left: -9999px; }
+  .share button[type=submit] {
+    width: 100%; margin-top: 16px; padding: 14px; border: 0; border-radius: 12px;
+    background: var(--green); color: #fff; font: inherit; font-weight: 600; font-size: 17px; cursor: pointer;
+  }
+  .share button[disabled] { opacity: .6; }
+  .share .status { margin: 12px 0 0; font-size: 15px; text-align: center; }
+  .share .status.error { color: var(--rust); }
+  .share .or { margin: 14px 0 0; text-align: center; font-size: 15px; }
+  .share .or a { color: var(--green); font-weight: 600; }
+  .share .done { text-align: center; font-size: 17px; font-weight: 600; color: var(--green); margin: 4px 0; }
   ul { list-style: none; margin: 8px 0 0; padding: 0 12px 16px; }
   li a {
     display: flex; align-items: center; gap: 16px;
@@ -102,6 +129,28 @@
     Save Contact
   </a>
   <p class="hint" id="save-hint"></p>
+
+  <button class="share-toggle" id="share-toggle" type="button" aria-expanded="false" aria-controls="share">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></svg>
+    Share your info with me
+  </button>
+  <form class="share" id="share" hidden novalidate>
+    <p>I&rsquo;ll get your details right away. Tap Name and your phone can fill in the rest.</p>
+    <label for="share-name">Name</label>
+    <input id="share-name" name="name" autocomplete="name" required maxlength="100">
+    <label for="share-phone">Phone</label>
+    <input id="share-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="40">
+    <label for="share-email">Email</label>
+    <input id="share-email" name="email" type="email" autocomplete="email" maxlength="254">
+    <label for="share-company">Company <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+    <input id="share-company" name="company" autocomplete="organization" maxlength="100">
+    <label for="share-note">Note <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+    <textarea id="share-note" name="note" maxlength="1000" placeholder="Where we met, what you&rsquo;re working on&hellip;"></textarea>
+    <input class="trap" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <button type="submit">Send to Eric</button>
+    <p class="status" id="share-status" role="status"></p>
+    <p class="or">or <a id="share-text" href="sms:+17207620570">text me instead</a></p>
+  </form>
 
   <ul>
     <li><a href="https://calendar.app.google/x5yWEzH3CooDAXXL8" target="_blank" rel="noopener">
@@ -157,6 +206,36 @@
     } else if (/iPhone|iPad|iPod/i.test(ua)) {
       hint.textContent = 'Then scroll down and tap \u201cCreate New Contact\u201d.';
     }
+  })();
+  // "Share your info": posts to the Worker, which emails Eric with a contact file attached.
+  (function () {
+    var toggle = document.getElementById('share-toggle'), form = document.getElementById('share');
+    var status = document.getElementById('share-status'), text = document.getElementById('share-text');
+    var body = 'Hi Eric, it\u2019s ';
+    text.href = 'sms:+17207620570' + (/iPhone|iPad|iPod|Mac/i.test(navigator.userAgent) ? '&' : '?') + 'body=' + encodeURIComponent(body);
+    toggle.addEventListener('click', function () {
+      form.hidden = false; toggle.hidden = true; toggle.setAttribute('aria-expanded', 'true');
+      document.getElementById('share-name').focus();
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var data = {};
+      new FormData(form).forEach(function (value, key) { data[key] = String(value).trim(); });
+      status.className = 'status error';
+      if (!data.name) { status.textContent = 'Please add your name.'; return; }
+      if (!data.phone && !data.email) { status.textContent = 'Please add a phone number or email.'; return; }
+      var button = form.querySelector('button[type=submit]');
+      button.disabled = true; button.textContent = 'Sending\u2026'; status.textContent = '';
+      fetch('/api/card-share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+        .then(function (res) { return res.json().then(function (out) { if (!res.ok) throw new Error(out.error || 'Please try again.'); }); })
+        .then(function () {
+          form.innerHTML = '<p class="done">Thanks, ' + data.name.split(' ')[0].replace(/[<>&"]/g, '') + '! I\u2019ve got your info.</p>';
+        })
+        .catch(function (error) {
+          button.disabled = false; button.textContent = 'Send to Eric';
+          status.textContent = error.message === 'Failed to fetch' ? 'No connection. Please try again.' : error.message;
+        });
+    });
   })();
 </script>
 </body>
