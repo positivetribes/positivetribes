@@ -54,7 +54,7 @@
       <form id="groceryForm" class="add-grocery"><label class="sr-only" for="groceryItem">Add grocery item</label><input id="groceryItem" maxlength="200" placeholder="Add milk, snacks, anything…" required><input id="groceryStore" maxlength="40" list="storeOptions" autocomplete="off" aria-label="Store (optional)" placeholder="Store (optional)"><datalist id="storeOptions"></datalist><button class="primary">Add</button></form>
       </div>
       <div id="customView" hidden>
-        <div class="section-head"><div><h2 id="customTitle">List</h2></div><button class="ghost small" id="editList">Edit list</button></div>
+        <div class="section-head"><div><h2 id="customTitle">List</h2><p id="customOwner" class="owner-line"></p></div><button class="ghost small" id="editList">Edit list</button></div>
         <div class="week-tools"><p id="customStatus" class="hint" role="status"></p><button class="ghost small" id="clearChecked" hidden>Clear checked</button></div>
         <div id="customStoreBar" class="store-filter" hidden><label class="sr-only" for="customStoreFilter">Filter by store</label><select id="customStoreFilter"></select></div>
         <div id="customList" class="week-list"></div>
@@ -87,8 +87,9 @@
 </form></dialog>
 <dialog id="itemDialog"><form id="itemForm" class="modal"><h2>Edit item</h2><label>Item<input id="itemInput" maxlength="200" autocomplete="off" required></label><p id="itemNote" class="hint help"></p><div class="actions"><button type="button" class="ghost danger" id="deleteItem">Delete</button><button type="button" class="ghost" id="resetItem">Use original</button><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Save</button></div></form></dialog>
 <dialog id="listDialog"><form id="listForm" class="modal"><h2 id="listDialogTitle">New list</h2>
-  <label>List name<input id="listName" maxlength="40" autocomplete="off" placeholder="Costco run, Camping, Hardware store…" required><small class="hint">Only you see this list. The Grocery List stays shared with the whole family.</small></label>
+  <label>List name<input id="listName" maxlength="40" autocomplete="off" placeholder="Costco run, Camping, Hardware store…" required></label>
   <fieldset class="setting"><legend>Type</legend><div class="segmented two" role="radiogroup"><label><input type="radio" name="listKind" value="grocery" checked><span>Grocery list</span></label><label><input type="radio" name="listKind" value="basic"><span>Basic list</span></label></div><small class="hint" id="listKindHint"></small></fieldset>
+  <label class="switch-row"><span><span class="switch-title">Share with the whole family</span><small class="hint" id="listShareHint"></small></span><input type="checkbox" class="switch" id="listShared" role="switch"></label>
   <div class="actions"><button type="button" class="ghost danger" id="deleteList">Delete list</button><button type="button" class="ghost close-dialog">Cancel</button><button class="primary" id="saveList">Create list</button></div>
 </form></dialog>
 <dialog id="storeDialog"><form id="storeForm" class="modal"><h2 id="storeTitle">Choose a store</h2><div id="storeChips" class="chips"></div><label>Store<input id="storeInput" maxlength="40" list="storeOptions" autocomplete="off" placeholder="Costco, Target, Whole Foods…"></label><div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button type="button" class="ghost" id="clearStore">No store</button><button class="primary">Save</button></div></form></dialog>

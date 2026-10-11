@@ -361,7 +361,7 @@ test('custom lists: create grocery and basic lists, manage items, share store sp
     const tp = await call('/lists/items', 'POST', { list_id: costco.body.id, label: 'Paper towels', store: 'whole foods' });
     await call('/lists/items', 'POST', { list_id: costco.body.id, label: 'Coffee', store: 'Costco' });
     let detail = (await call('/lists/items?list=' + costco.body.id)).body;
-    assert.deepEqual(detail.list, { id: costco.body.id, name: 'Costco run', kind: 'grocery' });
+    assert.deepEqual(detail.list, { id: costco.body.id, name: 'Costco run', kind: 'grocery', owner: 'Alex', shared: false, mine: true });
     assert.deepEqual(detail.items.map(i => [i.label, i.store, i.checked]), [['Paper towels', 'Whole Foods', false], ['Coffee', 'Costco', false]]);
     assert.deepEqual(detail.stores, ['Costco', 'Whole Foods']);
     assert.deepEqual((await call('/groceries?week=' + start)).body.stores, ['Whole Foods']);  // private list stores stay private
@@ -384,7 +384,7 @@ test('custom lists: create grocery and basic lists, manage items, share store sp
     assert.deepEqual((await call('/lists/items?list=' + costco.body.id)).body.items.map(i => i.label), ['Coffee']);
     assert.equal((await call('/lists/items', 'DELETE', { list_id: packing.body.id, id: tent.body.id })).status, 200);
     assert.equal((await call('/lists', 'PUT', { id: packing.body.id, name: 'Camping', kind: 'grocery' })).status, 200);
-    assert.deepEqual((await call('/lists/items?list=' + packing.body.id)).body.list, { id: packing.body.id, name: 'Camping', kind: 'grocery' });
+    assert.deepEqual((await call('/lists/items?list=' + packing.body.id)).body.list, { id: packing.body.id, name: 'Camping', kind: 'grocery', owner: 'Alex', shared: false, mine: true });
     // Deleting a list removes its items and leaves the weekly grocery list alone.
     assert.equal((await call('/lists', 'DELETE', { id: costco.body.id })).status, 200);
     assert.equal((await call('/lists/items?list=' + costco.body.id)).status, 404);
@@ -449,5 +449,52 @@ test('an existing lists table without owners is upgraded in place', async () => 
     sqlite.exec("INSERT INTO family_members (name) VALUES ('Alex')");
     assert.deepEqual((await (await call('/lists', 'Alex')).json()).lists.map(l => l.name), ['Before owners']);
     assert.equal((await call('/summary', 'Alex')).status, 200);  // migration runs once, then is skipped
+  } finally { sqlite.close(); }
+});
+
+test('list sharing: the creator shares with every profile and can revoke; only the creator manages the list', async () => {
+  const { call, sqlite } = await fixture();
+  try {
+    for (const name of ['Alex', 'Sam', 'Jo']) await call('/members', 'POST', { name });
+    const as = who => (path, method = 'GET', payload) => call(path, method, payload, true, who);
+    const alex = as('Alex'), sam = as('Sam'), jo = as('Jo');
+    const party = await alex('/lists', 'POST', { name: 'Party', kind: 'grocery', shared: false });
+    const milk = await alex('/lists/items', 'POST', { list_id: party.body.id, label: 'Balloons', store: 'Party City' });
+    assert.equal((await sam('/lists/items?list=' + party.body.id)).status, 404);
+    assert.equal((await alex('/lists', 'POST', { name: 'Bad', kind: 'basic', shared: 'yes' })).status, 400);
+    // Share it: every profile sees it, marked with its creator.
+    assert.equal((await alex('/lists', 'PUT', { id: party.body.id, name: 'Party', kind: 'grocery', shared: true })).status, 200);
+    for (const who of [sam, jo]) {
+      const seen = (await who('/lists')).body.lists;
+      assert.deepEqual(seen.map(l => [l.name, l.owner, l.shared, l.mine]), [['Party', 'Alex', true, false]]);
+    }
+    assert.equal((await alex('/lists')).body.lists[0].mine, true);
+    // Others can work with the items, and see the list's stores.
+    const detail = (await sam('/lists/items?list=' + party.body.id)).body;
+    assert.deepEqual(detail.stores, ['Party City']);
+    assert.equal((await sam('/lists/items', 'POST', { list_id: party.body.id, label: 'Cake', store: 'party city' })).body.id > 0, true);
+    assert.equal((await jo('/lists/items', 'PATCH', { list_id: party.body.id, id: milk.body.id, checked: true })).status, 200);
+    assert.deepEqual((await alex('/lists/items?list=' + party.body.id)).body.items.map(i => [i.label, i.store, i.checked]), [['Balloons', 'Party City', true], ['Cake', 'Party City', false]]);
+    assert.equal((await jo('/lists/items', 'DELETE', { list_id: party.body.id, checked: true })).body.removed, 1);
+    // ...but only the creator can rename, retype, unshare, or delete it.
+    for (const [method, payload] of [['PUT', { id: party.body.id, name: 'Mine', kind: 'grocery' }], ['PUT', { id: party.body.id, name: 'Party', kind: 'grocery', shared: false }], ['DELETE', { id: party.body.id }]]) {
+      const response = await sam('/lists', method, payload);
+      assert.equal(response.status, 403); assert.match(response.body.error, /Only Alex/);
+    }
+    // Renaming without "shared" keeps it shared.
+    await alex('/lists', 'PUT', { id: party.body.id, name: 'Birthday party', kind: 'grocery' });
+    assert.equal((await sam('/lists')).body.lists[0].name, 'Birthday party');
+    // Revoke: it disappears for everyone else, with items intact for the creator.
+    assert.equal((await alex('/lists', 'PUT', { id: party.body.id, name: 'Birthday party', kind: 'grocery', shared: false })).status, 200);
+    assert.deepEqual((await sam('/lists')).body.lists, []);
+    assert.equal((await sam('/lists/items?list=' + party.body.id)).status, 404);
+    assert.equal((await jo('/lists/items', 'POST', { list_id: party.body.id, label: 'x' })).status, 404);
+    assert.deepEqual((await sam('/lists/items?list=' + (await sam('/lists', 'POST', { name: 'Sam own', kind: 'grocery' })).body.id)).body.stores, []);
+    assert.deepEqual((await alex('/lists/items?list=' + party.body.id)).body.items.map(i => i.label), ['Cake']);
+    // Share again, then the creator deletes it for everyone.
+    await alex('/lists', 'PUT', { id: party.body.id, name: 'Birthday party', kind: 'grocery', shared: true });
+    assert.equal((await jo('/lists')).body.lists.length, 1);
+    assert.equal((await alex('/lists', 'DELETE', { id: party.body.id })).status, 200);
+    assert.deepEqual((await jo('/lists')).body.lists, []);
   } finally { sqlite.close(); }
 });

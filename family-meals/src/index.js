@@ -81,7 +81,7 @@ db.prepare("CREATE INDEX IF NOT EXISTS grocery_items_week ON grocery_items(week_
 db.prepare("CREATE TABLE IF NOT EXISTS family_members (name TEXT PRIMARY KEY COLLATE NOCASE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS family_claims (name TEXT PRIMARY KEY COLLATE NOCASE,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS dinner_absences (plan_date TEXT NOT NULL,member TEXT NOT NULL COLLATE NOCASE,PRIMARY KEY(plan_date,member))"),
-db.prepare("CREATE TABLE IF NOT EXISTS lists (id INTEGER PRIMARY KEY AUTOINCREMENT,owner TEXT NOT NULL DEFAULT '' COLLATE NOCASE,name TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('grocery','basic')),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+db.prepare("CREATE TABLE IF NOT EXISTS lists (id INTEGER PRIMARY KEY AUTOINCREMENT,owner TEXT NOT NULL DEFAULT '' COLLATE NOCASE,shared INTEGER NOT NULL DEFAULT 0 CHECK(shared IN (0,1)),name TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('grocery','basic')),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS list_items (id INTEGER PRIMARY KEY AUTOINCREMENT,list_id INTEGER NOT NULL,label TEXT NOT NULL,store TEXT NOT NULL DEFAULT '',checked INTEGER NOT NULL DEFAULT 0 CHECK(checked IN (0,1)),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE INDEX IF NOT EXISTS list_items_list ON list_items(list_id)"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_labels (week_start TEXT NOT NULL,item_key TEXT NOT NULL,label TEXT NOT NULL,PRIMARY KEY(week_start,item_key))"),
@@ -91,6 +91,8 @@ db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,m
 // Lists made before lists belonged to a profile have no owner column yet.
 if (!(await db.prepare("SELECT 1 FROM pragma_table_info('lists') WHERE name='owner'").first()))
   await db.prepare("ALTER TABLE lists ADD COLUMN owner TEXT NOT NULL DEFAULT '' COLLATE NOCASE").run();
+if (!(await db.prepare("SELECT 1 FROM pragma_table_info('lists') WHERE name='shared'").first()))
+  await db.prepare("ALTER TABLE lists ADD COLUMN shared INTEGER NOT NULL DEFAULT 0 CHECK(shared IN (0,1))").run();
 // D1 batches are transactional. Keep the empty-table check, all 15 inserts,
 // and the marker together so simultaneous first requests cannot seed twice.
 // Record the marker for existing databases too; never replace family content.
@@ -200,7 +202,7 @@ const storeName = value => text(value, 40).replace(/\s+/g, ' ');
 async function canonicalStore(db, name, owner = null) {
   if (!name) return '';
   const existing = await db.prepare(`SELECT store FROM (SELECT store,0 src,rowid r FROM grocery_stores UNION ALL
-      SELECT i.store,1 src,i.id r FROM list_items i JOIN lists l ON l.id=i.list_id WHERE i.store<>'' AND l.owner=?)
+      SELECT i.store,1 src,i.id r FROM list_items i JOIN lists l ON l.id=i.list_id WHERE i.store<>'' AND (l.owner=? OR l.shared=1))
     WHERE lower(store)=lower(?) ORDER BY src,r LIMIT 1`).bind(owner ?? '', name).first();
   return existing ? existing.store : name;
 }
@@ -209,7 +211,7 @@ const storeStatement = (db, start, kind, key, store) => store
       ON CONFLICT(week_start,kind,item_key) DO UPDATE SET store=excluded.store`).bind(start, kind, key, store)
   : db.prepare('DELETE FROM grocery_stores WHERE week_start=? AND kind=? AND item_key=?').bind(start, kind, key);
 const allStores = async (db, owner = null) => (await rows(db, `SELECT store FROM (SELECT store FROM grocery_stores UNION
-  SELECT i.store FROM list_items i JOIN lists l ON l.id=i.list_id WHERE i.store<>'' AND l.owner=?) ORDER BY lower(store)`, owner ?? '')).map(r => r.store);
+  SELECT i.store FROM list_items i JOIN lists l ON l.id=i.list_id WHERE i.store<>'' AND (l.owner=? OR l.shared=1)) ORDER BY lower(store)`, owner ?? '')).map(r => r.store);
 // Custom lists belong to one family profile, sent by the app as x-family-member. Everyone shares the PIN, so this keeps lists separate, not secret.
 async function requireOwner(db, request) {
   let name = '';
@@ -226,19 +228,30 @@ function listInput(b) {
   if (!LIST_KINDS.includes(b.kind)) throw new InputError('Choose a Grocery list or a Basic list.');
   return { name, kind: b.kind };
 }
-async function requireList(db, value, owner) {
+// A list is visible to its creator, and to every profile while the creator shares it.
+// Anyone who can see a list can work with its items; only the creator can rename, retype, share, unshare, or delete it.
+const listView = (row, me) => ({ id: row.id, name: row.name, kind: row.kind, owner: row.owner, shared: !!row.shared, mine: row.owner.toLowerCase() === me.toLowerCase() });
+async function requireList(db, value, me, { mine = false } = {}) {
   const id = Number(value);
-  const row = Number.isSafeInteger(id) && id > 0 && await db.prepare('SELECT id,name,kind FROM lists WHERE id=? AND owner=?').bind(id, owner).first();
-  if (!row) throw new InputError('List not found. It may have been deleted.', 404);
-  return row;
+  const row = Number.isSafeInteger(id) && id > 0 && await db.prepare('SELECT id,owner,shared,name,kind FROM lists WHERE id=? AND (owner=? OR shared=1)').bind(id, me).first();
+  if (!row) throw new InputError('List not found. It may have been deleted or is no longer shared.', 404);
+  const list = listView(row, me);
+  if (mine && !list.mine) throw new InputError(`Only ${list.owner} can change this list's settings.`, 403);
+  return list;
 }
 async function requireListItem(db, list, value) {
   const id = Number(value);
   if (!Number.isSafeInteger(id) || !await db.prepare('SELECT id FROM list_items WHERE id=? AND list_id=?').bind(id, list.id).first()) throw new InputError('List item not found.', 404);
   return id;
 }
-const allLists = (db, owner) => rows(db, `SELECT l.id,l.name,l.kind,COUNT(i.id) item_count,COALESCE(SUM(i.checked),0) checked_count
-  FROM lists l LEFT JOIN list_items i ON i.list_id=l.id WHERE l.owner=? GROUP BY l.id ORDER BY l.id`, owner);
+const allLists = async (db, me) => (await rows(db, `SELECT l.id,l.owner,l.shared,l.name,l.kind,COUNT(i.id) item_count,COALESCE(SUM(i.checked),0) checked_count
+  FROM lists l LEFT JOIN list_items i ON i.list_id=l.id WHERE l.owner=? OR l.shared=1 GROUP BY l.id ORDER BY l.id`, me))
+  .map(r => ({ ...listView(r, me), item_count: r.item_count, checked_count: r.checked_count }));
+const sharedInput = value => {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'boolean') throw new InputError('Shared must be true or false.');
+  return Number(value);
+};
 async function listDetail(db, list, owner) {
   return { list, items: (await rows(db, 'SELECT id,label,store,checked FROM list_items WHERE list_id=? ORDER BY id', list.id)).map(r => ({ ...r, checked: !!r.checked })), stores: await allStores(db, owner) };
 }
@@ -382,18 +395,18 @@ export default {
         return json({ lists: await allLists(db, owner) });
       }
       if (path === '/api/lists' && method === 'POST') {
-        const input = listInput(await body(request));
+        const b = await body(request), input = listInput(b);
         if ((await db.prepare('SELECT COUNT(*) n FROM lists WHERE owner=?').bind(owner).first()).n >= 50) throw new InputError('You can have up to 50 lists. Delete one to make room.');
-        const result = await db.prepare('INSERT INTO lists (owner,name,kind) VALUES (?,?,?)').bind(owner, input.name, input.kind).run();
+        const result = await db.prepare('INSERT INTO lists (owner,name,kind,shared) VALUES (?,?,?,?)').bind(owner, input.name, input.kind, sharedInput(b.shared) ?? 0).run();
         return json({ ok: true, id: result.meta.last_row_id }, 201);
       }
       if (path === '/api/lists' && method === 'PUT') {
-        const b = await body(request), list = await requireList(db, b.id, owner), input = listInput(b);
-        await db.prepare('UPDATE lists SET name=?,kind=? WHERE id=?').bind(input.name, input.kind, list.id).run();
+        const b = await body(request), list = await requireList(db, b.id, owner, { mine: true }), input = listInput(b), shared = sharedInput(b.shared);
+        await db.prepare('UPDATE lists SET name=?,kind=?,shared=COALESCE(?,shared) WHERE id=?').bind(input.name, input.kind, shared ?? null, list.id).run();
         return json({ ok: true });
       }
       if (path === '/api/lists' && method === 'DELETE') {
-        const list = await requireList(db, (await body(request)).id, owner);
+        const list = await requireList(db, (await body(request)).id, owner, { mine: true });
         await db.batch([db.prepare('DELETE FROM list_items WHERE list_id=?').bind(list.id), db.prepare('DELETE FROM lists WHERE id=?').bind(list.id)]);
         return json({ ok: true });
       }

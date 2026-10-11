@@ -23,6 +23,7 @@ let storeFilter = '', groceryState = null, storeTarget = null;
 const NO_STORE = '__none__';
 // Lists tab: the weekly Grocery List plus any lists the family creates. Remember the last one opened on this device.
 const GROCERY = 'grocery';
+const PEOPLE = '<svg class="shared-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.7 3.2 2.5 3.5 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const PENCIL = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 // Custom lists belong to the profile using this phone; remember the last list per person.
 const listKey = () => 'familyMealsList:' + member.toLowerCase();
@@ -580,7 +581,7 @@ async function loadLists() {
 function renderListPicker() {
   const chip = (id, name, extra = '') => `<button type="button" class="list-chip${currentList === String(id) ? ' active' : ''}" data-list="${id}" aria-pressed="${currentList === String(id)}"><span class="name">${esc(name)}</span>${extra}</button>`;
   $('#listPicker').innerHTML = chip(GROCERY, 'Grocery List') +
-    lists.map(l => { const left = l.item_count - l.checked_count; return chip(l.id, l.name, left ? `<span class="count" aria-label="${left} to go">${left}</span>` : ''); }).join('') +
+    lists.map(l => { const left = l.item_count - l.checked_count; return chip(l.id, l.name, (l.shared ? `${PEOPLE}<span class="sr-only">${l.mine ? 'shared by you' : 'shared by ' + esc(l.owner)}</span>` : '') + (left ? `<span class="count" aria-label="${left} to go">${left}</span>` : '')); }).join('') +
     `<button type="button" class="list-chip new" id="newList">${needsName ? 'Pick your name' : '+ New list'}</button>`;
   $$('[data-list]').forEach(button => button.onclick = () => selectList(button.dataset.list));
   $('#newList').onclick = () => needsName ? openProfile() : openListDialog(null);
@@ -619,6 +620,9 @@ function renderCustom() {
   knownStores = stores;
   $('#storeOptions').innerHTML = stores.map(store => `<option value="${esc(store)}">`).join('');
   $('#customTitle').textContent = list.name;
+  $('#customOwner').innerHTML = list.mine ? (list.shared ? `${PEOPLE} Shared with the family` : 'Only you can see this list') : `${PEOPLE} Shared by ${esc(list.owner)}`;
+  $('#customOwner').classList.toggle('shared', list.shared);
+  $('#editList').hidden = !list.mine;
   const listStores = grocery ? [...new Set(items.map(item => item.store).filter(Boolean))].sort((a, b) => a.localeCompare(b)) : [];
   const unassigned = items.filter(item => !item.store).length;
   if (!listStores.length || (customFilter === NO_STORE ? !unassigned : customFilter && !listStores.includes(customFilter))) customFilter = '';
@@ -665,6 +669,10 @@ $('#clearChecked').onclick = event => {
 const KIND_HINTS = { grocery: 'Tag items with a store and filter the list by store.', basic: 'A simple checklist — just items, no stores.' };
 function paintKindHint() { $('#listKindHint').textContent = KIND_HINTS[$('#listForm [name=listKind]:checked').value]; }
 $$('#listForm [name=listKind]').forEach(input => input.onchange = paintKindHint);
+function paintShareHint() {
+  $('#listShareHint').textContent = $('#listShared').checked ? 'Everyone can see, add to, and check off this list. Only you can rename, unshare, or delete it.' : 'Only you can see this list.';
+}
+$('#listShared').onchange = paintShareHint;
 function openListDialog(list) {
   editingList = list;
   $('#listDialogTitle').textContent = list ? 'Edit list' : 'New list';
@@ -672,22 +680,27 @@ function openListDialog(list) {
   $('#listName').value = list ? list.name : '';
   $(`#listForm [name=listKind][value=${list ? list.kind : 'grocery'}]`).checked = true;
   $('#deleteList').hidden = !list;
-  paintKindHint();
+  $('#listShared').checked = !!list?.shared;
+  paintKindHint(); paintShareHint();
   $('#listDialog').showModal();
   if (!list) $('#listName').focus();
 }
 $('#editList').onclick = () => customState && openListDialog(customState.list);
 $('#listForm').onsubmit = event => {
   event.preventDefault(); action(event.submitter, async () => {
-    const payload = { name: $('#listName').value, kind: $('#listForm [name=listKind]:checked').value };
+    const payload = { name: $('#listName').value, kind: $('#listForm [name=listKind]:checked').value, shared: $('#listShared').checked };
+    const wasShared = !!editingList?.shared;
+    if (wasShared && !payload.shared && !confirm(`Stop sharing “${editingList.name}”? The rest of the family will no longer see it.`)) return;
     if (editingList) await send('/lists', 'PUT', { id: editingList.id, ...payload });
     else { const result = await send('/lists', 'POST', payload); setCurrentList(result.id); customFilter = ''; }
-    $('#listDialog').close(); await loadLists();
+    $('#listDialog').close();
+    if (payload.shared !== wasShared) toast(payload.shared ? `${payload.name.trim()} is shared with the family.` : `${payload.name.trim()} is private again.`);
+    await loadLists();
   });
 };
 $('#deleteList').onclick = event => {
   const list = editingList, n = customState?.items.length || 0;
-  if (!confirm(`Delete “${list.name}”${n ? ` and its ${n} item${n > 1 ? 's' : ''}` : ''}? This can't be undone.`)) return;
+  if (!confirm(`Delete “${list.name}”${n ? ` and its ${n} item${n > 1 ? 's' : ''}` : ''}${list.shared ? ' for the whole family' : ''}? This can't be undone.`)) return;
   action(event.currentTarget, async () => {
     await send('/lists', 'DELETE', { id: list.id });
     setCurrentList(GROCERY); $('#listDialog').close(); toast(`Deleted ${list.name}.`); await loadLists();
