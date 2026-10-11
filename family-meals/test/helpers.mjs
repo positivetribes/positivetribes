@@ -11,7 +11,7 @@ export function database() {
         async first() { return sqlite.prepare(sql).get(...values); },
         async run() {
           const result = sqlite.prepare(sql).run(...values);
-          return { meta: { last_row_id: Number(result.lastInsertRowid) } };
+          return { meta: { last_row_id: Number(result.lastInsertRowid), changes: Number(result.changes) } };
         }
       };
     },

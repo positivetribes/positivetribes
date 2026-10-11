@@ -81,6 +81,9 @@ db.prepare("CREATE INDEX IF NOT EXISTS grocery_items_week ON grocery_items(week_
 db.prepare("CREATE TABLE IF NOT EXISTS family_members (name TEXT PRIMARY KEY COLLATE NOCASE,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS family_claims (name TEXT PRIMARY KEY COLLATE NOCASE,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS dinner_absences (plan_date TEXT NOT NULL,member TEXT NOT NULL COLLATE NOCASE,PRIMARY KEY(plan_date,member))"),
+db.prepare("CREATE TABLE IF NOT EXISTS lists (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('grocery','basic')),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+db.prepare("CREATE TABLE IF NOT EXISTS list_items (id INTEGER PRIMARY KEY AUTOINCREMENT,list_id INTEGER NOT NULL,label TEXT NOT NULL,store TEXT NOT NULL DEFAULT '',checked INTEGER NOT NULL DEFAULT 0 CHECK(checked IN (0,1)),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+db.prepare("CREATE INDEX IF NOT EXISTS list_items_list ON list_items(list_id)"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_labels (week_start TEXT NOT NULL,item_key TEXT NOT NULL,label TEXT NOT NULL,PRIMARY KEY(week_start,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_stores (week_start TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('generated','manual')),item_key TEXT NOT NULL,store TEXT NOT NULL,PRIMARY KEY(week_start,kind,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
@@ -192,13 +195,39 @@ const storeName = value => text(value, 40).replace(/\s+/g, ' ');
 // Reuse the spelling already in use ("costco" becomes "Costco") so filters do not split.
 async function canonicalStore(db, name) {
   if (!name) return '';
-  const existing = await db.prepare('SELECT store FROM grocery_stores WHERE lower(store)=lower(?) ORDER BY rowid LIMIT 1').bind(name).first();
+  const existing = await db.prepare(`SELECT store FROM (SELECT store,0 src,rowid r FROM grocery_stores UNION ALL SELECT store,1 src,id r FROM list_items WHERE store<>'')
+    WHERE lower(store)=lower(?) ORDER BY src,r LIMIT 1`).bind(name).first();
   return existing ? existing.store : name;
 }
 const storeStatement = (db, start, kind, key, store) => store
   ? db.prepare(`INSERT INTO grocery_stores (week_start,kind,item_key,store) VALUES (?,?,?,?)
       ON CONFLICT(week_start,kind,item_key) DO UPDATE SET store=excluded.store`).bind(start, kind, key, store)
   : db.prepare('DELETE FROM grocery_stores WHERE week_start=? AND kind=? AND item_key=?').bind(start, kind, key);
+const allStores = async db => (await rows(db, "SELECT store FROM (SELECT store FROM grocery_stores UNION SELECT store FROM list_items WHERE store<>'') ORDER BY lower(store)")).map(r => r.store);
+// Custom lists: not tied to a week. 'grocery' lists can tag items with a store; 'basic' lists are just items.
+const LIST_KINDS = ['grocery', 'basic'];
+function listInput(b) {
+  const name = text(b.name, 40).replace(/\s+/g, ' ');
+  if (!name) throw new InputError('List name is required.');
+  if (!LIST_KINDS.includes(b.kind)) throw new InputError('Choose a Grocery list or a Basic list.');
+  return { name, kind: b.kind };
+}
+async function requireList(db, value) {
+  const id = Number(value);
+  const row = Number.isSafeInteger(id) && id > 0 && await db.prepare('SELECT id,name,kind FROM lists WHERE id=?').bind(id).first();
+  if (!row) throw new InputError('List not found. It may have been deleted.', 404);
+  return row;
+}
+async function requireListItem(db, list, value) {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || !await db.prepare('SELECT id FROM list_items WHERE id=? AND list_id=?').bind(id, list.id).first()) throw new InputError('List item not found.', 404);
+  return id;
+}
+const allLists = db => rows(db, `SELECT l.id,l.name,l.kind,COUNT(i.id) item_count,COALESCE(SUM(i.checked),0) checked_count
+  FROM lists l LEFT JOIN list_items i ON i.list_id=l.id GROUP BY l.id ORDER BY l.id`);
+async function listDetail(db, list) {
+  return { list, items: (await rows(db, 'SELECT id,label,store,checked FROM list_items WHERE list_id=? ORDER BY id', list.id)).map(r => ({ ...r, checked: !!r.checked })), stores: await allStores(db) };
+}
 async function groceries(db, start) {
   const planned = await rows(db, `SELECT p.plan_date,m.id,m.name,COALESCE(d.ingredients,'[]') ingredients
     FROM weekly_plan p JOIN meals m ON m.id=p.meal_id LEFT JOIN meal_details d ON d.meal_id=m.id
@@ -221,7 +250,7 @@ async function groceries(db, start) {
   }
   return { week_start: start, generated: [...combined.values()],
     manual: (await rows(db, 'SELECT * FROM grocery_items WHERE week_start=? ORDER BY id', start)).map(r => ({ ...r, checked: !!r.checked, store: stores.get('manual:' + r.id) || '' })),
-    stores: (await rows(db, 'SELECT DISTINCT store FROM grocery_stores ORDER BY lower(store)')).map(r => r.store),
+    stores: await allStores(db),
     missing: [...missing].map(([id, name]) => ({ id, name })), planned_count: planned.length };
 }
 
@@ -329,6 +358,51 @@ export default {
         if (typeof b.out !== 'boolean') throw new InputError('Out must be true or false.');
         const name = await requireMember(db, b.member);
         await (b.out ? db.prepare('INSERT OR IGNORE INTO dinner_absences (plan_date,member) VALUES (?,?)') : db.prepare('DELETE FROM dinner_absences WHERE plan_date=? AND member=?')).bind(b.plan_date, name).run();
+        return json({ ok: true });
+      }
+      if (path === '/api/lists' && method === 'GET') return json({ lists: await allLists(db) });
+      if (path === '/api/lists' && method === 'POST') {
+        const input = listInput(await body(request));
+        if ((await db.prepare('SELECT COUNT(*) n FROM lists').first()).n >= 50) throw new InputError('You can have up to 50 lists. Delete one to make room.');
+        const result = await db.prepare('INSERT INTO lists (name,kind) VALUES (?,?)').bind(input.name, input.kind).run();
+        return json({ ok: true, id: result.meta.last_row_id }, 201);
+      }
+      if (path === '/api/lists' && method === 'PUT') {
+        const b = await body(request), list = await requireList(db, b.id), input = listInput(b);
+        await db.prepare('UPDATE lists SET name=?,kind=? WHERE id=?').bind(input.name, input.kind, list.id).run();
+        return json({ ok: true });
+      }
+      if (path === '/api/lists' && method === 'DELETE') {
+        const list = await requireList(db, (await body(request)).id);
+        await db.batch([db.prepare('DELETE FROM list_items WHERE list_id=?').bind(list.id), db.prepare('DELETE FROM lists WHERE id=?').bind(list.id)]);
+        return json({ ok: true });
+      }
+      if (path === '/api/lists/items' && method === 'GET') return json(await listDetail(db, await requireList(db, url.searchParams.get('list'))));
+      if (path === '/api/lists/items' && method === 'POST') {
+        const b = await body(request), list = await requireList(db, b.list_id), label = text(b.label, 200);
+        if (!label) throw new InputError('Item is required.');
+        if ((await db.prepare('SELECT COUNT(*) n FROM list_items WHERE list_id=?').bind(list.id).first()).n >= 500) throw new InputError('A list can hold up to 500 items. Clear checked items to make room.');
+        const store = list.kind === 'grocery' ? await canonicalStore(db, storeName(b.store)) : '';
+        const result = await db.prepare('INSERT INTO list_items (list_id,label,store) VALUES (?,?,?)').bind(list.id, label, store).run();
+        return json({ ok: true, id: result.meta.last_row_id }, 201);
+      }
+      if (path === '/api/lists/items' && method === 'PATCH') {
+        const b = await body(request), list = await requireList(db, b.list_id), id = await requireListItem(db, list, b.id);
+        const sets = [], values = [];
+        if (b.label !== undefined) { const label = text(b.label, 200); if (!label) throw new InputError('Item is required.'); sets.push('label=?'); values.push(label); }
+        if (b.checked !== undefined) { if (typeof b.checked !== 'boolean') throw new InputError('Checked must be true or false.'); sets.push('checked=?'); values.push(Number(b.checked)); }
+        if (b.store !== undefined) { if (typeof b.store !== 'string') throw new InputError('Store must be text. Use an empty value to clear it.'); sets.push('store=?'); values.push(await canonicalStore(db, storeName(b.store))); }
+        if (!sets.length) throw new InputError('Nothing to change.');
+        await db.prepare(`UPDATE list_items SET ${sets.join(',')} WHERE id=? AND list_id=?`).bind(...values, id, list.id).run();
+        return json({ ok: true, store: b.store === undefined ? undefined : values[sets.indexOf('store=?')] });
+      }
+      if (path === '/api/lists/items' && method === 'DELETE') {
+        const b = await body(request), list = await requireList(db, b.list_id);
+        if (b.checked === true) {
+          const result = await db.prepare('DELETE FROM list_items WHERE list_id=? AND checked=1').bind(list.id).run();
+          return json({ ok: true, removed: result.meta.changes });
+        }
+        await db.prepare('DELETE FROM list_items WHERE id=? AND list_id=?').bind(await requireListItem(db, list, b.id), list.id).run();
         return json({ ok: true });
       }
       if (path === '/api/groceries' && method === 'GET') return json(await groceries(db, weekStart(url.searchParams.get('week'))));

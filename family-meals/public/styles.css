@@ -85,3 +85,13 @@ input,textarea,select{font-size:16px}
 .profile.picking .profile-head{align-items:center}
 /* Grocery item edit button */
 .grocery-item .edit-item{display:grid;place-items:center;min-height:44px;min-width:44px;padding:0;flex-shrink:0}#itemDialog .actions .danger{margin-right:auto}
+/* Lists tab: switcher between the weekly Grocery List and family-made lists */
+.list-picker{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 6px;margin:-4px -2px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.list-picker::-webkit-scrollbar{display:none}
+.list-chip{flex-shrink:0;display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:0 15px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--muted);font-size:14px;font-weight:750;white-space:nowrap;transition:background .15s,color .15s,border-color .15s}
+.list-chip .name{max-width:170px;overflow:hidden;text-overflow:ellipsis}.list-chip .count{min-width:21px;padding:1px 6px;border-radius:999px;background:var(--green2);color:var(--green);font-size:12px;line-height:18px;text-align:center}
+.list-chip.active{background:var(--green);border-color:var(--green);color:#fff}.list-chip.active .count{background:#ffffff2e;color:#fff}
+.list-chip.new{border-style:dashed;background:transparent;color:var(--green)}
+[data-theme="dark"] .list-chip.active{color:#173023}[data-theme="dark"] .list-chip.active .count{background:#1730232b;color:#173023}
+.segmented.two{grid-template-columns:1fr 1fr}
+.add-grocery #customItem{flex:1 1 100%}.add-grocery #customStore{flex:1 1 0}#customForm.basic #customItem{flex:1 1 0}
+#customView .section-head h2{overflow-wrap:anywhere}#customView .section-head{gap:12px}#editList{flex-shrink:0;padding:10px 14px}

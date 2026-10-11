@@ -346,3 +346,55 @@ test('grocery items can be renamed: manual items directly, meal ingredients per 
     assert.equal((await call('/groceries/label', 'POST', { week_start: start, kind: 'manual', id: milk.body.id, label: 'x' }, false)).status, 401);
   } finally { sqlite.close(); }
 });
+
+test('custom lists: create grocery and basic lists, manage items, share store spelling, and validate', async () => {
+  const { call, sqlite } = await fixture();
+  try {
+    assert.deepEqual((await call('/lists')).body.lists, []);
+    const costco = await call('/lists', 'POST', { name: '  Costco   run ', kind: 'grocery' });
+    const packing = await call('/lists', 'POST', { name: 'Camping packing', kind: 'basic' });
+    assert.equal(costco.status, 201); assert.equal(packing.status, 201);
+    for (const bad of [{ name: '', kind: 'basic' }, { name: 'X', kind: 'todo' }, { name: 'x'.repeat(41), kind: 'basic' }]) assert.equal((await call('/lists', 'POST', bad)).status, 400);
+    // Weekly grocery stores and custom-list stores share one spelling.
+    await call('/groceries', 'POST', { week_start: start, label: 'Milk', store: 'Whole Foods' });
+    const tp = await call('/lists/items', 'POST', { list_id: costco.body.id, label: 'Paper towels', store: 'whole foods' });
+    await call('/lists/items', 'POST', { list_id: costco.body.id, label: 'Coffee', store: 'Costco' });
+    let detail = (await call('/lists/items?list=' + costco.body.id)).body;
+    assert.deepEqual(detail.list, { id: costco.body.id, name: 'Costco run', kind: 'grocery' });
+    assert.deepEqual(detail.items.map(i => [i.label, i.store, i.checked]), [['Paper towels', 'Whole Foods', false], ['Coffee', 'Costco', false]]);
+    assert.deepEqual(detail.stores, ['Costco', 'Whole Foods']);
+    assert.deepEqual((await call('/groceries?week=' + start)).body.stores, ['Costco', 'Whole Foods']);
+    // Basic lists ignore stores.
+    const tent = await call('/lists/items', 'POST', { list_id: packing.body.id, label: 'Tent', store: 'REI' });
+    await call('/lists/items', 'POST', { list_id: packing.body.id, label: 'Headlamps' });
+    assert.equal((await call('/lists/items?list=' + packing.body.id)).body.items[0].store, '');
+    // Edit, check, change store; items stay inside their own list.
+    assert.equal((await call('/lists/items', 'PATCH', { list_id: costco.body.id, id: tp.body.id, label: 'Paper towels (big pack)', checked: true, store: 'costco' })).body.store, 'Costco');
+    assert.equal((await call('/lists/items', 'PATCH', { list_id: packing.body.id, id: tp.body.id, checked: true })).status, 404);
+    assert.equal((await call('/lists/items', 'PATCH', { list_id: costco.body.id, id: tp.body.id })).status, 400);
+    assert.equal((await call('/lists/items', 'PATCH', { list_id: costco.body.id, id: tp.body.id, label: ' ' })).status, 400);
+    assert.equal((await call('/lists/items', 'PATCH', { list_id: costco.body.id, id: tp.body.id, checked: 'yes' })).status, 400);
+    detail = (await call('/lists/items?list=' + costco.body.id)).body;
+    assert.deepEqual(detail.items[0], { id: tp.body.id, label: 'Paper towels (big pack)', store: 'Costco', checked: true });
+    let lists = (await call('/lists')).body.lists;
+    assert.deepEqual(lists.map(l => [l.name, l.kind, l.item_count, l.checked_count]), [['Costco run', 'grocery', 2, 1], ['Camping packing', 'basic', 2, 0]]);
+    // Clear checked, delete one item, rename and retype a list.
+    assert.equal((await call('/lists/items', 'DELETE', { list_id: costco.body.id, checked: true })).body.removed, 1);
+    assert.deepEqual((await call('/lists/items?list=' + costco.body.id)).body.items.map(i => i.label), ['Coffee']);
+    assert.equal((await call('/lists/items', 'DELETE', { list_id: packing.body.id, id: tent.body.id })).status, 200);
+    assert.equal((await call('/lists', 'PUT', { id: packing.body.id, name: 'Camping', kind: 'grocery' })).status, 200);
+    assert.deepEqual((await call('/lists/items?list=' + packing.body.id)).body.list, { id: packing.body.id, name: 'Camping', kind: 'grocery' });
+    // Deleting a list removes its items and leaves the weekly grocery list alone.
+    assert.equal((await call('/lists', 'DELETE', { id: costco.body.id })).status, 200);
+    assert.equal((await call('/lists/items?list=' + costco.body.id)).status, 404);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM list_items WHERE list_id=?').get(costco.body.id).n, 0);
+    assert.equal((await call('/groceries?week=' + start)).body.manual[0].label, 'Milk');
+    lists = (await call('/lists')).body.lists;
+    assert.deepEqual(lists.map(l => l.name), ['Camping']);
+    // Missing lists and auth.
+    for (const [path, method, payload] of [['/lists/items?list=999', 'GET'], ['/lists/items', 'POST', { list_id: 999, label: 'x' }], ['/lists', 'PUT', { id: 999, name: 'x', kind: 'basic' }], ['/lists', 'DELETE', { id: 'abc' }]])
+      assert.equal((await call(path, method, payload)).status, 404);
+    assert.equal((await call('/lists', 'GET', undefined, false)).status, 401);
+    assert.equal((await call('/lists/items', 'POST', { list_id: packing.body.id, label: 'x' }, false)).status, 401);
+  } finally { sqlite.close(); }
+});

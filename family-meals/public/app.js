@@ -21,6 +21,11 @@ let weekOffset = 0, selectedRating = 0, activeMeal = null, activeDate = null;
 let draft = null, draftRevision = null, tagFilter = '', groceryRequest = 0;
 let storeFilter = '', groceryState = null, storeTarget = null;
 const NO_STORE = '__none__';
+// Lists tab: the weekly Grocery List plus any lists the family creates. Remember the last one opened on this device.
+const GROCERY = 'grocery';
+const PENCIL = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+let currentList = (() => { try { return localStorage.getItem('familyMealsList') || GROCERY; } catch { return GROCERY; } })();
+let lists = [], customState = null, customFilter = '', customRequest = 0, listsRequest = 0, knownStores = [], editingList = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const iso = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const today = () => iso(new Date());
@@ -97,12 +102,12 @@ async function load() {
 function render() {
   paintAvatar($('#memberButton'), member, photo);
   renderWeek(); renderMeals();
-  if ($('#groceries').classList.contains('active')) loadGroceries();
+  if ($('#groceries').classList.contains('active')) loadLists();
 }
 function switchTab(id) {
   $$('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === id));
   $$('.panel').forEach(panel => panel.classList.toggle('active', panel.id === id));
-  if (id === 'groceries') loadGroceries();
+  if (id === 'groceries') loadLists();
 }
 const sameName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 const isOut = (date, name) => data.absences.some(a => a.plan_date === date && sameName(a.member, name));
@@ -268,7 +273,7 @@ function suggestSwap() {
 async function navigateWeek(offset) {
   if (draft && !confirm('Discard this unaccepted preview?')) return;
   draft = null; weekOffset += offset; renderWeek();
-  if ($('#groceries').classList.contains('active')) await loadGroceries();
+  if ($('#groceries').classList.contains('active') && currentList === GROCERY) await loadGroceries();
 }
 async function loadGroceries() {
   const requestId = ++groceryRequest, start = monday();
@@ -294,6 +299,7 @@ function renderGroceries() {
   $('#storeFilter').innerHTML = `<option value="">All stores (${items.length})</option>` +
     weekStores.map(store => `<option value="${esc(store)}" ${store === storeFilter ? 'selected' : ''}>${esc(store)} (${items.filter(item => item.store === store).length})</option>`).join('') +
     (unassigned ? `<option value="${NO_STORE}" ${storeFilter === NO_STORE ? 'selected' : ''}>No store yet (${unassigned})</option>` : '');
+  knownStores = result.stores;
   $('#storeOptions').innerHTML = result.stores.map(store => `<option value="${esc(store)}">`).join('');
   const shown = items.map((item, i) => ({ item, i })).filter(({ item }) => !storeFilter || (storeFilter === NO_STORE ? !item.store : item.store === storeFilter));
   $('#groceryStatus').textContent = `${shown.filter(({ item }) => item.checked).length} of ${shown.length} checked${storeFilter ? (storeFilter === NO_STORE ? ' · no store yet' : ' · ' + storeFilter) : ''} · ${result.planned_count} planned dinners${draft ? ' · Preview is not saved yet' : ''}`;
@@ -313,17 +319,21 @@ let itemTarget = null;
 function openItem(item) {
   itemTarget = item;
   $('#itemInput').value = item.label;
-  $('#itemNote').textContent = item.kind === 'manual' ? '' : `From ${item.meals.join(', ')}. This changes this week's list only — the recipe stays the same.`;
-  $('#itemNote').hidden = item.kind === 'manual';
-  $('#deleteItem').hidden = item.kind !== 'manual';
+  $('#itemNote').textContent = item.kind === 'generated' ? `From ${item.meals.join(', ')}. This changes this week's list only — the recipe stays the same.` : '';
+  $('#itemNote').hidden = item.kind !== 'generated';
+  $('#deleteItem').hidden = item.kind === 'generated';
   $('#resetItem').hidden = !item.edited;
   $('#itemDialog').showModal();
   $('#itemInput').focus();
 }
 function saveItemLabel(submitter, label) {
   return action(submitter, async () => {
-    const item = itemTarget, start = groceryState.start;
-    await send('/groceries/label', 'POST', { week_start: start, kind: item.kind, id: item.id, key: item.key, label });
+    const item = itemTarget;
+    if (item.kind === 'list') {
+      await send('/lists/items', 'PATCH', { list_id: item.list_id, id: item.id, label });
+      $('#itemDialog').close(); return loadCustom();
+    }
+    await send('/groceries/label', 'POST', { week_start: groceryState.start, kind: item.kind, id: item.id, key: item.key, label });
     $('#itemDialog').close(); await loadGroceries();
   });
 }
@@ -332,6 +342,10 @@ $('#resetItem').onclick = event => saveItemLabel(event.currentTarget, '');
 $('#deleteItem').onclick = event => {
   if (!confirm(`Remove “${itemTarget.label}” from the list?`)) return;
   action(event.currentTarget, async () => {
+    if (itemTarget.kind === 'list') {
+      await send('/lists/items', 'DELETE', { list_id: itemTarget.list_id, id: itemTarget.id });
+      $('#itemDialog').close(); return loadCustom();
+    }
     await send('/groceries', 'DELETE', { week_start: groceryState.start, kind: 'manual', id: itemTarget.id });
     $('#itemDialog').close(); await loadGroceries();
   });
@@ -340,7 +354,7 @@ function openStore(item) {
   storeTarget = item;
   $('#storeTitle').textContent = `Where to buy ${item.label}`;
   $('#storeInput').value = item.store || '';
-  $('#storeChips').innerHTML = groceryState.result.stores.map(store => `<button type="button" class="chip pick-store ${store === item.store ? 'voted' : ''}" data-store="${esc(store)}">${esc(store)}</button>`).join('');
+  $('#storeChips').innerHTML = knownStores.map(store => `<button type="button" class="chip pick-store ${store === item.store ? 'voted' : ''}" data-store="${esc(store)}">${esc(store)}</button>`).join('');
   $$('.pick-store').forEach(button => button.onclick = () => { $('#storeInput').value = button.dataset.store; $('#storeForm').requestSubmit(); });
   $('#clearStore').hidden = !item.store;
   $('#storeDialog').showModal();
@@ -505,7 +519,7 @@ $('#acceptWeek').onclick = event => action(event.currentTarget, async () => {
   await send('/plan/week', 'POST', { week_start: monday(), days: draft, expected_revision: draftRevision });
   draft = null; await refresh(); toast('Week saved. Your grocery list is ready.');
 });
-$('#openGroceries').onclick = () => switchTab('groceries');
+$('#openGroceries').onclick = () => { setCurrentList(GROCERY); switchTab('groceries'); };
 $('#refreshGroceries').onclick = loadGroceries;
 $('#groceryForm').onsubmit = event => {
   event.preventDefault(); action(event.submitter, async () => {
@@ -523,10 +537,147 @@ $('#storeFilter').onchange = () => {
 };
 $('#storeForm').onsubmit = event => {
   event.preventDefault(); action(event.submitter, async () => {
-    const item = storeTarget, start = groceryState.start;
-    await send('/groceries/store', 'POST', { week_start: start, kind: item.kind, id: item.id, key: item.key, store: $('#storeInput').value });
+    const item = storeTarget;
+    if (item.kind === 'list') {
+      await send('/lists/items', 'PATCH', { list_id: item.list_id, id: item.id, store: $('#storeInput').value });
+      $('#storeDialog').close(); return loadCustom();
+    }
+    await send('/groceries/store', 'POST', { week_start: groceryState.start, kind: item.kind, id: item.id, key: item.key, store: $('#storeInput').value });
     $('#storeDialog').close(); await loadGroceries();
   });
 };
 $('#clearStore').onclick = () => { $('#storeInput').value = ''; $('#storeForm').requestSubmit(); };
+// ---- Lists tab ----
+function setCurrentList(id) {
+  currentList = String(id);
+  try { localStorage.setItem('familyMealsList', currentList); } catch {}
+}
+async function loadLists() {
+  const requestId = ++listsRequest;
+  showList();
+  try {
+    const result = await api('/lists');
+    if (requestId !== listsRequest) return;
+    lists = result.lists;
+    // A list deleted on another phone falls back to the Grocery List.
+    if (currentList !== GROCERY && !lists.some(l => String(l.id) === currentList)) { setCurrentList(GROCERY); showList(); }
+    renderListPicker();
+  } catch (error) { if (requestId === listsRequest) toast(error.message); }
+}
+function renderListPicker() {
+  const chip = (id, name, extra = '') => `<button type="button" class="list-chip${currentList === String(id) ? ' active' : ''}" data-list="${id}" aria-pressed="${currentList === String(id)}"><span class="name">${esc(name)}</span>${extra}</button>`;
+  $('#listPicker').innerHTML = chip(GROCERY, 'Grocery List') +
+    lists.map(l => { const left = l.item_count - l.checked_count; return chip(l.id, l.name, left ? `<span class="count" aria-label="${left} to go">${left}</span>` : ''); }).join('') +
+    '<button type="button" class="list-chip new" id="newList">+ New list</button>';
+  $$('[data-list]').forEach(button => button.onclick = () => selectList(button.dataset.list));
+  $('#newList').onclick = () => openListDialog(null);
+  $('#listPicker .active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+function selectList(id) {
+  if (String(id) === currentList) return;
+  setCurrentList(id); customFilter = ''; renderListPicker(); showList();
+}
+function showList() {
+  const grocery = currentList === GROCERY;
+  $('#groceryView').hidden = !grocery;
+  $('#customView').hidden = grocery;
+  if (grocery) loadGroceries();
+  else loadCustom();
+}
+async function loadCustom() {
+  const requestId = ++customRequest, id = currentList;
+  if (customState?.list && String(customState.list.id) !== id) { customState = null; $('#customList').innerHTML = ''; $('#customTitle').textContent = lists.find(l => String(l.id) === id)?.name || 'List'; }
+  $('#customStatus').textContent = 'Loading your list…';
+  try {
+    const result = await api('/lists/items?list=' + encodeURIComponent(id));
+    if (requestId !== customRequest) return;
+    customState = result;
+    const summary = lists.find(l => l.id === result.list.id);
+    if (summary) Object.assign(summary, result.list, { item_count: result.items.length, checked_count: result.items.filter(i => i.checked).length });
+    renderListPicker(); renderCustom();
+  } catch (error) {
+    if (requestId !== customRequest) return;
+    if (error.status === 404) { setCurrentList(GROCERY); toast('That list was deleted.'); return loadLists(); }
+    $('#customStatus').textContent = error.message;
+  }
+}
+function renderCustom() {
+  const { list, items, stores } = customState, grocery = list.kind === 'grocery';
+  knownStores = stores;
+  $('#storeOptions').innerHTML = stores.map(store => `<option value="${esc(store)}">`).join('');
+  $('#customTitle').textContent = list.name;
+  const listStores = grocery ? [...new Set(items.map(item => item.store).filter(Boolean))].sort((a, b) => a.localeCompare(b)) : [];
+  const unassigned = items.filter(item => !item.store).length;
+  if (!listStores.length || (customFilter === NO_STORE ? !unassigned : customFilter && !listStores.includes(customFilter))) customFilter = '';
+  $('#customStoreBar').hidden = !listStores.length;
+  $('#customStoreFilter').innerHTML = `<option value="">All stores (${items.length})</option>` +
+    listStores.map(store => `<option value="${esc(store)}" ${store === customFilter ? 'selected' : ''}>${esc(store)} (${items.filter(item => item.store === store).length})</option>`).join('') +
+    (listStores.length && unassigned ? `<option value="${NO_STORE}" ${customFilter === NO_STORE ? 'selected' : ''}>No store yet (${unassigned})</option>` : '');
+  const shown = items.map((item, i) => ({ item, i })).filter(({ item }) => !customFilter || (customFilter === NO_STORE ? !item.store : item.store === customFilter));
+  const checked = shown.filter(({ item }) => item.checked).length;
+  $('#customStatus').textContent = `${checked} of ${shown.length} checked · ${grocery ? 'Grocery list' : 'Basic list'}${customFilter ? (customFilter === NO_STORE ? ' · no store yet' : ' · ' + customFilter) : ''}`;
+  $('#clearChecked').hidden = !items.some(item => item.checked);
+  $('#customStore').hidden = !grocery;
+  $('#customForm').classList.toggle('basic', !grocery);
+  $('#customList').innerHTML = shown.map(({ item, i }) => `<div class="grocery-item ${item.checked ? 'checked' : ''}"><label><input type="checkbox" data-item="${i}" ${item.checked ? 'checked' : ''}><span><strong>${esc(item.label)}</strong></span></label>${grocery ? `<button class="chip store-chip ${item.store ? 'set' : ''}" data-item="${i}" aria-label="${item.store ? `Store for ${esc(item.label)}: ${esc(item.store)}. Change store` : `Choose a store for ${esc(item.label)}`}">${item.store ? esc(item.store) : '+ Store'}</button>` : ''}<button class="ghost edit-item" data-item="${i}" aria-label="Edit ${esc(item.label)}">${PENCIL}</button></div>`).join('')
+    || `<div class="card auth-card">${items.length ? 'Nothing for this store.' : 'Nothing on this list yet. Add the first item below.'}</div>`;
+  const target = i => ({ ...items[i], kind: 'list', list_id: list.id });
+  $$('#customList input').forEach(input => input.onchange = () => action(input, async () => {
+    const item = target(+input.dataset.item);
+    try { await send('/lists/items', 'PATCH', { list_id: list.id, id: item.id, checked: input.checked }); }
+    catch (error) { input.checked = !input.checked; throw error; }
+    await loadCustom();
+  }));
+  $$('#customList .edit-item').forEach(button => button.onclick = () => openItem(target(+button.dataset.item)));
+  $$('#customList .store-chip').forEach(button => button.onclick = () => openStore(target(+button.dataset.item)));
+}
+$('#customStoreFilter').onchange = () => {
+  customFilter = $('#customStoreFilter').value;
+  $('#customStore').value = customFilter && customFilter !== NO_STORE ? customFilter : '';
+  renderCustom();
+};
+$('#customForm').onsubmit = event => {
+  event.preventDefault(); action(event.submitter, async () => {
+    const grocery = customState.list.kind === 'grocery', store = grocery ? $('#customStore').value.trim() : '';
+    if (customFilter && (customFilter === NO_STORE ? store : store.toLowerCase() !== customFilter.toLowerCase())) customFilter = '';
+    await send('/lists/items', 'POST', { list_id: customState.list.id, label: $('#customItem').value, store });
+    $('#customItem').value = ''; $('#customItem').focus(); await loadCustom();
+  });
+};
+$('#clearChecked').onclick = event => {
+  const n = customState.items.filter(item => item.checked).length;
+  if (!confirm(`Remove ${n} checked item${n > 1 ? 's' : ''} from ${customState.list.name}?`)) return;
+  action(event.currentTarget, async () => { await send('/lists/items', 'DELETE', { list_id: customState.list.id, checked: true }); await loadCustom(); });
+};
+const KIND_HINTS = { grocery: 'Tag items with a store and filter the list by store.', basic: 'A simple checklist — just items, no stores.' };
+function paintKindHint() { $('#listKindHint').textContent = KIND_HINTS[$('#listForm [name=listKind]:checked').value]; }
+$$('#listForm [name=listKind]').forEach(input => input.onchange = paintKindHint);
+function openListDialog(list) {
+  editingList = list;
+  $('#listDialogTitle').textContent = list ? 'Edit list' : 'New list';
+  $('#saveList').textContent = list ? 'Save' : 'Create list';
+  $('#listName').value = list ? list.name : '';
+  $(`#listForm [name=listKind][value=${list ? list.kind : 'grocery'}]`).checked = true;
+  $('#deleteList').hidden = !list;
+  paintKindHint();
+  $('#listDialog').showModal();
+  if (!list) $('#listName').focus();
+}
+$('#editList').onclick = () => customState && openListDialog(customState.list);
+$('#listForm').onsubmit = event => {
+  event.preventDefault(); action(event.submitter, async () => {
+    const payload = { name: $('#listName').value, kind: $('#listForm [name=listKind]:checked').value };
+    if (editingList) await send('/lists', 'PUT', { id: editingList.id, ...payload });
+    else { const result = await send('/lists', 'POST', payload); setCurrentList(result.id); customFilter = ''; }
+    $('#listDialog').close(); await loadLists();
+  });
+};
+$('#deleteList').onclick = event => {
+  const list = editingList, n = customState?.items.length || 0;
+  if (!confirm(`Delete “${list.name}”${n ? ` and its ${n} item${n > 1 ? 's' : ''}` : ''}? This can't be undone.`)) return;
+  action(event.currentTarget, async () => {
+    await send('/lists', 'DELETE', { id: list.id });
+    setCurrentList(GROCERY); $('#listDialog').close(); toast(`Deleted ${list.name}.`); await loadLists();
+  });
+};
 if (pin) load();
