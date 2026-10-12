@@ -663,6 +663,8 @@ function notesHtml(r,n){
 let lastKey='';
 // Small "Built by Positive Tribes" credit, shown only on the sign-in and climber home screens.
 const PTAG='<p class="ptag">Built by <a href="https://positivetribes.org/" target="_blank" rel="noopener">Positive Tribes</a></p>';
+// "Get help" link for lead volunteers and staff only, so app problems reach Positive Tribes support directly.
+const GETHELP='<p class="ptag">Something not working? <a href="https://positivetribes.org/support" target="_blank" rel="noopener">Get help ↗</a></p>';
 function render(){
   const r=role(),p=state.user?me():null,wide=r==='admin';
   let body='',tabs='';
@@ -672,8 +674,8 @@ function render(){
     const T=TABS[r],cur=state.tab[r]||T[0][0];
     tabs=`<nav class="tabbar" aria-label="App sections">${T.map(([id,l])=>`<button data-act="tab" data-v="${id}" ${id===cur?'aria-current="page"':''}>${l}</button>`).join('')}</nav>`;
     if(r==='climber')body=cur==='home'?climberHome()+PTAG:cur==='find'?climberFind():climberProfile();
-    if(r==='lead')body=cur==='checkin'?leadCheckin():leadSchedule();
-    if(r==='admin')body=cur==='overview'?adminOverview():adminSites();
+    if(r==='lead')body=(cur==='checkin'?leadCheckin():leadSchedule())+GETHELP;
+    if(r==='admin')body=(cur==='overview'?adminOverview():adminSites())+GETHELP;
   }
   const sw=p&&p.roles.includes('lead')&&p.waiver?`<div class="switch" role="group" aria-label="Switch view"><button data-act="mode" data-v="climber" aria-pressed="${r==='climber'}">My climbing</button><button data-act="mode" data-v="lead" aria-pressed="${r==='lead'}">My site</button></div>`:'';
   const n=NOTES[r==='waiver'?'climber':r];
