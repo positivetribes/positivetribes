@@ -386,23 +386,21 @@ function waiverFlow(){
     <label class="f" for="ecPhone">Emergency contact phone<input type="tel" id="ecPhone" data-bind="ecPhone" value="${esc(W.ecPhone)}"></label>
     <button class="btn full" data-act="wstep" data-v="2" ${W.type&&W.ecName.trim()&&W.ecPhone.trim()?'':'disabled'}>Continue</button>`;
   if(W.step===2){
-    const ok=W.ack1&&W.ack2&&W.name.trim()&&(!W.proxy||W.proxyName.trim());
+    const ok=W.ack1&&W.ack2&&W.name.trim();
     return steps+`
     <h2>Participant waiver</h2>
     <div class="waiver" tabindex="0" aria-label="Waiver text">
       <span class="wt">Up ENDing Parkinson's Participant Waiver and Release of Liability</span>
       <p><b>Acknowledgment of risk</b>Indoor climbing carries risks such as falls, rope burns and strains, and may aggravate existing conditions.</p>
       <p><b>Medical responsibility</b>I have consulted my healthcare provider, or chosen not to. UEP volunteers and staff are not medical professionals.</p>
-      <p><b>Release of liability</b>I release UEP, its officers, staff, volunteers and sponsors from claims arising from my participation.</p>
-      <p class="hint">Prototype summary only. The full waiver text goes here, exactly as approved. Scroll inside this box to read it all.</p>
+      <p><b>Release and Waiver of Liability</b>In consideration of being permitted to utilize this scheduling system to participate in a climbing program offered by an affiliate of Up ENDing Parkinson's, I, for myself and on behalf of my heirs, assigns, personal representatives, and next of kin, hereby release, indemnify, and hold harmless Up ENDing Parkinson's, its officers, directors, staff, volunteers, sponsors, and partner gyms from any and all claims, demands, losses, or liabilities arising from or related to any injury, disability, or loss I may sustain while participating in such a climbing program.</p>
+      <p class="hint">Release text as proposed by UEP's counsel, with two typos corrected for review ("ENDnding" and a repeated "and"). The first two sections are summarized for the prototype.</p>
     </div>
-    <label class="check"><input type="checkbox" id="ack1" data-bind="ack1" ${W.ack1?'checked':''}><span>I have read the full waiver and understand I am giving up substantial rights.</span></label>
+    <label class="check"><input type="checkbox" id="ack1" data-bind="ack1" ${W.ack1?'checked':''}><span><b>Participant consent.</b> I have read this waiver and release of liability in full. I agree to its terms, and I fully understand that I am giving up substantial rights by signing it. I sign this waiver freely and voluntarily.</span></label>
     <label class="check"><input type="checkbox" id="ack2" data-bind="ack2" ${W.ack2?'checked':''}><span>I have consulted my healthcare provider about climbing, or have chosen not to.</span></label>
-    <label class="check"><input type="checkbox" id="proxy" data-bind="proxy" ${W.proxy?'checked':''}><span>I am signing for someone else, as their care partner.</span></label>
-    ${W.proxy?`<div class="grid2"><label class="f" for="proxyName">Your name<input type="text" id="proxyName" data-bind="proxyName" value="${esc(W.proxyName)}"></label>
-      <label class="f" for="proxyRel">Relationship<select id="proxyRel" data-bind="proxyRel">${['Spouse or partner','Adult child','Other family','Legal guardian'].map(o=>`<option ${W.proxyRel===o?'selected':''}>${o}</option>`).join('')}</select></label></div>`:''}
-    <label class="f" for="sig">Type ${W.proxy?'the climber\'s':'your'} full name to sign<input type="text" id="sig" data-bind="name" value="${esc(W.name)}" placeholder="${esc(p.name)}" autocomplete="off"></label>
-    <p class="muted small">Signed ${esc(fmtLong(today))}. Waiver version 2026-1. No drawing needed.</p>
+    ${W.type==='partner'?'<p class="muted small">You are signing your own waiver, for when you climb or help at a session.</p>':'<p class="muted small">A care partner can help with the phone, but the person climbing types their own name.</p>'}
+    <label class="f" for="sig">Signature<span class="row" style="flex-wrap:nowrap;gap:10px;align-items:flex-end"><input type="text" id="sig" data-bind="name" value="${esc(W.name)}" placeholder="Type your full name" autocomplete="off" style="flex:1"><span style="font-family:var(--body);font-weight:400;padding-bottom:12px">(Seal)</span></span></label>
+    <p class="muted small">Your typed name is your electronic signature. Date: ${esc(fmtLong(today))}. Waiver version 2026-2. We save your name, the date and time, and an exact copy of what you signed.</p>
     <div class="row"><button class="btn ghost" data-act="wstep" data-v="1">Back</button><button class="btn" style="flex:1" data-act="sign" ${ok?'':'disabled'}>Sign waiver</button></div>`;
   }
   return '';
@@ -463,7 +461,8 @@ function climberProfile(){
   const p=me();
   return `<h2>My details</h2>
     <div class="card"><div class="row"><b>Waiver</b>${p.waiver?'<span class="pill ok">Signed</span>':'<span class="pill bad">Not signed</span>'}</div>
-      <p class="muted small">${p.waiver?'Signed '+esc(fmt(fromIso(p.waiver)))+', version 2026-1. Covers every UEP site.':'Needed before booking.'}</p></div>
+      <p class="muted small">${!p.waiver?'Needed before booking.':p.signedAt?`Signed "${esc(p.signedName)}" on ${esc(p.signedAt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' at '+p.signedAt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'}))}, version ${p.wver}. Identity confirmed by the code sent to ${esc(state.user)}. A copy of the exact text is saved. Covers every UEP site.`:'Signed '+esc(fmt(fromIso(p.waiver)))+', version 2026-1. Covers every UEP site.'}</p>
+      ${p.signedAt?'<button class="btn quiet sm" data-act="wcopy" style="align-self:flex-start">View signed copy</button>':''}</div>
     <div class="card"><b>I'm signed up as</b><p>${p.type==='partner'?'A care partner':'A climber with Parkinson\'s'}</p></div>
     <div class="card"><b>Home site</b><p>${esc(site(p.home).city)} · ${esc(site(p.home).gym)}</p></div>
     <div class="card"><b>Address</b><p>${esc(p.address||'Not added')}</p></div>
@@ -701,7 +700,8 @@ document.addEventListener('click',e=>{
   else if(a==='tab'){state.tab[role()]=v}
   else if(a==='wstep')W.step=+v;
   else if(a==='wtype'){W.type=v}
-  else if(a==='sign'){const p=me();p.waiver=iso(today);p.ec=`${W.ecName}, ${W.ecPhone}`;p.type=W.type;p.address=W.address;say('Waiver signed. You can book any session now.');state.tab.climber='find'}
+  else if(a==='wcopy'){say('Opens a PDF of the exact waiver signed, with name, date, time and version. Coming in the full build.')}
+  else if(a==='sign'){const p=me();p.waiver=iso(today);p.ec=`${W.ecName}, ${W.ecPhone}`;p.type=W.type;p.address=W.address;p.signedAt=new Date();p.signedName=W.name.trim();p.wver='2026-2';say('Waiver signed. You can book any session now.');state.tab.climber='find'}
   else if(a==='miss'){me().missed.push(v);say('Got it. Your spot is free for someone on the waitlist.')}
   else if(a==='undomiss'){const p=me();p.missed=p.missed.filter(x=>x!==v);say('Great, you\'re back on the list.')}
   else if(a==='stand'){const p=me(),s=sess(v);p.standing.push(v);s.booked++;say(`Booked every week: ${ruleText(s.rule)}.`)}
@@ -746,7 +746,7 @@ document.addEventListener('input',e=>{
   if(k==='home'){me().home=val;return}
   if(k in W){W[k]=val;if(e.target.type==='checkbox'||e.target.tagName==='SELECT')render();else{
       const b=$('[data-act="wstep"][data-v="2"]');if(b)b.disabled=!(W.type&&W.ecName.trim()&&W.ecPhone.trim());
-      const s=$('[data-act="sign"]');if(s)s.disabled=!(W.ack1&&W.ack2&&W.name.trim()&&(!W.proxy||W.proxyName.trim()));}
+      const s=$('[data-act="sign"]');if(s)s.disabled=!(W.ack1&&W.ack2&&W.name.trim());}
     return}
   if(k.startsWith('d.')&&D){const f=k.slice(2);D[f]=e.target.type==='checkbox'?val:(f==='nth'||f==='mday'?+val:val);
     if(f==='name'){const b=$('[data-act="savesess"]');if(b)b.disabled=!val.trim();return}
