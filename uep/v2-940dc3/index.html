@@ -84,6 +84,9 @@ p{margin:0}
 
 .card{background:var(--raised);border:1px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .muted{color:var(--muted);font-size:15px}
+.ptag{margin-top:28px;text-align:center;font-size:12px;color:var(--muted);opacity:.85}
+.ptag a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line)}
+.ptag a:hover,.ptag a:focus-visible{color:var(--fg)}
 .small{font-size:14px}
 .row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .stack{display:flex;flex-direction:column;gap:12px}
@@ -658,15 +661,17 @@ function notesHtml(r,n){
   return `<aside class="notes">${tryBox}${intro}${foot}</aside>`;
 }
 let lastKey='';
+// Small "Built by Positive Tribes" credit, shown only on the sign-in and climber home screens.
+const PTAG='<p class="ptag">Built by <a href="https://positivetribes.org/" target="_blank" rel="noopener">Positive Tribes</a></p>';
 function render(){
   const r=role(),p=state.user?me():null,wide=r==='admin';
   let body='',tabs='';
-  if(r==='out')body=signIn();
+  if(r==='out')body=signIn()+PTAG;
   else if(r==='waiver')body=waiverFlow();
   else{
     const T=TABS[r],cur=state.tab[r]||T[0][0];
     tabs=`<nav class="tabbar" aria-label="App sections">${T.map(([id,l])=>`<button data-act="tab" data-v="${id}" ${id===cur?'aria-current="page"':''}>${l}</button>`).join('')}</nav>`;
-    if(r==='climber')body=cur==='home'?climberHome():cur==='find'?climberFind():climberProfile();
+    if(r==='climber')body=cur==='home'?climberHome()+PTAG:cur==='find'?climberFind():climberProfile();
     if(r==='lead')body=cur==='checkin'?leadCheckin():leadSchedule();
     if(r==='admin')body=cur==='overview'?adminOverview():adminSites();
   }
