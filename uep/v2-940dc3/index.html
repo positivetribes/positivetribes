@@ -299,7 +299,7 @@ const S=(id,siteId,name,rule,from,to,cap,booked,tbc=false,wait=0)=>({id,site:sit
 const state={
   user:null, mode:null, tab:{}, toast:'',
   login:{step:1,email:'',code:'',sent:''},
-  waiver:{step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dob:'',ecName:'',ecPhone:'',type:'',address:''},
+  waiver:{step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dobM:'',dobY:'',ecName:'',ecPhone:'',type:'',address:''},
   findSite:'gol',
   sessions:[
     S('s1','gol','Morning climb',{freq:'weekly',days:[3],interval:1},'10:00','11:30',14,14,false,2),
@@ -331,7 +331,7 @@ const state={
     {n:'Alice Burke',site:'bou',last:'3 weeks ago',was:'Every other Thursday'},
     {n:'Tom Greer',site:'chi',last:'3 weeks ago',was:'Every Monday'}
   ],
-  nudged:new Set(), siteFilter:'All'
+  nudged:new Set(), filter:{by:'all',v:'',gyms:['gol']}
 };
 const WEEKS=[[96,61],[104,66],[99,58],[112,72],[108,70],[118,74],[121,79],[126,82]];
 
@@ -381,9 +381,10 @@ function waiverFlow(){
       <div class="chips" role="group" aria-label="I'm signing up as"><button class="chip" data-act="wtype" data-v="climber" aria-pressed="${W.type==='climber'}">A climber with Parkinson's</button><button class="chip" data-act="wtype" data-v="partner" aria-pressed="${W.type==='partner'}">A care partner</button></div>
       <p class="muted small" style="margin-top:6px">Care partners have their own account, so UEP can count both accurately.</p></div>
     <div class="grid2">
-      <label class="f" for="dob">Date of birth<input type="date" id="dob" data-bind="dob" value="${esc(W.dob)}"></label>
-      <label class="f" for="home">Home site<select id="home" data-bind="home">${SITES.map(s=>`<option value="${s.id}" ${p.home===s.id?'selected':''}>${esc(s.city)}</option>`).join('')}</select></label>
+      <label class="f" for="dobM">Birth month<select id="dobM" data-bind="dobM"><option value="">Month</option>${MONTHS.map((m,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${W.dobM===v?'selected':''}>${m}</option>`}).join('')}</select></label>
+      <label class="f" for="dobY">Birth year<select id="dobY" data-bind="dobY"><option value="">Year</option>${Array.from({length:90},(_,i)=>String(today.getFullYear()-18-i)).map(y=>`<option value="${y}" ${W.dobY===y?'selected':''}>${y}</option>`).join('')}</select></label>
     </div>
+    <label class="f" for="home">Home site<select id="home" data-bind="home">${SITES.map(s=>`<option value="${s.id}" ${p.home===s.id?'selected':''}>${esc(s.city)}</option>`).join('')}</select></label>
     <label class="f" for="address">Home address<input type="text" id="address" data-bind="address" value="${esc(W.address)}" autocomplete="street-address"></label>
     <label class="f" for="ecName">Emergency contact name<input type="text" id="ecName" data-bind="ecName" value="${esc(W.ecName)}"></label>
     <label class="f" for="ecPhone">Emergency contact phone<input type="tel" id="ecPhone" data-bind="ecPhone" value="${esc(W.ecPhone)}"></label>
@@ -547,7 +548,23 @@ function leadSchedule(){
 }
 
 /* ---------- Screens: admin ---------- */
-function sitesView(){return state.siteFilter==='All'?SITES:SITES.filter(s=>s.region===state.siteFilter)}
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const FKEY={region:s=>s.region,state:s=>s.city.split(', ')[1],city:s=>s.city};
+const FNAME={all:'All sites',region:'Region',state:'State',city:'City',gyms:'Gyms'};
+const fopts=by=>[...new Set(SITES.map(FKEY[by]))].sort();
+function sitesView(){const F=state.filter;
+  if(F.by==='gyms')return SITES.filter(s=>F.gyms.includes(s.id));
+  if(F.by==='all')return SITES;
+  return SITES.filter(s=>FKEY[F.by](s)===F.v)}
+function filterTitle(ss){const F=state.filter;
+  if(F.by==='all')return 'All sites';
+  if(F.by==='gyms')return ss.length===1?ss[0].gym+', '+ss[0].city.split(',')[0]:ss.length+' gyms';
+  return F.by==='region'?F.v+' region':F.v}
+function filterBar(){const F=state.filter;
+  let second='';
+  if(F.by==='region'||F.by==='state'||F.by==='city')second=`<label class="f" for="fval">${FNAME[F.by]}<select id="fval" data-bind="fval">${fopts(F.by).map(o=>`<option ${F.v===o?'selected':''}>${esc(o)}</option>`).join('')}</select></label>`;
+  return `<div class="card"><div class="grid2"><label class="f" for="fby">Show report for<select id="fby" data-bind="fby">${['all','region','state','city','gyms'].map(k=>`<option value="${k}" ${F.by===k?'selected':''}>${k==='gyms'?'One or more gyms':k==='all'?'All sites':'A '+FNAME[k].toLowerCase()}</option>`).join('')}</select></label>${second}</div>
+    ${F.by==='gyms'?`<div class="chips" role="group" aria-label="Gyms to include" style="margin-top:10px">${SITES.map(s=>`<button class="chip" data-act="fgym" data-v="${s.id}" aria-pressed="${F.gyms.includes(s.id)}">${esc(s.gym==='Partner gym'?s.city:s.gym)}</button>`).join('')}</div><p class="muted small">Tap gyms to add or remove them. At least one stays selected.</p>`:''}</div>`}
 function adminOverview(){
   const ss=sitesView();
   const sum=k=>ss.reduce((a,s)=>a+s[k],0);
@@ -558,8 +575,8 @@ function adminOverview(){
   const y=v=>H-24-(v/max)*(H-40);
   const bars=WEEKS.map(([b,c],i)=>{const x=pad+i*bw+bw*.16,w=bw*.32;return `<rect x="${x.toFixed(1)}" y="${y(b).toFixed(1)}" width="${w.toFixed(1)}" height="${(H-24-y(b)).toFixed(1)}" rx="3" fill="var(--bar2)"><title>Booked ${b}</title></rect><rect x="${(x+w+2).toFixed(1)}" y="${y(c).toFixed(1)}" width="${w.toFixed(1)}" height="${(H-24-y(c)).toFixed(1)}" rx="3" fill="var(--bar1)"><title>Checked in ${c}</title></rect><text x="${(x+w).toFixed(1)}" y="${H-6}" text-anchor="middle">${esc(fmt(addDays(weekStart(today),-(7*(WEEKS.length-1-i)))).replace(/^\w+, /,''))}</text>`}).join('');
   const grid=[0,35,70,105,140].map(v=>`<line x1="${pad}" x2="${W-6}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pad-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`).join('');
-  return `<div class="row"><div><h2>All sites, last 4 weeks</h2><p class="muted">Showing ${ss.length} of 84 sites (sample data).</p></div>
-    <div class="chips">${['All','East','Central','Mountain','West'].map(r=>`<button class="chip" data-act="region" data-v="${r}" aria-pressed="${state.siteFilter===r}">${r}</button>`).join('')}</div></div>
+  return `<div><h2>${esc(filterTitle(ss))}, last 4 weeks</h2><p class="muted">Showing ${ss.length} of 84 sites (sample data). Every report and export follows this filter.</p></div>
+  ${filterBar()}
   <div class="kpis">
     <div class="kpi"><span class="n">${checked}</span><span class="l">Attendance (check-ins)</span><span class="small muted">${booked} booked</span></div>
     <div class="kpi"><span class="n">${act+cp}</span><span class="l">Unique people, active</span><span class="small muted">${act} climbers · ${cp} care partners</span></div>
@@ -581,7 +598,7 @@ function adminOverview(){
       <div class="scroll-x"><table><tbody>
         <tr><td>Locations</td><td class="num"><b>84</b></td></tr>
         <tr><td>Locations that are free to climb</td><td class="num"><b>52</b></td></tr>
-        <tr><td>Unique people, active (climbers · care partners)</td><td class="num"><b>1,080 · 214</b></td></tr>
+        <tr><td>Unique people, active (climbers · care partners)</td><td class="num"><b>730 · 145</b></td></tr>
         <tr><td>Sessions held</td><td class="num"><b>3,120</b></td></tr>
         <tr><td>Attendance (check-ins)</td><td class="num"><b>24,860</b></td></tr>
       </tbody></table></div></div>
@@ -615,16 +632,16 @@ const TOUR=[
 ];
 const NOTES={
   out:{h:'One sign-in, no role picker',p:'Climbers, care partners, lead volunteers and staff all sign in the same way. The system looks up the account and opens the right view.',
-    b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
+    b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two or more leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
     t:'Sign in as Sam to see sign-up and the waiver. Then try Pat, a lead volunteer.',r:'Sign-in'},
   climber:{h:'Book once, stay booked',p:'Climbers pick a regular session once and stay booked every week, instead of booking week by week.',
     b:['A text goes out the day before, with a one-tap link to cancel and free the spot.','Full sessions offer a waitlist, and the lead volunteer is emailed.','Climbers can book at other sites without a second sign-up.','Sign-up is always free through UEP. Some gyms charge their own fee.'],
     t:'Tap "I can\'t make it this time" on the next climb, then book a one-time visit at another site.',r:'Climbers and care partners'},
   lead:{h:'Lead volunteers run their own site',p:'Leads check people in, see who is waiting, and change their own schedule, so Molly doesn\'t have to do it for every site.',
-    b:['Check-in is a tap per person, and care partners are marked.','A waitlist alert says when a session is full, so the site can add spots or volunteers.','Leads can create and edit sessions, including first-Tuesday patterns and skipped dates.','Two leads can share one site.'],
+    b:['Check-in is a tap per person, and care partners are marked.','A waitlist alert says when a session is full, so the site can add spots or volunteers.','Leads can create and edit sessions, including first-Tuesday patterns and skipped dates.','A site can have two or more leads.'],
     t:'Edit Morning climb, raise the spots, and watch the waitlist move in.',r:'Lead volunteers'},
   admin:{h:'Every site in one view',p:'Molly sees attendance, active people and sessions across all 84 locations without logging into separate accounts.',
-    b:['Climbers and care partners are counted separately, for grants and headcounts.','Active means attended in the last 6 months.','One-click exports for the board and for sites that report to funders.','Waitlists show where the program is growing.'],
+    b:['Climbers and care partners are counted separately, for grants and headcounts.','Active means attended in the last 6 months.','Reports filter by one or more gyms, or by city, state or region.','One-click exports for the board and for sites that report to funders.','Waitlists show where the program is growing.'],
     t:'Download the board report, then export attendance for one site.',r:'Reports'}
 };
 
@@ -708,7 +725,7 @@ document.addEventListener('click',e=>{
   else if(a==='wstep')W.step=+v;
   else if(a==='wtype'){W.type=v}
   else if(a==='wcopy'){say('Opens a PDF of the exact waiver signed, with name, date, time and version. Coming in the full build.')}
-  else if(a==='sign'){const p=me();p.waiver=iso(today);p.ec=`${W.ecName}, ${W.ecPhone}`;p.type=W.type;p.address=W.address;p.signedAt=new Date();p.signedName=W.name.trim();p.wver='2026-2';say('Waiver signed. You can book any session now.');state.tab.climber='find'}
+  else if(a==='sign'){const p=me();p.waiver=iso(today);p.ec=`${W.ecName}, ${W.ecPhone}`;p.type=W.type;p.address=W.address;p.birth=W.dobY&&W.dobM?W.dobY+'-'+W.dobM:'';p.signedAt=new Date();p.signedName=W.name.trim();p.wver='2026-2';say('Waiver signed. You can book any session now.');state.tab.climber='find'}
   else if(a==='miss'){me().missed.push(v);say('Got it. Your spot is free for someone on the waitlist.')}
   else if(a==='undomiss'){const p=me();p.missed=p.missed.filter(x=>x!==v);say('Great, you\'re back on the list.')}
   else if(a==='stand'){const p=me(),s=sess(v);p.standing.push(v);s.booked++;say(`Booked every week: ${ruleText(s.rule)}.`)}
@@ -730,7 +747,7 @@ document.addEventListener('click',e=>{
   else if(a==='dskip'){const D=state.draft;D.skip=D.skip.includes(v)?D.skip.filter(x=>x!==v):[...D.skip,v]}
   else if(a==='savesess'&&state.draft.editId){const D=state.draft,s=sess(D.editId),r=draftRule(D);if(D.freq==='weekly'&&s.rule.freq==='weekly')r.start=s.rule.start;Object.assign(s,{name:D.name.trim(),rule:r,from:D.from,to:D.to,cap:+D.cap||s.cap,tbc:D.tbc});let n=0;if(s.booked<s.cap&&s.wait){n=Math.min(s.wait,s.cap-s.booked);s.wait-=n;s.booked+=n}state.draft=null;say(n?`Changes saved. ${n} ${n===1?'person':'people'} moved off the waitlist and got a text.`:'Changes saved. People booked into this session get a text about the change.')}
   else if(a==='savesess'){const D=state.draft;state.sessions.push({id:'n'+Date.now(),site:me().lead,name:D.name.trim(),rule:draftRule(D),from:D.from,to:D.to,cap:+D.cap||12,booked:0,tbc:D.tbc});state.draft=null;say('Session saved. Climbers can book it now.')}
-  else if(a==='region')state.siteFilter=v;
+  else if(a==='fgym'){const F=state.filter;F.gyms=F.gyms.includes(v)?(F.gyms.length>1?F.gyms.filter(x=>x!==v):F.gyms):[...F.gyms,v]}
   else if(a==='nudge'){state.nudged.add(+v);say('Note sent: "We miss you at climbing. Want to come back this week?"')}
   render();
   if(['tab','verify','signout','mode','wstep','sign','fill','sendcode','tourgo'].includes(a)){const s=$('#screen');if(s)s.scrollTop=0}
@@ -739,7 +756,7 @@ function doVerify(){
   const L=state.login,k=L.sent.toLowerCase();
   if(!state.people[k]){state.people[k]={name:k.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),roles:['climber'],type:'',address:'',wl:[],home:'gol',waiver:null,ec:'',standing:[],once:[],missed:[]}}
   state.user=k;state.mode=null;L.step=1;L.email='';L.code='';
-  state.waiver={step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dob:'',ecName:'',ecPhone:'',type:'',address:''};
+  state.waiver={step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dobM:'',dobY:'',ecName:'',ecPhone:'',type:'',address:''};
   state.findSite=me().home||'gol';
   const r=role();say(r==='admin'?'Signed in. You have admin access to every site.':r==='lead'?'Signed in. You and Jo Kim lead the Golden site, and you climb there too.':r==='waiver'?'Signed in. One quick step before your first climb.':'Signed in.');
 }
@@ -751,6 +768,8 @@ document.addEventListener('input',e=>{
   if(k==='walkin'){state.walkin=val;const b=$('[data-act="addwalk"]');if(b)b.disabled=!val.trim();return}
   if(k==='findSite'){state.findSite=val;render();return}
   if(k==='home'){me().home=val;return}
+  if(k==='fby'){const F=state.filter;F.by=val;if(FKEY[val])F.v=fopts(val)[0];render();return}
+  if(k==='fval'){state.filter.v=val;render();return}
   if(k in W){W[k]=val;if(e.target.type==='checkbox'||e.target.tagName==='SELECT')render();else{
       const b=$('[data-act="wstep"][data-v="2"]');if(b)b.disabled=!(W.type&&W.ecName.trim()&&W.ecPhone.trim());
       const s=$('[data-act="sign"]');if(s)s.disabled=!(W.ack1&&W.ack2&&W.name.trim());}
