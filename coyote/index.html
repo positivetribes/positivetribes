@@ -36,28 +36,8 @@
   --body:'Montserrat',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
   --ease:.3s;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#1e201d; --surface:#2a2d29; --raised:#30332f; --sunk:#252824;
-  --fg:#ededed; --text:#d3d6d9; --muted:#a3adba; --line:#464a44;
-  --accent:#d0a236; --accent-fg:#2a2d29; --accent-soft:#3c3524; --accent-hover:#ededed;
-  --gold:#d0a236; --rust:#d08a6c;
-  --hero:#373a36; --hero-fg:#ededed; --hero-eyebrow:#d0a236; --hero-btn:#d0a236; --hero-btn-fg:#2a2d29; --hero-btn-hover:#ededed;
-  --toast-bg:#ededed; --toast-fg:#2a2d29;
-  --warn:#e5b95c; --warn-bg:#3b3118; --ok:#8bc79b; --ok-bg:#1f3325; --bad:#f0a09a; --bad-bg:#43251f;
-  --h0:#363934; --h1:#5c4a2a; --h2:#8a6a2a; --h3:#b88a3a; --h4:#e2bb5c;
-  --shadow-head:0 5px 30px rgba(0,0,0,.35); --shadow-card:0 0 10px rgba(0,0,0,.45);
-  color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#1e201d; --surface:#2a2d29; --raised:#30332f; --sunk:#252824;
-  --fg:#ededed; --text:#d3d6d9; --muted:#a3adba; --line:#464a44;
-  --accent:#d0a236; --accent-fg:#2a2d29; --accent-soft:#3c3524; --accent-hover:#ededed;
-  --gold:#d0a236; --rust:#d08a6c;
-  --hero:#373a36; --hero-fg:#ededed; --hero-eyebrow:#d0a236; --hero-btn:#d0a236; --hero-btn-fg:#2a2d29; --hero-btn-hover:#ededed;
-  --toast-bg:#ededed; --toast-fg:#2a2d29;
-  --warn:#e5b95c; --warn-bg:#3b3118; --ok:#8bc79b; --ok-bg:#1f3325; --bad:#f0a09a; --bad-bg:#43251f;
-  --h0:#363934; --h1:#5c4a2a; --h2:#8a6a2a; --h3:#b88a3a; --h4:#e2bb5c;
-  --shadow-head:0 5px 30px rgba(0,0,0,.35); --shadow-card:0 0 10px rgba(0,0,0,.45);
-  color-scheme:dark}
+/* Light only: projectcoyote.org has no dark mode, so the prototype stays white in every viewer setting. */
+:root{color-scheme:light}
 
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font:400 16px/1.6 var(--body);padding-inline:16px;padding-block:28px 48px}
