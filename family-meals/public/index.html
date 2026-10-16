@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f7f4ed">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Family Meals">
-  <meta name="description" content="Your family's dinner plans, favorites, and grocery list.">
+  <meta name="description" content="Your family's dinner plans, favorites, grocery list, and chores.">
   <title>Family Meals</title>
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="/apple-touch-icon.png">
@@ -25,7 +25,7 @@
   <header class="topbar"><div><p class="eyebrow">OUR TABLE</p><h1>Family Meals</h1><p class="sub">Plan the week. Remember the favorites.</p></div><div class="header-actions"><button class="avatar" id="memberButton" aria-label="Open profile and settings">?</button></div></header>
   <section id="locked" class="card auth-card"><span class="big-icon">🍽️</span><h2>Welcome home</h2><p>Enter your family PIN once on this device.</p><form id="pinForm" class="stack"><label class="sr-only" for="pin">Family PIN</label><input id="pin" type="password" inputmode="numeric" placeholder="Family PIN" required><button class="primary">Open Family Meals</button></form><p id="setupMessage" class="hint" role="alert"></p></section>
   <div id="app" hidden>
-    <nav class="tabs" aria-label="Family Meals"><button class="tab active" data-tab="week">This Week</button><button class="tab" data-tab="ideas">Meal Ideas</button><button class="tab" data-tab="favorites">Favorites</button><button class="tab" data-tab="groceries">Lists</button></nav>
+    <nav class="tabs" aria-label="Family Meals"><button class="tab active" data-tab="week">This Week</button><button class="tab" data-tab="ideas">Meal Ideas</button><button class="tab" data-tab="favorites">Favorites</button><button class="tab" data-tab="groceries">Lists</button><button class="tab" data-tab="chores">Chores</button></nav>
     <section id="week" class="panel active">
       <div class="section-head"><div><p class="eyebrow">DINNER PLAN</p><h2 id="weekTitle">This Week</h2></div><div class="week-nav"><button class="ghost" data-week-offset="-1" aria-label="Previous week">‹</button><button class="week-home" data-week-home type="button" aria-label="Go to this week"><span class="week-home-text">This week</span></button><button class="ghost" id="nextWeek" data-week-offset="1" aria-label="Next week">›</button></div></div>
       <p id="weekLabel" class="hint"></p>
@@ -61,6 +61,15 @@
         <form id="customForm" class="add-grocery"><label class="sr-only" for="customItem">Add an item</label><input id="customItem" maxlength="200" placeholder="Add an item…" autocomplete="off" required><input id="customStore" maxlength="40" list="storeOptions" autocomplete="off" aria-label="Store (optional)" placeholder="Store (optional)"><button class="primary">Add</button></form>
       </div>
     </section>
+    <section id="chores" class="panel">
+      <div class="section-head"><div><p class="eyebrow">FAMILY JOBS</p><h2 id="choreTitle">Today</h2></div><div class="week-nav"><button class="ghost" data-chore-step="-1" aria-label="Previous day">‹</button><button class="week-home" id="choreToday" type="button"><span class="week-home-text">Today</span></button><button class="ghost" data-chore-step="1" aria-label="Next day">›</button></div></div>
+      <p id="choreLabel" class="hint"></p>
+      <div class="week-tools"><div class="segmented two chore-scope" role="radiogroup" aria-label="Which chores to show"><label><input type="radio" name="choreScope" value="all" checked><span>Everyone</span></label><label><input type="radio" name="choreScope" value="mine"><span>Mine</span></label></div><button class="primary small" id="addChore">+ Add chore</button></div>
+      <p id="choreStatus" class="hint" role="status"></p>
+      <div id="choreList" class="week-list"></div>
+      <div id="choreSummary" class="card chore-summary" hidden></div>
+      <details id="choreRecent" class="history" hidden><summary>Recent activity</summary><ul id="choreRecentList"></ul></details>
+    </section>
   </div>
 </main>
 <dialog id="memberDialog"><form id="profileForm" class="modal profile"><div class="profile-head"><div class="photo-picker"><label class="avatar profile-avatar" id="profileAvatar" for="photoInput" aria-label="Choose a profile photo">?</label><input id="photoInput" type="file" accept="image/*" class="sr-only" tabindex="-1"><div class="photo-actions"><label for="photoInput" class="link-button" id="photoAction">Add photo</label><button type="button" class="link-button danger" id="removePhoto" hidden>Remove</button></div></div><div><h2 id="profileTitle" tabindex="-1">Profile</h2><p class="hint" id="profileHint">Settings for you on this device.</p></div></div>
@@ -91,6 +100,14 @@
   <fieldset class="setting"><legend>Type</legend><div class="segmented two" role="radiogroup"><label><input type="radio" name="listKind" value="grocery" checked><span>Grocery list</span></label><label><input type="radio" name="listKind" value="basic"><span>Basic list</span></label></div><small class="hint" id="listKindHint"></small></fieldset>
   <label class="switch-row"><span><span class="switch-title">Share with the whole family</span><small class="hint" id="listShareHint"></small></span><input type="checkbox" class="switch" id="listShared" role="switch"></label>
   <div class="actions"><button type="button" class="ghost danger" id="deleteList">Delete list</button><button type="button" class="ghost close-dialog">Cancel</button><button class="primary" id="saveList">Create list</button></div>
+</form></dialog>
+<dialog id="choreDialog"><form id="choreForm" class="modal"><h2 id="choreDialogTitle">New chore</h2>
+  <label>Chore<input id="choreName" maxlength="80" autocomplete="off" placeholder="Empty the dishwasher, Walk the dog…" required></label>
+  <fieldset class="setting"><legend>How often</legend><div class="segmented" role="radiogroup"><label><input type="radio" name="choreRepeat" value="once" checked><span>Once</span></label><label><input type="radio" name="choreRepeat" value="daily"><span>Daily</span></label><label><input type="radio" name="choreRepeat" value="weekly"><span>Weekly</span></label></div></fieldset>
+  <fieldset class="setting" id="choreDaysField"><legend>On these days</legend><div class="chips day-chips" id="choreDays"></div></fieldset>
+  <label><span id="choreDateLabel">Due date</span><input id="choreDate" type="date" required></label>
+  <fieldset class="setting"><legend>Who is it for?</legend><div class="chips" id="choreWho"></div><small class="hint" id="choreWhoHint"></small></fieldset>
+  <div class="actions"><button type="button" class="ghost danger" id="deleteChore">Delete</button><button type="button" class="ghost close-dialog">Cancel</button><button class="primary" id="saveChore">Add chore</button></div>
 </form></dialog>
 <dialog id="storeDialog"><form id="storeForm" class="modal"><h2 id="storeTitle">Choose a store</h2><div id="storeChips" class="chips"></div><label>Store<input id="storeInput" maxlength="40" list="storeOptions" autocomplete="off" placeholder="Costco, Target, Whole Foods…"></label><div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button type="button" class="ghost" id="clearStore">No store</button><button class="primary">Save</button></div></form></dialog>
 <dialog id="rateDialog"><form id="rateForm" class="modal"><h2 id="rateTitle">Rate meal</h2><div class="stars" id="stars"></div><label class="sr-only" for="ratingComment">Rating notes</label><textarea id="ratingComment" maxlength="2000" placeholder="What should we remember next time?"></textarea><div class="actions"><button type="button" class="ghost close-dialog">Cancel</button><button class="primary">Save rating</button></div></form></dialog>

@@ -498,3 +498,70 @@ test('list sharing: the creator shares with every profile and can revoke; only t
     assert.deepEqual((await jo('/lists')).body.lists, []);
   } finally { sqlite.close(); }
 });
+
+test('chores: one-time, daily, and weekly schedules; completions per day; shared by the family', async () => {
+  const { call, sqlite } = await fixture();
+  try {
+    await call('/members', 'POST', { name: 'Alex' }); await call('/members', 'POST', { name: 'Sam' });
+    const week = start;  // Monday 2026-09-28
+    assert.deepEqual((await call('/chores?week=' + week)).body.chores, []);
+    assert.equal((await call('/chores?week=2026-09-29')).status, 400);  // must be a Monday
+    const dishes = await call('/chores', 'POST', { title: '  Empty   dishwasher ', repeat: 'daily', start_date: week, assignees: ['sam'] });
+    const trash = await call('/chores', 'POST', { title: 'Trash out', repeat: 'weekly', days: [4, 1, 4], start_date: week });
+    const garage = await call('/chores', 'POST', { title: 'Clean garage', repeat: 'once', start_date: '2026-09-30' });
+    assert.deepEqual([dishes.status, trash.status, garage.status], [201, 201, 201]);
+    const listed = (await call('/chores?week=' + week)).body.chores;
+    assert.deepEqual(listed.map(c => [c.title, c.repeat, c.days, c.assignees, c.created_by]), [['Empty dishwasher', 'daily', [], ['Sam'], 'Alex'], ['Trash out', 'weekly', [1, 4], [], 'Alex'], ['Clean garage', 'once', [], [], 'Alex']]);
+    // Validation.
+    for (const bad of [{ title: '', repeat: 'daily' }, { title: 'x', repeat: 'monthly' }, { title: 'x', repeat: 'weekly', days: [] }, { title: 'x', repeat: 'weekly', days: [8] },
+      { title: 'x', repeat: 'daily', start_date: 'soon' }, { title: 'x'.repeat(81), repeat: 'daily' }, { title: 'x', repeat: 'daily', assignees: ['Nobody'] }, { title: 'x', repeat: 'daily', assignees: 'Sam' }])
+      assert.equal((await call('/chores', 'POST', { start_date: week, ...bad })).status, bad.assignees ? (bad.assignees === 'Sam' ? 400 : 404) : 400, JSON.stringify(bad));
+    // Completing: only on scheduled days, first person keeps the credit, unchecking clears it.
+    assert.equal((await call('/chores/done', 'POST', { chore_id: trash.body.id, date: '2026-09-29', done: true })).status, 400);   // Tuesday
+    assert.equal((await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: '2026-09-27', done: true })).status, 400);  // before it started
+    assert.equal((await call('/chores/done', 'POST', { chore_id: garage.body.id, date: '2026-09-29', done: true })).status, 400);
+    assert.equal((await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: week, done: 'yes' })).status, 400);
+    assert.equal((await call('/chores/done', 'POST', { chore_id: 999, date: week, done: true })).status, 404);
+    assert.equal((await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: week, done: true }, true, 'Sam')).status, 200);
+    await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: week, done: true }, true, 'Alex');
+    await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: '2026-09-29', done: true });
+    await call('/chores/done', 'POST', { chore_id: garage.body.id, date: '2026-09-30', done: true });
+    let state = (await call('/chores?week=' + week)).body;
+    assert.deepEqual(state.done.map(d => [d.chore_id, d.due_date, d.done_by]), [[dishes.body.id, week, 'Sam'], [dishes.body.id, '2026-09-29', 'Alex'], [garage.body.id, '2026-09-30', 'Alex']]);
+    assert.equal(state.recent.length, 3); assert.equal(state.recent[0].title, 'Clean garage');
+    // A later week only carries that week's completions, plus one-time history.
+    assert.deepEqual((await call('/chores?week=2026-10-05')).body.done.map(d => d.chore_id), [garage.body.id]);
+    await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: week, done: false });
+    assert.equal((await call('/chores?week=' + week)).body.done.filter(d => d.chore_id === dishes.body.id).length, 1);
+    // Editing keeps history; deleting removes the chore and its completions.
+    assert.equal((await call('/chores', 'PUT', { id: dishes.body.id, title: 'Dishwasher', repeat: 'daily', start_date: week, assignees: ['Alex', 'sam'] })).status, 200);
+    assert.deepEqual((await call('/chores?week=' + week)).body.chores[0].assignees, ['Alex', 'Sam']);
+    assert.equal((await call('/chores', 'PUT', { id: 999, title: 'x', repeat: 'daily', start_date: week })).status, 404);
+    assert.equal((await call('/chores?week=' + week)).body.done.filter(d => d.chore_id === dishes.body.id).length, 1);
+    assert.equal((await call('/chores', 'DELETE', { id: dishes.body.id })).status, 200);
+    state = (await call('/chores?week=' + week)).body;
+    assert.deepEqual(state.chores.map(c => c.title), ['Trash out', 'Clean garage']);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM chore_done WHERE chore_id=?').get(dishes.body.id).n, 0);
+    // Removing a family member returns their chores to "anyone" but keeps what they finished.
+    const sweep = await call('/chores', 'POST', { title: 'Sweep', repeat: 'daily', start_date: week, assignees: ['Sam', 'Alex'] });
+    await call('/chores/done', 'POST', { chore_id: sweep.body.id, date: week, done: true }, true, 'Sam');
+    await call('/members', 'DELETE', { name: 'Sam' });
+    state = (await call('/chores?week=' + week)).body;
+    assert.deepEqual(state.chores.find(c => c.title === 'Sweep').assignees, ['Alex']);
+    assert.equal(state.done.find(d => d.chore_id === sweep.body.id).done_by, 'Sam');
+    // Writes need a known family name and the PIN; reading needs only the PIN.
+    assert.equal((await call('/chores', 'POST', { title: 'x', repeat: 'daily', start_date: week }, true, '')).status, 403);
+    assert.equal((await call('/chores', 'POST', { title: 'x', repeat: 'daily', start_date: week }, true, 'Stranger')).status, 403);
+    assert.equal((await call('/chores?week=' + week, 'GET', undefined, true, '')).status, 200);
+    assert.equal((await call('/chores?week=' + week, 'GET', undefined, false)).status, 401);
+  } finally { sqlite.close(); }
+});
+
+test('chores limit: up to 100 for the family', async () => {
+  const { call, sqlite } = await fixture();
+  try {
+    await call('/members', 'POST', { name: 'Alex' });
+    sqlite.exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<100) INSERT INTO chores (title,repeat,start_date) SELECT 'Chore '||i,'daily','2026-09-28' FROM n`);
+    assert.equal((await call('/chores', 'POST', { title: 'One too many', repeat: 'daily', start_date: start })).status, 400);
+  } finally { sqlite.close(); }
+});

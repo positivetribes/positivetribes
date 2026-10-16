@@ -86,7 +86,9 @@ db.prepare("CREATE TABLE IF NOT EXISTS list_items (id INTEGER PRIMARY KEY AUTOIN
 db.prepare("CREATE INDEX IF NOT EXISTS list_items_list ON list_items(list_id)"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_labels (week_start TEXT NOT NULL,item_key TEXT NOT NULL,label TEXT NOT NULL,PRIMARY KEY(week_start,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_stores (week_start TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('generated','manual')),item_key TEXT NOT NULL,store TEXT NOT NULL,PRIMARY KEY(week_start,kind,item_key))"),
-db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+db.prepare("CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,repeat TEXT NOT NULL CHECK(repeat IN ('once','daily','weekly')),days TEXT NOT NULL DEFAULT '[]',start_date TEXT NOT NULL,assignees TEXT NOT NULL DEFAULT '[]',created_by TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
+db.prepare("CREATE TABLE IF NOT EXISTS chore_done (chore_id INTEGER NOT NULL,due_date TEXT NOT NULL,done_by TEXT NOT NULL,done_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(chore_id,due_date))")
 ]);
 // Lists made before lists belonged to a profile have no owner column yet.
 if (!(await db.prepare("SELECT 1 FROM pragma_table_info('lists') WHERE name='owner'").first()))
@@ -213,11 +215,11 @@ const storeStatement = (db, start, kind, key, store) => store
 const allStores = async (db, owner = null) => (await rows(db, `SELECT store FROM (SELECT store FROM grocery_stores UNION
   SELECT i.store FROM list_items i JOIN lists l ON l.id=i.list_id WHERE i.store<>'' AND (l.owner=? OR l.shared=1)) ORDER BY lower(store)`, owner ?? '')).map(r => r.store);
 // Custom lists belong to one family profile, sent by the app as x-family-member. Everyone shares the PIN, so this keeps lists separate, not secret.
-async function requireOwner(db, request) {
+async function requireOwner(db, request, message = 'Choose your name in your profile to see your own lists.') {
   let name = '';
   try { name = decodeURIComponent(request.headers.get('x-family-member') || ''); } catch {}
   const row = name.trim() && await db.prepare('SELECT name FROM family_members WHERE name=?').bind(name.trim()).first();
-  if (!row) throw new InputError('Choose your name in your profile to see your own lists.', 403);
+  if (!row) throw new InputError(message, 403);
   return row.name;
 }
 // Custom lists: not tied to a week. 'grocery' lists can tag items with a store; 'basic' lists are just items.
@@ -254,6 +256,43 @@ const sharedInput = value => {
 };
 async function listDetail(db, list, owner) {
   return { list, items: (await rows(db, 'SELECT id,label,store,checked FROM list_items WHERE list_id=? ORDER BY id', list.id)).map(r => ({ ...r, checked: !!r.checked })), stores: await allStores(db, owner) };
+}
+// Chores: a chore is one-time (on its date), daily, or weekly on chosen days (ISO 1=Mon … 7=Sun), from start_date on.
+// Completions are kept per chore and date, so history survives edits and a daily chore resets itself each day.
+const CHORE_REPEATS = ['once', 'daily', 'weekly'];
+const isoDay = date => new Date(date + 'T12:00:00Z').getUTCDay() || 7;
+const choreOn = (c, date) => date >= c.start_date && (c.repeat === 'daily' || (c.repeat === 'once' && date === c.start_date) || (c.repeat === 'weekly' && c.days.includes(isoDay(date))));
+const choreView = r => ({ id: r.id, title: r.title, repeat: r.repeat, days: JSON.parse(r.days), start_date: r.start_date, assignees: JSON.parse(r.assignees), created_by: r.created_by });
+async function choreInput(db, b) {
+  const title = text(b.title, 80).replace(/\s+/g, ' ');
+  if (!title) throw new InputError('Chore name is required.');
+  if (!CHORE_REPEATS.includes(b.repeat)) throw new InputError('Choose one time, daily, or weekly.');
+  if (!validDate(b.start_date)) throw new InputError('A valid date is required.');
+  let days = [];
+  if (b.repeat === 'weekly') {
+    days = Array.isArray(b.days) ? [...new Set(b.days.map(Number))].sort((a, z) => a - z) : [];
+    if (!days.length || days.some(d => !Number.isInteger(d) || d < 1 || d > 7)) throw new InputError('Choose at least one day of the week.');
+  }
+  if (b.assignees !== undefined && (!Array.isArray(b.assignees) || b.assignees.length > 20)) throw new InputError('Choose who it is for from the family list.');
+  const assignees = [];
+  for (const name of b.assignees || []) {
+    const canonical = await requireMember(db, name);
+    if (!assignees.some(a => a.toLowerCase() === canonical.toLowerCase())) assignees.push(canonical);
+  }
+  return { title, repeat: b.repeat, days, start_date: b.start_date, assignees };
+}
+async function requireChore(db, value) {
+  const id = Number(value);
+  const row = Number.isSafeInteger(id) && id > 0 && await db.prepare('SELECT * FROM chores WHERE id=?').bind(id).first();
+  if (!row) throw new InputError('Chore not found. It may have been deleted.', 404);
+  return choreView(row);
+}
+async function choresForWeek(db, start) {
+  const end = addDays(start, 6);
+  return { week_start: start, chores: (await rows(db, 'SELECT * FROM chores ORDER BY id')).map(choreView),
+    // One-time chores need their whole history to tell what is overdue; other chores only need this week.
+    done: await rows(db, `SELECT chore_id,due_date,done_by,done_at FROM chore_done WHERE (due_date>=? AND due_date<=?) OR chore_id IN (SELECT id FROM chores WHERE repeat='once') ORDER BY chore_id,due_date`, start, end),
+    recent: await rows(db, 'SELECT d.chore_id,c.title,d.due_date,d.done_by,d.done_at FROM chore_done d JOIN chores c ON c.id=d.chore_id ORDER BY d.done_at DESC,d.rowid DESC LIMIT 30') };
 }
 async function groceries(db, start) {
   const planned = await rows(db, `SELECT p.plan_date,m.id,m.name,COALESCE(d.ingredients,'[]') ingredients
@@ -376,7 +415,10 @@ export default {
       }
       if (path === '/api/members' && method === 'DELETE') {
         const name = await requireMember(db, (await body(request)).name);
-        await db.batch([db.prepare('DELETE FROM dinner_absences WHERE member=?').bind(name), db.prepare('DELETE FROM family_claims WHERE name=?').bind(name), db.prepare('DELETE FROM family_members WHERE name=?').bind(name)]);
+        // Chores assigned to someone who leaves the family go back to "anyone". Their completion history stays.
+        const unassign = (await rows(db, 'SELECT id,assignees FROM chores')).filter(r => JSON.parse(r.assignees).some(a => a.toLowerCase() === name.toLowerCase()))
+          .map(r => db.prepare('UPDATE chores SET assignees=? WHERE id=?').bind(JSON.stringify(JSON.parse(r.assignees).filter(a => a.toLowerCase() !== name.toLowerCase())), r.id));
+        await db.batch([db.prepare('DELETE FROM dinner_absences WHERE member=?').bind(name), db.prepare('DELETE FROM family_claims WHERE name=?').bind(name), ...unassign, db.prepare('DELETE FROM family_members WHERE name=?').bind(name)]);
         return json({ ok: true });
       }
       if (path === '/api/absence' && method === 'POST') {
@@ -436,6 +478,38 @@ export default {
           return json({ ok: true, removed: result.meta.changes });
         }
         await db.prepare('DELETE FROM list_items WHERE id=? AND list_id=?').bind(await requireListItem(db, list, b.id), list.id).run();
+        return json({ ok: true });
+      }
+        return json({ error: 'Not found.' }, 404);
+      }
+      if (path.startsWith('/api/chores')) {
+      if (path === '/api/chores' && method === 'GET') return json(await choresForWeek(db, weekStart(url.searchParams.get('week'))));
+      const me = await requireOwner(db, request, 'Choose your name in your profile to work with chores.');
+      if (path === '/api/chores' && method === 'POST') {
+        const input = await choreInput(db, await body(request));
+        if ((await db.prepare('SELECT COUNT(*) n FROM chores').first()).n >= 100) throw new InputError('The family can have up to 100 chores. Delete one to make room.');
+        const result = await db.prepare('INSERT INTO chores (title,repeat,days,start_date,assignees,created_by) VALUES (?,?,?,?,?,?)')
+          .bind(input.title, input.repeat, JSON.stringify(input.days), input.start_date, JSON.stringify(input.assignees), me).run();
+        return json({ ok: true, id: result.meta.last_row_id }, 201);
+      }
+      if (path === '/api/chores' && method === 'PUT') {
+        const b = await body(request), chore = await requireChore(db, b.id), input = await choreInput(db, b);
+        await db.prepare('UPDATE chores SET title=?,repeat=?,days=?,start_date=?,assignees=? WHERE id=?')
+          .bind(input.title, input.repeat, JSON.stringify(input.days), input.start_date, JSON.stringify(input.assignees), chore.id).run();
+        return json({ ok: true });
+      }
+      if (path === '/api/chores' && method === 'DELETE') {
+        const chore = await requireChore(db, (await body(request)).id);
+        await db.batch([db.prepare('DELETE FROM chore_done WHERE chore_id=?').bind(chore.id), db.prepare('DELETE FROM chores WHERE id=?').bind(chore.id)]);
+        return json({ ok: true });
+      }
+      if (path === '/api/chores/done' && method === 'POST') {
+        const b = await body(request), chore = await requireChore(db, b.chore_id);
+        if (!validDate(b.date) || !choreOn(chore, b.date)) throw new InputError('This chore is not scheduled for that day.');
+        if (typeof b.done !== 'boolean') throw new InputError('Done must be true or false.');
+        // The first person to finish a chore keeps the credit if someone else taps it again.
+        await (b.done ? db.prepare('INSERT OR IGNORE INTO chore_done (chore_id,due_date,done_by) VALUES (?,?,?)').bind(chore.id, b.date, me)
+          : db.prepare('DELETE FROM chore_done WHERE chore_id=? AND due_date=?').bind(chore.id, b.date)).run();
         return json({ ok: true });
       }
         return json({ error: 'Not found.' }, 404);

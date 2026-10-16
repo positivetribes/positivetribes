@@ -107,11 +107,13 @@ function render() {
   paintAvatar($('#memberButton'), member, photo);
   renderWeek(); renderMeals();
   if ($('#groceries').classList.contains('active')) loadLists();
+  if ($('#chores').classList.contains('active')) loadChores();
 }
 function switchTab(id) {
   $$('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === id));
   $$('.panel').forEach(panel => panel.classList.toggle('active', panel.id === id));
   if (id === 'groceries') loadLists();
+  if (id === 'chores') loadChores();
 }
 const sameName = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 const isOut = (date, name) => data.absences.some(a => a.plan_date === date && sameName(a.member, name));
@@ -704,6 +706,158 @@ $('#deleteList').onclick = event => {
   action(event.currentTarget, async () => {
     await send('/lists', 'DELETE', { id: list.id });
     setCurrentList(GROCERY); $('#listDialog').close(); toast(`Deleted ${list.name}.`); await loadLists();
+  });
+};
+// ---- Chores tab ----
+// A day-by-day checklist. Recurring chores come back on their own; completions are kept per chore and date.
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const isoDay = date => new Date(date + 'T12:00:00Z').getUTCDay() || 7;
+const choreOn = (c, date) => date >= c.start_date && (c.repeat === 'daily' || (c.repeat === 'once' && date === c.start_date) || (c.repeat === 'weekly' && c.days.includes(isoDay(date))));
+const shortDate = value => new Date(value + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+let choreDate = today(), choreState = null, choreRequest = 0, choreScope = 'all', editingChore = null, choreDays = [], choreWho = [];
+const choreWeek = date => addDays(date, 1 - isoDay(date));
+const choreDone = (chore, date) => choreState.done.find(d => d.chore_id === chore.id && d.due_date === date);
+async function loadChores() {
+  const requestId = ++choreRequest, start = choreWeek(choreDate);
+  $('#choreStatus').textContent = 'Loading chores…';
+  try {
+    const result = await api('/chores?week=' + start);
+    if (requestId !== choreRequest) return;
+    choreState = { ...result, start };
+    renderChores();
+  } catch (error) { if (requestId === choreRequest) $('#choreStatus').textContent = error.message; }
+}
+function stepChoreDay(days) {
+  choreDate = days === 0 ? today() : addDays(choreDate, days);
+  if (choreState?.start === choreWeek(choreDate)) renderChores(); else { renderChoreHeader(); loadChores(); }
+}
+function renderChoreHeader() {
+  const now = today();
+  $('#choreTitle').textContent = choreDate === now ? 'Today' : choreDate === addDays(now, 1) ? 'Tomorrow' : choreDate === addDays(now, -1) ? 'Yesterday' : new Date(choreDate + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long' });
+  $('#choreLabel').textContent = displayDate(choreDate);
+  const away = choreDate !== now, days = Math.abs(daysBetween(now, choreDate));
+  const button = $('#choreToday');
+  button.classList.toggle('away', away);
+  button.setAttribute('aria-disabled', String(!away));
+  button.setAttribute('aria-label', away ? `Back to today (${days} day${days > 1 ? 's' : ''} ${choreDate > now ? 'ahead' : 'back'})` : 'Showing today');
+  button.title = away ? 'Back to today' : 'You are on today';
+}
+const choreRepeatText = c => c.repeat === 'daily' ? 'Every day' : c.repeat === 'weekly' ? 'Weekly · ' + c.days.map(d => DAY_NAMES[d - 1]).join(', ') : 'One time';
+function renderChores() {
+  if (!choreState) return;
+  renderChoreHeader();
+  const { chores } = choreState, date = choreDate, isToday = date === today();
+  const forMe = c => !c.assignees.length || c.assignees.some(name => sameName(name, member));
+  const rows = [];
+  for (const chore of chores) {
+    if (choreScope === 'mine' && !forMe(chore)) continue;
+    if (choreOn(chore, date)) rows.push({ chore, date, done: choreDone(chore, date) });
+    // A one-time chore nobody finished stays on today's list until it is done.
+    else if (isToday && chore.repeat === 'once' && chore.start_date < date && !choreState.done.some(d => d.chore_id === chore.id)) rows.push({ chore, date: chore.start_date, overdue: true });
+  }
+  rows.sort((a, b) => (!!a.done - !!b.done) || (!!b.overdue - !!a.overdue));
+  const left = rows.filter(r => !r.done).length;
+  $('#choreStatus').textContent = !chores.length ? '' : !rows.length ? '' : left ? `${rows.length - left} of ${rows.length} done` : `All ${rows.length} done 🎉`;
+  $('#choreList').innerHTML = rows.map((r, i) => {
+    const c = r.chore, who = c.assignees.length ? c.assignees.map(esc).join(', ') : 'Anyone';
+    const meta = [r.overdue ? `Overdue · was due ${esc(shortDate(r.date))}` : '', who, esc(choreRepeatText(c)), r.done ? `✓ Done by ${esc(r.done.done_by)}` : ''].filter(Boolean).join(' · ');
+    return `<div class="grocery-item chore${r.done ? ' checked' : ''}${r.overdue ? ' overdue' : ''}"><label><input type="checkbox" data-row="${i}" ${r.done ? 'checked' : ''}><span><strong>${esc(c.title)}</strong><small>${meta}</small></span></label><button class="ghost edit-item" data-chore="${c.id}" aria-label="Edit ${esc(c.title)}">${PENCIL}</button></div>`;
+  }).join('') || `<div class="card auth-card">${!chores.length ? 'No chores yet. Tap “+ Add chore” to start the list.' : choreScope === 'mine' ? 'Nothing for you this day.' : 'Nothing scheduled this day.'}</div>`;
+  $$('#choreList input').forEach(input => input.onchange = () => action(input, async () => {
+    if (!member) { input.checked = !input.checked; return openProfile(); }
+    const r = rows[+input.dataset.row];
+    try { await send('/chores/done', 'POST', { chore_id: r.chore.id, date: r.date, done: input.checked }); }
+    catch (error) { input.checked = !input.checked; throw error; }
+    await loadChores();
+  }));
+  $$('#choreList .edit-item').forEach(button => button.onclick = () => openChoreDialog(chores.find(c => c.id === +button.dataset.chore)));
+  renderChoreSummary();
+}
+// This week for the family: how much got done, and by whom.
+function renderChoreSummary() {
+  const { chores, start, recent } = choreState, box = $('#choreSummary');
+  box.hidden = !chores.length;
+  if (chores.length) {
+    let scheduled = 0, finished = 0;
+    const credit = new Map(data.members.map(name => [name.toLowerCase(), { name, n: 0 }]));
+    for (const date of weekDates(start)) for (const chore of chores) {
+      if (!choreOn(chore, date)) continue;
+      scheduled++;
+      const row = choreDone(chore, date);
+      if (!row) continue;
+      finished++;
+      const key = row.done_by.toLowerCase();
+      if (!credit.has(key)) credit.set(key, { name: row.done_by, n: 0 });
+      credit.get(key).n++;
+    }
+    const people = [...credit.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+    const pct = scheduled ? Math.round(finished / scheduled * 100) : 0;
+    box.innerHTML = `<p class="eyebrow">${start === choreWeek(today()) ? 'THIS WEEK' : `WEEK OF ${esc(displayDate(start).toUpperCase())}`}</p><strong>${finished} of ${scheduled} chores done</strong><div class="meter" role="img" aria-label="${pct} percent done"><i style="width:${pct}%"></i></div>${people.some(p => p.n) ? `<div class="chips">${people.map(p => `<span class="chip${p.n ? ' voted' : ''}">${esc(p.name)} · ${p.n}</span>`).join('')}</div>` : '<p class="hint">Nothing checked off yet this week.</p>'}`;
+  }
+  $('#choreRecent').hidden = !recent.length;
+  $('#choreRecentList').innerHTML = recent.map(r => `<li><strong>${esc(r.done_by)}</strong> did ${esc(r.title)} · ${esc(shortDate(r.due_date))}</li>`).join('');
+}
+$$('[data-chore-step]').forEach(button => button.onclick = () => stepChoreDay(+button.dataset.choreStep));
+$('#choreToday').onclick = () => { if (choreDate !== today()) stepChoreDay(0); };
+$$('[name=choreScope]').forEach(radio => radio.onchange = () => { choreScope = $('[name=choreScope]:checked').value; renderChores(); });
+function renderChoreDialogChips() {
+  $('#choreDays').innerHTML = DAY_NAMES.map((name, i) => `<button type="button" class="chip${choreDays.includes(i + 1) ? ' voted' : ''}" data-day="${i + 1}" aria-pressed="${choreDays.includes(i + 1)}">${name}</button>`).join('');
+  $$('#choreDays [data-day]').forEach(button => button.onclick = () => {
+    const day = +button.dataset.day;
+    choreDays = choreDays.includes(day) ? choreDays.filter(d => d !== day) : [...choreDays, day];
+    renderChoreDialogChips();
+  });
+  $('#choreWho').innerHTML = data.members.map(name => { const on = choreWho.some(w => sameName(w, name)); return `<button type="button" class="chip${on ? ' voted' : ''}" data-who="${esc(name)}" aria-pressed="${on}">${esc(name)}</button>`; }).join('');
+  $$('#choreWho [data-who]').forEach(button => button.onclick = () => {
+    const name = button.dataset.who;
+    choreWho = choreWho.some(w => sameName(w, name)) ? choreWho.filter(w => !sameName(w, name)) : [...choreWho, name];
+    renderChoreDialogChips();
+  });
+  $('#choreWhoHint').textContent = !data.members.length ? 'Add your name in your profile to assign chores.' : choreWho.length ? 'Only these people see it under “Mine”.' : 'No one picked — anyone can do it.';
+}
+function paintChoreRepeat() {
+  const repeat = $('[name=choreRepeat]:checked').value;
+  $('#choreDaysField').hidden = repeat !== 'weekly';
+  $('#choreDateLabel').textContent = repeat === 'once' ? 'Due date' : 'Starts on';
+}
+$$('[name=choreRepeat]').forEach(radio => radio.onchange = () => {
+  if ($('[name=choreRepeat]:checked').value === 'weekly' && !choreDays.length && $('#choreDate').value) choreDays = [isoDay($('#choreDate').value)];
+  paintChoreRepeat(); renderChoreDialogChips();
+});
+function openChoreDialog(chore) {
+  if (!chore && !member) return openProfile();
+  editingChore = chore || null;
+  $('#choreDialogTitle').textContent = chore ? 'Edit chore' : 'New chore';
+  $('#saveChore').textContent = chore ? 'Save' : 'Add chore';
+  $('#deleteChore').hidden = !chore;
+  $('#choreName').value = chore?.title || '';
+  $(`[name=choreRepeat][value=${chore?.repeat || 'once'}]`).checked = true;
+  $('#choreDate').value = chore?.start_date || choreDate;
+  choreDays = chore ? [...chore.days] : [];
+  choreWho = chore ? chore.assignees.filter(name => data.members.some(m => sameName(m, name))) : [];
+  paintChoreRepeat(); renderChoreDialogChips();
+  $('#choreDialog').showModal();
+  if (!chore) $('#choreName').focus();
+}
+$('#addChore').onclick = () => openChoreDialog(null);
+$('#choreForm').onsubmit = event => {
+  event.preventDefault(); action(event.submitter, async () => {
+    const repeat = $('[name=choreRepeat]:checked').value;
+    if (repeat === 'weekly' && !choreDays.length) return toast('Choose at least one day of the week.');
+    const payload = { title: $('#choreName').value, repeat, days: choreDays, start_date: $('#choreDate').value, assignees: choreWho };
+    const result = editingChore ? await send('/chores', 'PUT', { id: editingChore.id, ...payload }) : await send('/chores', 'POST', payload);
+    $('#choreDialog').close();
+    // Show the day the chore starts on, so a new chore is never "missing" from the screen.
+    if (!editingChore && payload.start_date > choreDate && repeat === 'once') choreDate = payload.start_date;
+    await loadChores(); toast(editingChore ? 'Chore updated' : 'Chore added');
+  });
+};
+$('#deleteChore').onclick = event => {
+  const chore = editingChore;
+  if (!confirm(`Delete “${chore.title}”?\n\nIt disappears for the whole family, along with its history.`)) return;
+  action(event.currentTarget, async () => {
+    await send('/chores', 'DELETE', { id: chore.id });
+    $('#choreDialog').close(); await loadChores(); toast('Chore deleted');
   });
 };
 if (pin) load();
