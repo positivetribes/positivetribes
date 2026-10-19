@@ -12,6 +12,10 @@ Mobile-first family dinner planner for Cloudflare Workers + D1. The main Positiv
 - **First-time name picker:** A phone that has not chosen a name is asked *Who are you?* and shown only the family names nobody has picked yet; one tap chooses it. *Not here? Show everyone* lists all names (taken ones are marked *Other phone*, for a new phone), and *Someone new* lets a person type a name and join. A phone saved under an older name that is not on the family list is asked the same way once per visit (*Not now* dismisses it) and is never added to the list automatically. Picking a name only hides it from other first-time pickers; it does not lock anyone out. The week list names everyone who is out ("Mom, Stella & Vincent out").
 - Existing Edit/Delete, family voting, ratings/comments, favorites, recipe links, and family PIN remain available. Deleting a meal retains the original behavior: it removes ratings/votes and clears its meal reference from all plans, including past plans. Notes and manual groceries remain.
 
+## Dashboard endpoint
+
+`GET /api/dashboard` returns read-only counts for a home-server dashboard: chores due today (done, left, and the list, including one-time chores that are overdue) and this week's grocery items left to buy. It is authenticated with its own `x-dashboard-token` header, checked against the `DASHBOARD_TOKEN` Worker secret, and **does not accept the family PIN**, so the dashboard never holds the PIN. Without the secret the endpoint returns 503. "Today" uses `DASHBOARD_TZ` (default `America/Denver`); `?date=YYYY-MM-DD` overrides it. Set the secret with `npx wrangler secret put DASHBOARD_TOKEN`; never put it in GitHub.
+
 ## Suggestion rules
 
 The planner runs locally with no AI service, API key, or paid dependency. The same meals, ratings, votes, dates, and plan produce the same result.

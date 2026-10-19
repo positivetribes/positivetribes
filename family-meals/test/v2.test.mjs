@@ -565,3 +565,35 @@ test('chores limit: up to 100 for the family', async () => {
     assert.equal((await call('/chores', 'POST', { title: 'One too many', repeat: 'daily', start_date: start })).status, 400);
   } finally { sqlite.close(); }
 });
+
+test('dashboard: read-only counts behind its own token, never the family PIN', async () => {
+  const { db, call, sqlite } = await fixture();
+  const dash = async (path = '', headers = { 'x-dashboard-token': 'dash-test-only' }, env = { DB: db, FAMILY_PIN: 'test-only-pin', DASHBOARD_TOKEN: 'dash-test-only' }) => {
+    const response = await worker.fetch(new Request('https://test.invalid/api/dashboard' + path, { headers }), env);
+    return { status: response.status, body: await response.json() };
+  };
+  try {
+    assert.equal((await dash('', {})).status, 401);
+    assert.equal((await dash('', { 'x-dashboard-token': 'wrong' })).status, 401);
+    assert.equal((await dash('', { 'x-family-pin': 'test-only-pin' })).status, 401);   // the family PIN is not accepted here
+    assert.equal((await dash('', undefined, { DB: db, FAMILY_PIN: 'test-only-pin' })).status, 503);
+    assert.equal((await dash('?date=soon')).status, 400);
+    assert.equal((await call('/summary', 'GET', undefined, false)).status, 401);       // the rest of the API still needs the PIN
+    await call('/members', 'POST', { name: 'Alex' });
+    const dishes = await call('/chores', 'POST', { title: 'Dishwasher', repeat: 'daily', start_date: start, assignees: ['Alex'] });
+    await call('/chores', 'POST', { title: 'Trash out', repeat: 'weekly', days: [1], start_date: start });
+    const garage = await call('/chores', 'POST', { title: 'Clean garage', repeat: 'once', start_date: start });
+    await call('/groceries', 'POST', { week_start: start, label: 'Milk' });
+    const eggs = await call('/groceries', 'POST', { week_start: start, label: 'Eggs' });
+    await call('/groceries', 'PATCH', { week_start: start, kind: 'manual', id: eggs.body.id, checked: true });
+    let day = (await dash('?date=2026-09-29')).body;                    // Tuesday: dishwasher + overdue garage, trash not due
+    assert.deepEqual([day.week_start, day.chores.total, day.chores.left, day.chores.done], [start, 2, 2, 0]);
+    assert.deepEqual(day.chores.items.map(c => [c.title, c.overdue, c.done]), [['Dishwasher', false, false], ['Clean garage', true, false]]);
+    assert.deepEqual(day.groceries, { total: 2, left: 1 });
+    await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: '2026-09-29', done: true });
+    await call('/chores/done', 'POST', { chore_id: garage.body.id, date: start, done: true });
+    day = (await dash('?date=2026-09-29')).body;
+    assert.deepEqual([day.chores.total, day.chores.left, day.chores.done], [1, 0, 1]);
+    assert.equal((await dash('?date=2026-09-28')).body.chores.total, 3);   // Monday: dishwasher, trash, garage
+  } finally { sqlite.close(); }
+});
