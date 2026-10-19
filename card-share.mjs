@@ -50,7 +50,7 @@ export async function handleCardShare(request, env, url, readBody) {
       replyTo: person.email || undefined,
       subject: 'New contact from your card: ' + person.name,
       text,
-      attachments: [{ content: btoa(unescape(encodeURIComponent(contactCard(person)))), filename: (person.name.replace(/[^\w .-]/g, '').trim() || 'contact') + '.vcf', type: 'text/vcard', disposition: 'attachment' }]
+      attachments: [{ content: new TextEncoder().encode(contactCard(person)), filename: (person.name.replace(/[^\w .-]/g, '').trim() || 'contact') + '.vcf', type: 'text/vcard', disposition: 'attachment' }]
     });
     return json({ ok: true });
   } catch (error) {
