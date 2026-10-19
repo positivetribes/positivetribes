@@ -1,4 +1,4 @@
-# Family Meals
+# The fam jam!
 
 Mobile-first family dinner planner for Cloudflare Workers + D1. The main Positive Tribes site is separate; all application files live in this directory.
 
