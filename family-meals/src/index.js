@@ -320,11 +320,48 @@ async function groceries(db, start) {
     missing: [...missing].map(([id, name]) => ({ id, name })), planned_count: planned.length };
 }
 
+// Read-only numbers for the home-server dashboard. It has its own token (DASHBOARD_TOKEN), so the dashboard never holds the family PIN.
+// "Today" is the family's local date (DASHBOARD_TZ, default America/Denver); ?date=YYYY-MM-DD overrides it.
+const sameSecret = (a, b) => {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+};
+const localDate = (zone, now = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+async function dashboard(db, today) {
+  const start = addDays(today, 1 - isoDay(today));
+  const { chores, done } = await choresForWeek(db, start);
+  const finished = new Set(done.map(d => d.chore_id + '|' + d.due_date));
+  // Due today, plus one-time chores whose day has passed without being finished.
+  const due = chores.filter(c => choreOn(c, today) || (c.repeat === 'once' && c.start_date < today && !done.some(d => d.chore_id === c.id)))
+    .map(c => ({ title: c.title, assignees: c.assignees, overdue: c.start_date < today && c.repeat === 'once', done: finished.has(c.id + '|' + today) || (c.repeat === 'once' && done.some(d => d.chore_id === c.id)) }));
+  const list = await groceries(db, start);
+  const items = [...list.generated, ...list.manual];
+  return {
+    date: today, week_start: start,
+    chores: { total: due.length, done: due.filter(c => c.done).length, left: due.filter(c => !c.done).length, items: due },
+    groceries: { total: items.length, left: items.filter(i => !i.checked).length }
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (!env.DB) return json({ error: 'Database is not configured yet.' }, 503);
+    if (url.pathname === '/api/dashboard' && request.method === 'GET') {
+      if (!env.DASHBOARD_TOKEN) return json({ error: 'Dashboard token is not configured.' }, 503);
+      if (!sameSecret(request.headers.get('x-dashboard-token'), env.DASHBOARD_TOKEN)) return json({ error: 'Incorrect dashboard token.' }, 401);
+      try {
+        await ensureSchema(env.DB);
+        const asked = url.searchParams.get('date');
+        if (asked && !validDate(asked)) return json({ error: 'Use a date like 2026-10-18.' }, 400);
+        return json(await dashboard(env.DB, asked || localDate(env.DASHBOARD_TZ || 'America/Denver')));
+      } catch {
+        return json({ error: 'Unable to load right now.' }, 500);
+      }
+    }
     if (!env.FAMILY_PIN) return json({ error: 'Family PIN is not configured yet.', setupRequired: true }, 503);
     if (request.headers.get('x-family-pin') !== env.FAMILY_PIN) return json({ error: 'Incorrect family PIN.' }, 401);
     try {
