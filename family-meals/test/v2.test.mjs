@@ -589,7 +589,8 @@ test('dashboard: read-only counts behind its own token, never the family PIN', a
     let day = (await dash('?date=2026-09-29')).body;                    // Tuesday: dishwasher + overdue garage, trash not due
     assert.deepEqual([day.week_start, day.chores.total, day.chores.left, day.chores.done], [start, 2, 2, 0]);
     assert.deepEqual(day.chores.items.map(c => [c.title, c.overdue, c.done]), [['Dishwasher', false, false], ['Clean garage', true, false]]);
-    assert.deepEqual(day.groceries, { total: 2, left: 1 });
+    assert.deepEqual(day.groceries, { total: 2, left: 1, items: [{ name: 'Milk', store: '' }] });
+    assert.deepEqual(day.chores.items.map(c => c.who), ['Alex', 'Anyone']);
     await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: '2026-09-29', done: true });
     await call('/chores/done', 'POST', { chore_id: garage.body.id, date: start, done: true });
     day = (await dash('?date=2026-09-29')).body;

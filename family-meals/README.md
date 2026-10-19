@@ -14,7 +14,7 @@ Mobile-first family dinner planner for Cloudflare Workers + D1. The main Positiv
 
 ## Dashboard endpoint
 
-`GET /api/dashboard` returns read-only counts for a home-server dashboard: chores due today (done, left, and the list, including one-time chores that are overdue) and this week's grocery items left to buy. It is authenticated with its own `x-dashboard-token` header, checked against the `DASHBOARD_TOKEN` Worker secret, and **does not accept the family PIN**, so the dashboard never holds the PIN. Without the secret the endpoint returns 503. "Today" uses `DASHBOARD_TZ` (default `America/Denver`); `?date=YYYY-MM-DD` overrides it. Set the secret with `npx wrangler secret put DASHBOARD_TOKEN`; never put it in GitHub.
+`GET /api/dashboard` returns read-only counts for a home-server dashboard: chores due today (done, left, and the list, including one-time chores that are overdue) and this week's grocery items left to buy. Each chore includes `who` (assignees, or "Anyone"), and `groceries.items` lists the unchecked items with their store. It is authenticated with its own `x-dashboard-token` header, checked against the `DASHBOARD_TOKEN` Worker secret, and **does not accept the family PIN**, so the dashboard never holds the PIN. Without the secret the endpoint returns 503. "Today" uses `DASHBOARD_TZ` (default `America/Denver`); `?date=YYYY-MM-DD` overrides it. Set the secret with `npx wrangler secret put DASHBOARD_TOKEN`; never put it in GitHub.
 
 ## Suggestion rules
 
