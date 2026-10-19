@@ -32,6 +32,7 @@ for (const screen of ['workouts', 'training-frequency', 'blood-pressure', 'medic
   await copyFile(`pulselift-${screen}.png`, `public/pulselift-${screen}.png`);
 }
 await copyFile('positive-tribes-community.jpg', 'public/positive-tribes-community.jpg');
+for (const file of ['eric-roberts.jpg', 'eric-roberts.webp']) await copyFile(file, `public/${file}`);
 await cp('fonts', 'public/fonts', { recursive: true });
 await cp('brand', 'public/brand', { recursive: true });
 await cp('help-a-friend', 'public/help-a-friend', { recursive: true });
