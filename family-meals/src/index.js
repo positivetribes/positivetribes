@@ -335,13 +335,13 @@ async function dashboard(db, today) {
   const finished = new Set(done.map(d => d.chore_id + '|' + d.due_date));
   // Due today, plus one-time chores whose day has passed without being finished.
   const due = chores.filter(c => choreOn(c, today) || (c.repeat === 'once' && c.start_date < today && !done.some(d => d.chore_id === c.id)))
-    .map(c => ({ title: c.title, assignees: c.assignees, overdue: c.start_date < today && c.repeat === 'once', done: finished.has(c.id + '|' + today) || (c.repeat === 'once' && done.some(d => d.chore_id === c.id)) }));
+    .map(c => ({ title: c.title, assignees: c.assignees, who: c.assignees.join(', ') || 'Anyone', overdue: c.start_date < today && c.repeat === 'once', done: finished.has(c.id + '|' + today) || (c.repeat === 'once' && done.some(d => d.chore_id === c.id)) }));
   const list = await groceries(db, start);
   const items = [...list.generated, ...list.manual];
   return {
     date: today, week_start: start,
     chores: { total: due.length, done: due.filter(c => c.done).length, left: due.filter(c => !c.done).length, items: due },
-    groceries: { total: items.length, left: items.filter(i => !i.checked).length }
+    groceries: { total: items.length, left: items.filter(i => !i.checked).length, items: items.filter(i => !i.checked).map(i => ({ name: i.label, store: i.store || '' })) }
   };
 }
 
