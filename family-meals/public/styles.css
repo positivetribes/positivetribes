@@ -127,3 +127,4 @@ input.switch:checked{background:var(--green)}input.switch:checked::before{transf
 @media(max-width:370px){.tab{font-size:10px}.tab-icon{font-size:18px}}
 @media(prefers-reduced-motion:reduce){.tab,.tab-icon{transition:none}}
 .link-row{margin-top:0;flex-wrap:nowrap}.link-row input{flex:1}.link-row button{flex-shrink:0;white-space:nowrap}
+.recipe-go{display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap}.recipe-go+.swap{margin-left:-3px}
