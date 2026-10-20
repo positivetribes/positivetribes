@@ -195,14 +195,27 @@ function openEditMeal(id) {
   $('#editRecipeUrl').value = meal.recipe_url || '';
   $('#editMealNotes').value = meal.notes || '';
   $('#editMealTags').value = meal.tags.join(', ');
-  $('#editIngredients').value = meal.ingredients.join('\n');
+  $('#editIngredients').value = bulletize(meal.ingredients);
   $('#editMealDialog').showModal();
+}
+// Ingredient boxes show a bullet list; bullets are stripped again in mealPayload.
+const bulletize = items => items.map(item => `• ${item}`).join('\n');
+for (const id of ['#ingredients', '#editIngredients']) {
+  const box = $(id);
+  box.addEventListener('focus', () => { if (!box.value.trim()) box.value = '• '; });
+  box.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    const { selectionStart: at, selectionEnd: end, value } = box;
+    box.value = `${value.slice(0, at)}\n• ${value.slice(end)}`;
+    box.selectionStart = box.selectionEnd = at + 3;
+  });
 }
 function mealPayload(edit = false) {
   return { name: $(edit ? '#editMealName' : '#mealName').value, recipe_url: $(edit ? '#editRecipeUrl' : '#recipeUrl').value,
     notes: $(edit ? '#editMealNotes' : '#mealNotes').value,
     tags: $(edit ? '#editMealTags' : '#mealTags').value.split(',').map(s => s.trim()).filter(Boolean),
-    ingredients: $(edit ? '#editIngredients' : '#ingredients').value.split('\n').map(s => s.trim()).filter(Boolean) };
+    ingredients: $(edit ? '#editIngredients' : '#ingredients').value.split('\n').map(s => s.replace(/^\s*[•\-*]\s*/, '').trim()).filter(Boolean) };
 }
 function openRate(id) {
   if (!member) return openProfile();
@@ -477,7 +490,7 @@ async function importRecipe() {
   $('#mealName').value = draft.name;
   if (draft.notes) $('#mealNotes').value = draft.notes;
   if (draft.tags.length) $('#mealTags').value = draft.tags.join(', ');
-  if (draft.ingredients.length) $('#ingredients').value = draft.ingredients.join('\n');
+  if (draft.ingredients.length) $('#ingredients').value = bulletize(draft.ingredients);
   toast(source === 'recipe' ? 'Recipe filled in. Check it, then tap Add idea.' : "Couldn't read the recipe, so only the name was filled in.");
 }
 $('#importRecipe').onclick = event => action(event.currentTarget, importRecipe);
