@@ -85,6 +85,7 @@ db.prepare("CREATE TABLE IF NOT EXISTS lists (id INTEGER PRIMARY KEY AUTOINCREME
 db.prepare("CREATE TABLE IF NOT EXISTS list_items (id INTEGER PRIMARY KEY AUTOINCREMENT,list_id INTEGER NOT NULL,label TEXT NOT NULL,store TEXT NOT NULL DEFAULT '',checked INTEGER NOT NULL DEFAULT 0 CHECK(checked IN (0,1)),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE INDEX IF NOT EXISTS list_items_list ON list_items(list_id)"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_labels (week_start TEXT NOT NULL,item_key TEXT NOT NULL,label TEXT NOT NULL,PRIMARY KEY(week_start,item_key))"),
+db.prepare("CREATE TABLE IF NOT EXISTS grocery_removed (week_start TEXT NOT NULL,item_key TEXT NOT NULL,PRIMARY KEY(week_start,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS grocery_stores (week_start TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('generated','manual')),item_key TEXT NOT NULL,store TEXT NOT NULL,PRIMARY KEY(week_start,kind,item_key))"),
 db.prepare("CREATE TABLE IF NOT EXISTS weekly_plan (plan_date TEXT PRIMARY KEY,meal_id INTEGER,note TEXT DEFAULT '',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS chores (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,repeat TEXT NOT NULL CHECK(repeat IN ('once','daily','weekly')),days TEXT NOT NULL DEFAULT '[]',start_date TEXT NOT NULL,assignees TEXT NOT NULL DEFAULT '[]',created_by TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
@@ -357,6 +358,7 @@ async function groceries(db, start) {
   const checks = new Map((await rows(db, 'SELECT item_key,checked FROM grocery_checks WHERE week_start=?', start)).map(r => [r.item_key, !!r.checked]));
   const stores = new Map((await rows(db, 'SELECT kind,item_key,store FROM grocery_stores WHERE week_start=?', start)).map(r => [`${r.kind}:${r.item_key}`, r.store]));
   const labels = new Map((await rows(db, 'SELECT item_key,label FROM grocery_labels WHERE week_start=?', start)).map(r => [r.item_key, r.label]));
+  const removed = new Set((await rows(db, 'SELECT item_key FROM grocery_removed WHERE week_start=?', start)).map(r => r.item_key));
   const combined = new Map();
   const missing = new Map();
   for (const meal of planned) {
@@ -364,6 +366,7 @@ async function groceries(db, start) {
     if (!ingredients.length) missing.set(meal.id, meal.name);
     for (const label of ingredients) {
       const key = itemKey(label);
+      if (removed.has(key)) continue;
       if (!combined.has(key)) combined.set(key, { key, label: labels.get(key) || label, original_label: label, edited: labels.has(key), count: 0, meals: [], checked: checks.get(key) || false, store: stores.get('generated:' + key) || '' });
       const item = combined.get(key);
       item.count++;
@@ -671,6 +674,11 @@ export default {
           if (!current.generated.some(item => item.key === key)) throw new InputError('This ingredient is no longer on the plan. Refresh the list.', 409);
           await db.prepare(`INSERT INTO grocery_checks (week_start,item_key,checked) VALUES (?,?,?)
             ON CONFLICT(week_start,item_key) DO UPDATE SET checked=excluded.checked`).bind(start, key, Number(b.checked)).run();
+        } else if (b.kind === 'generated' && method === 'DELETE') {
+          // Meal-generated lines are derived, so "delete" hides the line for this week only; the recipe is untouched.
+          const key = text(b.key, 200);
+          if (!(await groceries(db, start)).generated.some(item => item.key === key)) throw new InputError('This ingredient is no longer on the plan. Refresh the list.', 409);
+          await db.prepare('INSERT OR IGNORE INTO grocery_removed (week_start,item_key) VALUES (?,?)').bind(start, key).run();
         } else if (b.kind === 'manual') {
           const id = Number(b.id);
           if (!Number.isSafeInteger(id) || !await db.prepare('SELECT id FROM grocery_items WHERE id=? AND week_start=?').bind(id, start).first()) throw new InputError('Grocery item not found.', 404);
