@@ -196,6 +196,7 @@ function openEditMeal(id) {
   $('#editMealNotes').value = meal.notes || '';
   $('#editMealTags').value = meal.tags.join(', ');
   $('#editIngredients').value = bulletize(meal.ingredients);
+  $('#editAddToGrocery').checked = meal.to_grocery !== false;
   $('#editMealDialog').showModal();
 }
 // Ingredient boxes show a bullet list; bullets are stripped again in mealPayload.
@@ -215,6 +216,7 @@ function mealPayload(edit = false) {
   return { name: $(edit ? '#editMealName' : '#mealName').value, recipe_url: $(edit ? '#editRecipeUrl' : '#recipeUrl').value,
     notes: $(edit ? '#editMealNotes' : '#mealNotes').value,
     tags: $(edit ? '#editMealTags' : '#mealTags').value.split(',').map(s => s.trim()).filter(Boolean),
+    to_grocery: $(edit ? '#editAddToGrocery' : '#addToGrocery').checked,
     ingredients: $(edit ? '#editIngredients' : '#ingredients').value.split('\n').map(s => s.replace(/^\s*[•\-*]\s*/, '').trim()).filter(Boolean) };
 }
 function openRate(id) {
