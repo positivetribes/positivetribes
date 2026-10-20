@@ -179,13 +179,37 @@ function renderMeals() {
     await send('/vote', 'POST', { meal_id: +button.dataset.id, member }); await refresh();
   }));
   $$('.edit-meal').forEach(button => button.onclick = () => openEditMeal(button.dataset.id));
+  $$('.meal-row[data-view]').forEach(row => {
+    row.onclick = () => openViewMeal(row.dataset.view);
+    row.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openViewMeal(row.dataset.view); } };
+  });
   $$('.rate').forEach(button => button.onclick = () => openRate(button.dataset.id));
 }
 function mealCard(meal) {
   const mine = data.ratings.find(r => +r.meal_id === +meal.id && r.member === member);
   const voted = data.votes.some(v => +v.meal_id === +meal.id && v.member === member);
   const history = historyFor(meal.id);
-  return `<article class="meal-card"><div class="meal-row"><div><h3>${esc(meal.name)}</h3><div class="hint">${esc(meal.notes || (meal.suggested_by ? `Suggested by ${meal.suggested_by}` : 'Family meal'))}</div></div><div class="score">${meal.average_rating ? `★ ${Number(meal.average_rating).toFixed(1)}` : 'New'}</div></div><div class="tags">${meal.tags.map(tag => `<span>${esc(tag)}</span>`).join('')}</div><p class="last-made">${lastMade(meal.id)}</p>${history.length ? `<details class="history"><summary>${history.length} past dinner${history.length === 1 ? '' : 's'}</summary><p class="hint">Based on past plans, not confirmed cooking.</p><ul>${history.map(p => `<li>${displayDate(p.plan_date)}${p.note ? ` · ${esc(p.note)}` : ''}</li>`).join('')}</ul></details>` : ''}<div class="chips"><button class="chip vote ${voted ? 'voted' : ''}" data-id="${meal.id}">♥ ${meal.vote_count || 0} want this</button><button class="chip edit-meal" data-id="${meal.id}">✎ Edit</button><button class="chip rate" data-id="${meal.id}">${mine ? `★ Your ${mine.rating}/5` : '☆ Rate it'}</button>${safeRecipe(meal.recipe_url) ? `<a class="chip" href="${esc(meal.recipe_url)}" target="_blank" rel="noopener noreferrer">Recipe ↗</a>` : ''}</div></article>`;
+  return `<article class="meal-card"><div class="meal-row" data-view="${meal.id}" role="button" tabindex="0" aria-label="View ${esc(meal.name)}"><div><h3>${esc(meal.name)}</h3><div class="hint">${esc(meal.notes || (meal.suggested_by ? `Suggested by ${meal.suggested_by}` : 'Family meal'))}</div></div><div class="score">${meal.average_rating ? `★ ${Number(meal.average_rating).toFixed(1)}` : 'New'}</div></div><div class="tags">${meal.tags.map(tag => `<span>${esc(tag)}</span>`).join('')}</div><p class="last-made">${lastMade(meal.id)}</p>${history.length ? `<details class="history"><summary>${history.length} past dinner${history.length === 1 ? '' : 's'}</summary><p class="hint">Based on past plans, not confirmed cooking.</p><ul>${history.map(p => `<li>${displayDate(p.plan_date)}${p.note ? ` · ${esc(p.note)}` : ''}</li>`).join('')}</ul></details>` : ''}<div class="chips"><button class="chip vote ${voted ? 'voted' : ''}" data-id="${meal.id}">♥ ${meal.vote_count || 0} want this</button><button class="chip edit-meal" data-id="${meal.id}">✎ Edit</button><button class="chip rate" data-id="${meal.id}">${mine ? `★ Your ${mine.rating}/5` : '☆ Rate it'}</button>${safeRecipe(meal.recipe_url) ? `<a class="chip" href="${esc(meal.recipe_url)}" target="_blank" rel="noopener noreferrer">Recipe ↗</a>` : ''}</div></article>`;
+}
+// Read-only look at a whole meal: full notes, ingredients, link and ratings.
+function openViewMeal(id) {
+  const meal = data.meals.find(m => +m.id === +id);
+  if (!meal) return;
+  const ratings = data.ratings.filter(r => +r.meal_id === meal.id);
+  const section = (title, html) => `<h3 class="view-title">${title}</h3>${html}`;
+  $('#viewName').textContent = meal.name;
+  $('#viewMeta').textContent = [meal.average_rating ? `★ ${Number(meal.average_rating).toFixed(1)} (${meal.rating_count})` : 'Not rated yet', meal.suggested_by && `Suggested by ${meal.suggested_by}`, lastMade(meal.id)].filter(Boolean).join(' · ');
+  $('#viewBody').innerHTML = [
+    meal.tags.length && `<div class="tags">${meal.tags.map(tag => `<span>${esc(tag)}</span>`).join('')}</div>`,
+    meal.recipe_url && safeRecipe(meal.recipe_url) && `<p><a href="${esc(meal.recipe_url)}" target="_blank" rel="noopener noreferrer">Open recipe ↗</a></p>`,
+    meal.notes && section('Notes', `<p class="view-notes">${esc(meal.notes)}</p>`),
+    section('Ingredients', meal.ingredients.length
+      ? `<ul class="view-list">${meal.ingredients.map(item => `<li>${esc(item)}</li>`).join('')}</ul><p class="hint">${meal.to_grocery ? 'Added to the shopping list when planned.' : 'Not added to the shopping list.'}</p>`
+      : '<p class="hint">No ingredients saved.</p>'),
+    ratings.length && section('Ratings', `<ul class="view-list">${ratings.map(r => `<li>${esc(r.member)}: ${'★'.repeat(r.rating)}${r.comment ? ` — ${esc(r.comment)}` : ''}</li>`).join('')}</ul>`)
+  ].filter(Boolean).join('');
+  $('#viewEdit').onclick = () => { $('#viewMealDialog').close(); openEditMeal(meal.id); };
+  $('#viewMealDialog').showModal();
 }
 function openEditMeal(id) {
   activeMeal = +id;
