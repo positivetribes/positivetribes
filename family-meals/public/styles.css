@@ -132,3 +132,5 @@ input.switch:checked{background:var(--green)}input.switch:checked::before{transf
 /* Swipe a grocery row left to reveal Delete */
 .swipe-row{position:relative;overflow:hidden;border-radius:15px}.swipe-row>.grocery-item{position:relative;z-index:1;touch-action:pan-y;transition:transform .2s ease}
 .swipe-delete{position:absolute;top:0;right:0;bottom:0;width:88px;border:0;border-radius:0 15px 15px 0;background:#b3261e;color:#fff;font-weight:750}
+
+.check-row{display:flex;align-items:center;gap:10px;font-weight:650}.check-row input{width:22px;height:22px;flex-shrink:0;accent-color:var(--green)}

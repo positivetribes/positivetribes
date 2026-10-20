@@ -94,6 +94,9 @@ db.prepare("CREATE TABLE IF NOT EXISTS chore_done (chore_id INTEGER NOT NULL,due
 // Lists made before lists belonged to a profile have no owner column yet.
 if (!(await db.prepare("SELECT 1 FROM pragma_table_info('lists') WHERE name='owner'").first()))
   await db.prepare("ALTER TABLE lists ADD COLUMN owner TEXT NOT NULL DEFAULT '' COLLATE NOCASE").run();
+// Meals made before "add to shopping list" was optional default to adding their ingredients.
+if (!(await db.prepare("SELECT 1 FROM pragma_table_info('meal_details') WHERE name='to_grocery'").first()))
+  await db.prepare("ALTER TABLE meal_details ADD COLUMN to_grocery INTEGER NOT NULL DEFAULT 1 CHECK(to_grocery IN (0,1))").run();
 if (!(await db.prepare("SELECT 1 FROM pragma_table_info('lists') WHERE name='shared'").first()))
   await db.prepare("ALTER TABLE lists ADD COLUMN shared INTEGER NOT NULL DEFAULT 0 CHECK(shared IN (0,1))").run();
 // D1 batches are transactional. Keep the empty-table check, all 15 inserts,
@@ -142,13 +145,18 @@ function list(value, limit, max, lower = false) {
     return lower ? entry.toLowerCase() : entry;
   }).filter(Boolean))];
 }
+const flag = value => {
+  if (typeof value !== 'boolean') throw new InputError('Add to shopping list must be true or false.');
+  return value;
+};
 function mealInput(b) {
   const name = text(b.name, 80);
   if (!name) throw new InputError('Meal name is required.');
   const recipe = text(b.recipe_url, 2000);
   if (recipe) recipeLink(recipe);
   return { name, recipe, notes: text(b.notes), tags: b.tags === undefined ? undefined : list(b.tags, 12, 40, true),
-    ingredients: b.ingredients === undefined ? undefined : list(b.ingredients, 80, 200) };
+    ingredients: b.ingredients === undefined ? undefined : list(b.ingredients, 80, 200),
+    to_grocery: b.to_grocery === undefined ? undefined : flag(b.to_grocery) };
 }
 function recipeLink(value) {
   let url;
@@ -217,10 +225,12 @@ async function requireMeal(db, value) {
   return id;
 }
 function detailsStatement(db, id, input) {
-  return db.prepare(`INSERT INTO meal_details (meal_id,tags,ingredients) VALUES (?,COALESCE(?, '[]'),COALESCE(?, '[]'))
-    ON CONFLICT(meal_id) DO UPDATE SET tags=COALESCE(?,meal_details.tags),ingredients=COALESCE(?,meal_details.ingredients)`)
-    .bind(id, input.tags === undefined ? null : JSON.stringify(input.tags), input.ingredients === undefined ? null : JSON.stringify(input.ingredients),
-      input.tags === undefined ? null : JSON.stringify(input.tags), input.ingredients === undefined ? null : JSON.stringify(input.ingredients));
+  const tags = input.tags === undefined ? null : JSON.stringify(input.tags);
+  const ingredients = input.ingredients === undefined ? null : JSON.stringify(input.ingredients);
+  const toGrocery = input.to_grocery === undefined ? null : Number(input.to_grocery);
+  return db.prepare(`INSERT INTO meal_details (meal_id,tags,ingredients,to_grocery) VALUES (?,COALESCE(?, '[]'),COALESCE(?, '[]'),COALESCE(?, 1))
+    ON CONFLICT(meal_id) DO UPDATE SET tags=COALESCE(?,meal_details.tags),ingredients=COALESCE(?,meal_details.ingredients),to_grocery=COALESCE(?,meal_details.to_grocery)`)
+    .bind(id, tags, ingredients, toGrocery, tags, ingredients, toGrocery);
 }
 async function requireMember(db, value) {
   const name = text(value, 30);
@@ -230,12 +240,12 @@ async function requireMember(db, value) {
 }
 const rows = async (db, sql, ...values) => (await db.prepare(sql).bind(...values).all()).results;
 async function summary(db) {
-  const meals = await rows(db, `SELECT m.*,COALESCE(d.tags,'[]') tags,COALESCE(d.ingredients,'[]') ingredients,
+  const meals = await rows(db, `SELECT m.*,COALESCE(d.tags,'[]') tags,COALESCE(d.ingredients,'[]') ingredients,COALESCE(d.to_grocery,1) to_grocery,
     (SELECT ROUND(AVG(rating),1) FROM ratings WHERE meal_id=m.id) average_rating,
     (SELECT COUNT(*) FROM ratings WHERE meal_id=m.id) rating_count,
     (SELECT COUNT(*) FROM meal_votes WHERE meal_id=m.id) vote_count
     FROM meals m LEFT JOIN meal_details d ON d.meal_id=m.id ORDER BY COALESCE(average_rating,0) DESC,m.id`);
-  return { plan_revision: (await db.prepare('SELECT revision FROM plan_revision WHERE id=1').first()).revision, meals: meals.map(m => ({ ...m, tags: JSON.parse(m.tags), ingredients: JSON.parse(m.ingredients) })),
+  return { plan_revision: (await db.prepare('SELECT revision FROM plan_revision WHERE id=1').first()).revision, meals: meals.map(m => ({ ...m, tags: JSON.parse(m.tags), ingredients: JSON.parse(m.ingredients), to_grocery: !!m.to_grocery })),
     ratings: await rows(db, 'SELECT * FROM ratings ORDER BY created_at DESC'),
     votes: await rows(db, 'SELECT * FROM meal_votes'),
     plan: await rows(db, `SELECT p.*,m.name meal_name FROM weekly_plan p LEFT JOIN meals m ON m.id=p.meal_id ORDER BY p.plan_date`),
@@ -352,7 +362,7 @@ async function choresForWeek(db, start) {
     recent: await rows(db, 'SELECT d.chore_id,c.title,d.due_date,d.done_by,d.done_at FROM chore_done d JOIN chores c ON c.id=d.chore_id ORDER BY d.done_at DESC,d.rowid DESC LIMIT 30') };
 }
 async function groceries(db, start) {
-  const planned = await rows(db, `SELECT p.plan_date,m.id,m.name,COALESCE(d.ingredients,'[]') ingredients
+  const planned = await rows(db, `SELECT p.plan_date,m.id,m.name,COALESCE(d.ingredients,'[]') ingredients,COALESCE(d.to_grocery,1) to_grocery
     FROM weekly_plan p JOIN meals m ON m.id=p.meal_id LEFT JOIN meal_details d ON d.meal_id=m.id
     WHERE p.plan_date>=? AND p.plan_date<=? ORDER BY p.plan_date`, start, addDays(start, 6));
   const checks = new Map((await rows(db, 'SELECT item_key,checked FROM grocery_checks WHERE week_start=?', start)).map(r => [r.item_key, !!r.checked]));
@@ -362,6 +372,7 @@ async function groceries(db, start) {
   const combined = new Map();
   const missing = new Map();
   for (const meal of planned) {
+    if (!meal.to_grocery) continue;
     const ingredients = JSON.parse(meal.ingredients);
     if (!ingredients.length) missing.set(meal.id, meal.name);
     for (const label of ingredients) {
@@ -444,7 +455,7 @@ export default {
         // The subquery refers to the row just inserted within this transaction.
         const result = await db.batch([
           db.prepare('INSERT INTO meals (name,notes,recipe_url,suggested_by) VALUES (?,?,?,?)').bind(input.name, input.notes, input.recipe, text(b.suggested_by, 30)),
-          db.prepare('INSERT INTO meal_details (meal_id,tags,ingredients) VALUES (last_insert_rowid(),?,?)').bind(JSON.stringify(input.tags || []), JSON.stringify(input.ingredients || []))
+          db.prepare('INSERT INTO meal_details (meal_id,tags,ingredients,to_grocery) VALUES (last_insert_rowid(),?,?,?)').bind(JSON.stringify(input.tags || []), JSON.stringify(input.ingredients || []), Number(input.to_grocery !== false))
         ]);
         return json({ ok: true, id: result[0].meta.last_row_id }, 201);
       }

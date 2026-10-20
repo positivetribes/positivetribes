@@ -98,6 +98,21 @@ test('week acceptance is atomic, validates all entries, and rejects stale previe
   } finally { sqlite.close(); }
 });
 
+test('meals can opt their ingredients out of the shopping list', async () => {
+  const { call, sqlite, meals } = await fixture();
+  try {
+    const [a] = meals;
+    await call('/meals', 'PUT', { id: a.id, name: a.name, ingredients: ['1 onion'] });
+    await call('/plan', 'POST', { plan_date: start, meal_id: a.id });
+    assert.equal((await call('/groceries?week=' + start)).body.generated.length, 1);
+    assert.equal((await call('/meals', 'PUT', { id: a.id, name: a.name, to_grocery: false })).status, 200);
+    const list = (await call('/groceries?week=' + start)).body;
+    assert.equal(list.generated.length, 0); assert.equal(list.missing.length, 0); assert.equal(list.planned_count, 1);
+    const saved = (await call('/summary')).body.meals.find(m => m.id === a.id);
+    assert.equal(saved.to_grocery, false); assert.deepEqual(saved.ingredients, ['1 onion']);
+    assert.equal((await call('/meals', 'PUT', { id: a.id, name: a.name, to_grocery: 'no' })).status, 400);
+  } finally { sqlite.close(); }
+});
 test('groceries group identical amounts, persist checks/manual items, and follow swaps and weeks', async () => {
   const { call, sqlite, meals } = await fixture();
   try {

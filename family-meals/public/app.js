@@ -196,6 +196,7 @@ function openEditMeal(id) {
   $('#editMealNotes').value = meal.notes || '';
   $('#editMealTags').value = meal.tags.join(', ');
   $('#editIngredients').value = bulletize(meal.ingredients);
+  $('#editAddToGrocery').checked = meal.to_grocery !== false;
   $('#editMealDialog').showModal();
 }
 // Ingredient boxes show a bullet list; bullets are stripped again in mealPayload.
@@ -215,6 +216,7 @@ function mealPayload(edit = false) {
   return { name: $(edit ? '#editMealName' : '#mealName').value, recipe_url: $(edit ? '#editRecipeUrl' : '#recipeUrl').value,
     notes: $(edit ? '#editMealNotes' : '#mealNotes').value,
     tags: $(edit ? '#editMealTags' : '#mealTags').value.split(',').map(s => s.trim()).filter(Boolean),
+    to_grocery: $(edit ? '#editAddToGrocery' : '#addToGrocery').checked,
     ingredients: $(edit ? '#editIngredients' : '#ingredients').value.split('\n').map(s => s.replace(/^\s*[•\-*]\s*/, '').trim()).filter(Boolean) };
 }
 function openRate(id) {
@@ -534,10 +536,9 @@ async function importRecipe() {
   if (!url) return toast('Paste a recipe link first.');
   const { source, draft } = await send('/meals/import', 'POST', { url });
   $('#mealName').value = draft.name;
-  // Imported ingredients go in Notes, not the grocery list; the family adds grocery items themselves.
-  const notes = [draft.notes, draft.ingredients.length && `Ingredients:\n${bulletize(draft.ingredients)}`].filter(Boolean).join('\n\n');
-  if (notes) $('#mealNotes').value = notes.slice(0, $('#mealNotes').maxLength);
+  if (draft.notes) $('#mealNotes').value = draft.notes;
   if (draft.tags.length) $('#mealTags').value = draft.tags.join(', ');
+  if (draft.ingredients.length) $('#ingredients').value = bulletize(draft.ingredients);
   toast(source === 'recipe' ? 'Recipe filled in. Check it, then tap Add idea.' : "Couldn't read the recipe, so only the name was filled in.");
 }
 $('#importRecipe').onclick = event => action(event.currentTarget, importRecipe);
