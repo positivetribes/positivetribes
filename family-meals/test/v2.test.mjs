@@ -598,3 +598,41 @@ test('dashboard: read-only counts behind its own token, never the family PIN', a
     assert.equal((await dash('?date=2026-09-28')).body.chores.total, 3);   // Monday: dishwasher, trash, garage
   } finally { sqlite.close(); }
 });
+
+test('recipe links import schema.org data, fall back to the page title or link, and never save', async () => {
+  const { sqlite, call } = await fixture();
+  const real = globalThis.fetch;
+  const serve = (html, type = 'text/html; charset=utf-8') => { globalThis.fetch = async () => new Response(html, { headers: { 'content-type': type } }); };
+  const link = 'https://cooking.nytimes.com/recipes/4735-old-fashioned-beef-stew?unlocked_article_code=abc&smid=share';
+  try {
+    const before = sqlite.prepare('SELECT COUNT(*) n FROM meals').get().n;
+    const recipe = { '@type': ['Recipe'], name: 'Beef Stew &amp; Carrots', description: '<p>Cozy &#8212; doubles well.</p>',
+      keywords: 'Beef, Easy, One Pot', recipeCategory: 'Dinner', recipeCuisine: ['American'], recipeIngredient: Array.from({ length: 100 }, (_, i) => `${i + 1} carrot`) };
+    serve(`<html><head><script type="application/ld+json">{bad json</script><script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@graph': [{ '@type': 'WebPage' }, recipe] })}</script></head></html>`);
+    let result = await call('/meals/import', 'POST', { url: link });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.source, 'recipe');
+    assert.deepEqual([result.body.draft.name, result.body.draft.notes, result.body.draft.recipe_url], ['Beef Stew & Carrots', 'Cozy — doubles well.', link]);
+    assert.deepEqual(result.body.draft.tags, ['beef', 'easy', 'one pot', 'dinner', 'american']);
+    assert.equal(result.body.draft.ingredients.length, 80);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM meals').get().n, before);
+
+    serve(`<script type="application/ld+json">${JSON.stringify({ '@type': 'Recipe', name: 'x'.repeat(120) })}</script>`);
+    assert.equal((await call('/meals/import', 'POST', { url: link })).body.draft.name.length, 80);
+
+    serve('<html><head><meta property="og:title" content="Sheet-Pan Chicken"><title>Ignored</title></head></html>');
+    result = await call('/meals/import', 'POST', { url: link });
+    assert.deepEqual([result.body.source, result.body.draft.name, result.body.draft.ingredients], ['page', 'Sheet-Pan Chicken', []]);
+
+    globalThis.fetch = async () => { throw new Error('blocked'); };
+    result = await call('/meals/import', 'POST', { url: link });
+    assert.deepEqual([result.body.source, result.body.draft.name], ['link', 'Old Fashioned Beef Stew']);
+    serve('{}', 'application/json');
+    assert.equal((await call('/meals/import', 'POST', { url: link })).body.source, 'link');
+
+    assert.equal((await call('/meals/import', 'POST', { url: link }, false)).status, 401);
+    assert.equal((await call('/meals/import', 'POST', { url: 'ftp://example.test/stew' })).status, 400);
+    assert.equal((await call('/meals/import', 'POST', { url: 42 })).status, 400);
+    assert.equal((await call('/meals/import', 'POST', {})).status, 400);
+  } finally { globalThis.fetch = real; sqlite.close(); }
+});
