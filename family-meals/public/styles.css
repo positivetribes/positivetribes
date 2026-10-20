@@ -133,9 +133,7 @@ input.switch:checked{background:var(--green)}input.switch:checked::before{transf
 .swipe-row{position:relative;overflow:hidden;border-radius:15px}.swipe-row>.grocery-item{position:relative;z-index:1;touch-action:pan-y;transition:transform .2s ease}
 .swipe-delete{position:absolute;top:0;right:0;bottom:0;width:88px;border:0;border-radius:0 15px 15px 0;background:#b3261e;color:#fff;font-weight:750}
 
-.check-row{display:flex;align-items:center;gap:10px;font-weight:650}.check-row input{width:22px;height:22px;flex-shrink:0;accent-color:var(--green)}
 
-.modal label.check-row{display:flex;align-items:center;gap:10px;font-weight:650}
 .meal-row[data-view]{cursor:pointer}.meal-row[data-view] h3{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .view-meal{max-height:85vh;overflow-y:auto}.view-title{margin:16px 0 6px;font-size:15px}.view-notes{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}.view-list{margin:0;padding-left:20px;display:grid;gap:4px;overflow-wrap:anywhere}
 
