@@ -120,6 +120,10 @@ test('groceries group identical amounts, persist checks/manual items, and follow
     await call('/plan', 'POST', { plan_date: start, meal_id: null });
     assert.equal((await call('/groceries?week=' + start)).body.generated.length, 0);
     assert.equal((await call('/groceries', 'PATCH', { week_start: start, kind: 'generated', key: '1 onion', checked: false })).status, 409);
+    await call('/plan', 'POST', { plan_date: start, meal_id: a.id });
+    assert.equal((await call('/groceries', 'DELETE', { week_start: start, kind: 'generated', key: '1 onion' })).status, 200);
+    assert.deepEqual((await call('/groceries?week=' + start)).body.generated.map(i => i.key), ['2 cups rice']);
+    assert.equal((await call('/groceries', 'DELETE', { week_start: start, kind: 'generated', key: 'nope' })).status, 409);
     assert.equal((await call('/groceries', 'DELETE', { week_start: start, kind: 'manual', id: manual.body.id })).status, 200);
     assert.equal((await call('/groceries?week=' + start)).body.manual.length, 0);
   } finally { sqlite.close(); }

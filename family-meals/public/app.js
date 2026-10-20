@@ -333,6 +333,52 @@ function renderGroceries() {
   }));
   $$('.edit-item').forEach(button => button.onclick = () => openItem(items[+button.dataset.item]));
   $$('.store-chip').forEach(button => button.onclick = () => openStore(items[+button.dataset.item]));
+  swipeToDelete($('#groceryList'), async i => {
+    const item = items[i];
+    await send('/groceries', 'DELETE', { week_start: start, kind: item.kind, id: item.id, key: item.key });
+    await loadGroceries();
+  });
+}
+// Swipe a grocery row left to reveal Delete (tap it to remove); a long swipe removes straight away. Rows are wrapped after rendering.
+function swipeToDelete(container, remove) {
+  const REVEAL = 88;
+  const closeAll = except => container.querySelectorAll('.swipe-row.open').forEach(row => { if (row !== except) { row.classList.remove('open'); row.firstElementChild.style.transform = ''; } });
+  container.querySelectorAll(':scope > .grocery-item').forEach(row => {
+    const index = +row.querySelector('input').dataset.item;
+    const wrap = document.createElement('div');
+    wrap.className = 'swipe-row';
+    const button = document.createElement('button');
+    button.className = 'swipe-delete'; button.type = 'button'; button.textContent = 'Delete';
+    button.setAttribute('aria-label', `Delete ${row.querySelector('strong').textContent}`);
+    button.onclick = () => action(button, () => remove(index));
+    row.replaceWith(wrap); wrap.append(row, button);
+    let startX = 0, startY = 0, base = 0, dx = 0, dragging = false, moved = false;
+    row.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      closeAll(wrap);
+      startX = event.clientX; startY = event.clientY; base = wrap.classList.contains('open') ? -REVEAL : 0; dx = base; dragging = true; moved = false;
+    });
+    row.addEventListener('pointermove', event => {
+      if (!dragging) return;
+      const x = event.clientX - startX, y = event.clientY - startY;
+      if (!moved && (Math.abs(x) < 8 || Math.abs(y) > Math.abs(x))) return;
+      if (!moved) { moved = true; row.setPointerCapture(event.pointerId); row.style.transition = 'none'; }
+      dx = Math.max(-wrap.offsetWidth, Math.min(0, base + x));
+      row.style.transform = `translateX(${dx}px)`;
+    });
+    const end = () => {
+      if (!dragging) return;
+      dragging = false; row.style.transition = '';
+      if (!moved) return;
+      if (dx < -wrap.offsetWidth * 0.6) { row.style.transform = `translateX(${-wrap.offsetWidth}px)`; action(button, () => remove(index)); return; }
+      const open = dx < -REVEAL / 2;
+      wrap.classList.toggle('open', open);
+      row.style.transform = open ? `translateX(${-REVEAL}px)` : '';
+    };
+    row.addEventListener('pointerup', end); row.addEventListener('pointercancel', end);
+    // A drag must not tick the checkbox or open a dialog underneath the finger.
+    row.addEventListener('click', event => { if (moved) { event.preventDefault(); event.stopPropagation(); moved = false; } }, true);
+  });
 }
 let itemTarget = null;
 function openItem(item) {
@@ -340,7 +386,7 @@ function openItem(item) {
   $('#itemInput').value = item.label;
   $('#itemNote').textContent = item.kind === 'generated' ? `From ${item.meals.join(', ')}. This changes this week's list only — the recipe stays the same.` : '';
   $('#itemNote').hidden = item.kind !== 'generated';
-  $('#deleteItem').hidden = item.kind === 'generated';
+  $('#deleteItem').hidden = false;
   $('#resetItem').hidden = !item.edited;
   $('#itemDialog').showModal();
   $('#itemInput').focus();
@@ -365,7 +411,7 @@ $('#deleteItem').onclick = event => {
       await send('/lists/items', 'DELETE', { list_id: itemTarget.list_id, id: itemTarget.id });
       $('#itemDialog').close(); return loadCustom();
     }
-    await send('/groceries', 'DELETE', { week_start: groceryState.start, kind: 'manual', id: itemTarget.id });
+    await send('/groceries', 'DELETE', { week_start: groceryState.start, kind: itemTarget.kind, id: itemTarget.id, key: itemTarget.key });
     $('#itemDialog').close(); await loadGroceries();
   });
 };
@@ -675,6 +721,10 @@ function renderCustom() {
   }));
   $$('#customList .edit-item').forEach(button => button.onclick = () => openItem(target(+button.dataset.item)));
   $$('#customList .store-chip').forEach(button => button.onclick = () => openStore(target(+button.dataset.item)));
+  swipeToDelete($('#customList'), async i => {
+    await send('/lists/items', 'DELETE', { list_id: list.id, id: items[i].id });
+    await loadCustom();
+  });
 }
 $('#customStoreFilter').onchange = () => {
   customFilter = $('#customStoreFilter').value;
