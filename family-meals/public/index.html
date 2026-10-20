@@ -79,8 +79,8 @@
   <div class="actions"><button type="button" class="ghost close-dialog" id="cancelProfile">Cancel</button><button class="primary" id="saveMember">Save</button></div>
 </form></dialog>
 <dialog id="mealDialog"><form id="mealForm" class="modal"><h2>Suggest a meal</h2>
+  <label>Recipe link <span class="hint">(optional)</span><span class="add-grocery link-row"><input id="recipeUrl" type="url" maxlength="2000" placeholder="https://…"><button type="button" class="ghost" id="importRecipe">Fill from link</button></span><small class="hint">Paste a link from NYT Cooking or most recipe sites to fill in the rest.</small></label>
   <label>Meal name<input id="mealName" maxlength="80" required></label>
-  <label>Recipe link <span class="hint">(optional)</span><input id="recipeUrl" type="url" maxlength="2000" placeholder="https://…"></label>
   <label>Notes<textarea id="mealNotes" maxlength="2000" placeholder="What makes this a favorite?"></textarea></label>
   <label>Tags<input id="mealTags" placeholder="Chicken, quick, Mexican"><small class="hint">Separate with commas. Up to 12 tags.</small></label>
   <label>Grocery ingredients<textarea id="ingredients" placeholder="1 lb chicken&#10;2 bell peppers&#10;8 tortillas"></textarea><small class="hint">One item per line, with the amount for one family dinner. Up to 80 items.</small></label>

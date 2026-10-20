@@ -470,6 +470,19 @@ $$('[data-week-home]').forEach(button => button.onclick = () => { if (weekOffset
 $('#addMeal').onclick = () => $('#mealDialog').showModal();
 $('#tagFilter').onchange = () => { tagFilter = $('#tagFilter').value; renderMeals(); };
 $('#mealSearch').oninput = renderMeals;
+async function importRecipe() {
+  const url = $('#recipeUrl').value.trim();
+  if (!url) return toast('Paste a recipe link first.');
+  const { source, draft } = await send('/meals/import', 'POST', { url });
+  $('#mealName').value = draft.name;
+  if (draft.notes) $('#mealNotes').value = draft.notes;
+  if (draft.tags.length) $('#mealTags').value = draft.tags.join(', ');
+  if (draft.ingredients.length) $('#ingredients').value = draft.ingredients.join('\n');
+  toast(source === 'recipe' ? 'Recipe filled in. Check it, then tap Add idea.' : "Couldn't read the recipe, so only the name was filled in.");
+}
+$('#importRecipe').onclick = event => action(event.currentTarget, importRecipe);
+// Pasting a link into an empty form fills it in right away.
+$('#recipeUrl').onpaste = () => setTimeout(() => { if (!$('#mealName').value.trim()) action($('#importRecipe'), importRecipe); });
 $('#mealForm').onsubmit = event => {
   event.preventDefault(); action(event.submitter, async () => {
     await send('/meals', 'POST', { ...mealPayload(), suggested_by: member });

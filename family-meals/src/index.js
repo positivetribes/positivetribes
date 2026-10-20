@@ -145,13 +145,69 @@ function mealInput(b) {
   const name = text(b.name, 80);
   if (!name) throw new InputError('Meal name is required.');
   const recipe = text(b.recipe_url, 2000);
-  if (recipe) {
-    let url;
-    try { url = new URL(recipe); } catch { throw new InputError('Use a valid recipe URL.'); }
-    if (!['https:', 'http:'].includes(url.protocol)) throw new InputError('Recipe links must use https or http.');
-  }
+  if (recipe) recipeLink(recipe);
   return { name, recipe, notes: text(b.notes), tags: b.tags === undefined ? undefined : list(b.tags, 12, 40, true),
     ingredients: b.ingredients === undefined ? undefined : list(b.ingredients, 80, 200) };
+}
+function recipeLink(value) {
+  let url;
+  try { url = new URL(value); } catch { throw new InputError('Use a valid recipe URL.'); }
+  if (!['https:', 'http:'].includes(url.protocol)) throw new InputError('Recipe links must use https or http.');
+  return url;
+}
+// Recipe import: most recipe sites publish schema.org Recipe JSON-LD for search engines.
+const entities = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const decode = (all, code) => {
+  if (code[0] !== '#') return entities[code.toLowerCase()] ?? all;
+  const hex = code[1] === 'x' || code[1] === 'X', point = parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
+  return point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : ' ';
+};
+const plain = (value, max) => String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, decode)
+  .replace(/\s+/g, ' ').trim().slice(0, max).trim();
+const many = value => Array.isArray(value) ? value : value == null ? [] : [value];
+function findRecipe(node, depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 6) return null;
+  if (Array.isArray(node)) { for (const item of node) { const found = findRecipe(item, depth + 1); if (found) return found; } return null; }
+  if (many(node['@type']).some(type => String(type).toLowerCase() === 'recipe')) return node;
+  return findRecipe(node['@graph'], depth + 1) || findRecipe(node.mainEntity, depth + 1);
+}
+function slugName(url) {
+  const slug = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() || url.hostname).replace(/\.[a-z]+$/i, '').replace(/^\d+-/, '');
+  return plain(slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), 80);
+}
+function recipeFromHtml(html, url) {
+  let recipe = null;
+  for (const [, script] of html.matchAll(/<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { recipe = findRecipe(JSON.parse(script.trim())); } catch { continue; }
+    if (recipe) break;
+  }
+  if (recipe && plain(recipe.name, 80)) {
+    const tags = [...new Set([recipe.keywords, recipe.recipeCategory, recipe.recipeCuisine].flatMap(many)
+      .flatMap(value => String(value).split(',')).map(tag => plain(tag, 40).toLowerCase()).filter(Boolean))].slice(0, 12);
+    return { source: 'recipe', name: plain(recipe.name, 80), notes: plain(recipe.description, 2000), tags,
+      ingredients: [...new Set(many(recipe.recipeIngredient).map(item => plain(item, 200)).filter(Boolean))].slice(0, 80) };
+  }
+  const meta = html.match(/<meta[^>]+property=["']og:title["'][^>]*content=["']([^"']*)["']/i) || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]*property=["']og:title["']/i);
+  const title = plain(meta?.[1] || html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1], 80);
+  return { source: title ? 'page' : 'link', name: title || slugName(url), notes: '', tags: [], ingredients: [] };
+}
+async function importRecipe(link) {
+  const url = recipeLink(link);
+  try {
+    const response = await fetch(url, { redirect: 'follow', headers: { accept: 'text/html', 'user-agent': 'FamJam/1.0 (family-meals recipe import)' }, signal: AbortSignal.timeout(8000) });
+    if (!response.ok || !/html/i.test(response.headers.get('content-type') || '')) throw new Error('Not a readable page.');
+    const reader = response.body.getReader(), decoder = new TextDecoder();
+    let html = '';
+    while (html.length < 2_000_000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+    }
+    reader.cancel().catch(() => {});
+    return recipeFromHtml(html, url);
+  } catch {
+    return { source: 'link', name: slugName(url), notes: '', tags: [], ingredients: [] };
+  }
 }
 async function requireMeal(db, value) {
   const id = Number(value);
@@ -369,6 +425,12 @@ export default {
       await ensureSchema(db);
       const method = request.method, path = url.pathname;
       if (path === '/api/summary' && method === 'GET') return json(await summary(db));
+      if (path === '/api/meals/import' && method === 'POST') {
+        const link = text((await body(request)).url, 2000);
+        if (!link) throw new InputError('Paste a recipe link.');
+        const { source, ...draft } = await importRecipe(link);
+        return json({ source, draft: { ...draft, recipe_url: link } });
+      }
       if (path === '/api/meals' && (method === 'POST' || method === 'PUT')) {
         const b = await body(request), input = mealInput(b);
         if (method === 'PUT') {
