@@ -534,9 +534,10 @@ async function importRecipe() {
   if (!url) return toast('Paste a recipe link first.');
   const { source, draft } = await send('/meals/import', 'POST', { url });
   $('#mealName').value = draft.name;
-  if (draft.notes) $('#mealNotes').value = draft.notes;
+  // Imported ingredients go in Notes, not the grocery list; the family adds grocery items themselves.
+  const notes = [draft.notes, draft.ingredients.length && `Ingredients:\n${bulletize(draft.ingredients)}`].filter(Boolean).join('\n\n');
+  if (notes) $('#mealNotes').value = notes.slice(0, $('#mealNotes').maxLength);
   if (draft.tags.length) $('#mealTags').value = draft.tags.join(', ');
-  if (draft.ingredients.length) $('#ingredients').value = bulletize(draft.ingredients);
   toast(source === 'recipe' ? 'Recipe filled in. Check it, then tap Add idea.' : "Couldn't read the recipe, so only the name was filled in.");
 }
 $('#importRecipe').onclick = event => action(event.currentTarget, importRecipe);
