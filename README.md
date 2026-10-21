@@ -12,6 +12,8 @@ The Up ENDing Parkinson's scheduling prototype is at `/uep/` (`uep/index.html`, 
 
 A copy of the same prototype adapted for United Rocks (climbing teams for people with intellectual and developmental disabilities) is at `/unitedrocks/` (`unitedrocks/index.html`, fictional sample data, hidden from search engines). Its shared backlog is the separate Worker in `unitedrocks-backlog/`, served at `unitedrocks.positivetribes.org`.
 
+The Sober AF Entertainment (SAFE) homepage concept is at `/soberafe/` (`soberafe/index.html`). Its chapters prototype is at `/soberafe/chapters/` (`soberafe/chapters/index.html`, one self-contained page with sample data saved only in the visitor's browser, hidden from search engines). It walks through how SAFE could grow nationwide: people apply to host, complete five training modules, sign a host agreement and waiver, shadow an event and get certified by their chapter lead; certified hosts submit events that go public only after SAFE or the chapter lead approves them and the venue signs a host site waiver. A "Viewing as" switcher shows the visitor, applicant, host, chapter lead and SAFE admin views, and `#/guide` has a demo script. Training and waiver text is draft language for SAFE to replace.
+
 The existing `contact-worker.mjs` serves static assets and handles `/api/contact`, including validation, origin checks, rate limiting, and email delivery. This redesign preserves that integration and requires no new dependencies or hosting configuration.
 
 ## Preview
