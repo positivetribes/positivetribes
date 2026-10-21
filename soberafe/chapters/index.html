@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Prototype of a host certification and chapter program for Sober AF Entertainment, with sample data.">
+<title>Sober AF Chapters | Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Doto:wght@700;900&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Same game-day stadium look as /soberafe/: pale concrete ground, navy ink, LED amber on the
+   scoreboard panels, cobalt for links. Everything is one page with hash routes and sample data
+   kept in this browser only. */
+:root{
+  --ground:#E9EEF3; --paper:#FFFFFF; --ink:#0E1B2C; --muted:#4A5668; --rule:#C5CDD8;
+  --amber:#FFB21C; --cobalt:#2440E0; --board:#070B14; --navy:#13233A;
+  --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --led:'Doto','Courier New',monospace;
+  --body:'Instrument Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--body);color:var(--ink);background:var(--ground);line-height:1.55;font-size:17px}
+a{color:inherit}
+a:focus-visible,button:focus-visible,select:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--cobalt);outline-offset:3px;border-radius:4px}
+h1,h2,h3{font-family:var(--display);font-weight:900;margin:0;line-height:.95;letter-spacing:.005em}
+h1:focus,h1[tabindex]:focus-visible,h2[tabindex]:focus-visible{outline:none}
+p{margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding:0 32px}
+.h2{font-size:clamp(40px,5vw,64px);text-transform:uppercase}
+.lede{font-size:20px;color:var(--muted);max-width:60ch}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 28px;border-radius:6px;font:inherit;font-weight:700;font-size:17px;text-decoration:none;border:2px solid var(--ink);cursor:pointer;color:var(--ink);transition:transform .15s ease,background-color .15s ease}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn-solid{background:var(--ink);color:var(--paper)}
+.btn-amber{background:var(--amber);border-color:var(--amber);color:var(--ink)}
+.btn-line{background:transparent}
+.btn-sm{min-height:44px;padding:0 18px;font-size:15px}
+.tlink{color:var(--cobalt);font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px;background:none;border:0;padding:0;font:inherit;font-weight:700;cursor:pointer}
+.btns{display:flex;flex-wrap:wrap;gap:12px}
+
+/* demo bar */
+.demo{position:sticky;top:0;z-index:20;background:var(--board);color:var(--amber);border-bottom:2px solid var(--navy)}
+.demo .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;padding-top:8px;padding-bottom:8px}
+.demo .tag{font-family:var(--led);font-weight:900;font-size:14px;letter-spacing:.08em;text-transform:uppercase;text-shadow:0 0 8px rgba(255,178,28,.5)}
+.demo label{font-size:14px;color:#C8D1DE;display:flex;align-items:center;gap:8px;white-space:nowrap;min-width:0}
+.demo select{font:inherit;font-size:15px;min-height:40px;border-radius:6px;border:1px solid #3A4A62;background:var(--navy);color:var(--paper);padding:0 10px;max-width:100%}
+.demo .links{display:flex;gap:4px 18px;margin-left:auto}
+.demo button,.demo a{background:none;border:0;color:var(--paper);font:inherit;font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:10px 0}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 32px;padding:22px 0}
+.logo{font-family:var(--display);font-weight:900;font-size:34px;letter-spacing:.01em;text-decoration:none;line-height:1}
+.logo small{font-size:20px;color:var(--cobalt);margin-left:8px;letter-spacing:.04em;text-transform:uppercase}
+nav{display:flex;flex-wrap:wrap;align-items:center;gap:4px 26px;font-weight:600}
+nav a{text-decoration:none;padding:12px 0}
+nav a:hover{color:var(--cobalt)}
+nav a[aria-current="page"]{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:8px;text-decoration-color:var(--amber)}
+
+/* page */
+main{padding:24px 0 112px;min-height:60vh}
+.page-head{margin-bottom:40px}
+.page-head h1{font-size:clamp(48px,7vw,96px);text-transform:uppercase}
+.page-head .lede{margin-top:20px}
+.eyebrow{display:block;font-weight:700;color:var(--cobalt);margin-bottom:12px}
+.section{margin-top:72px}
+.section-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px 24px;margin-bottom:28px}
+.panel{background:var(--paper);border:2px solid var(--ink);border-radius:10px;padding:28px}
+.panel+.panel{margin-top:20px}
+.panel h2{font-size:36px;text-transform:uppercase}
+.panel h3{font-size:28px;text-transform:uppercase}
+.muted{color:var(--muted)}
+.small{font-size:15px}
+.stack>*+*{margin-top:16px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.split{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:48px;align-items:start}
+
+/* hero + LED board */
+.hero{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:56px;align-items:center;padding:24px 0 24px}
+.hero h1{font-size:clamp(56px,7.5vw,108px);text-transform:uppercase}
+.hero .lede{margin:28px 0 36px}
+.board{background:var(--board);color:var(--amber);border-radius:14px;padding:24px 26px;box-shadow:0 0 0 10px var(--navy),0 30px 60px -20px rgba(14,27,44,.55);
+  background-image:radial-gradient(circle,rgba(255,178,28,.07) 1.1px,transparent 1.3px);background-size:6px 6px}
+.board .led{font-family:var(--led);font-weight:900;letter-spacing:.06em;text-transform:uppercase;text-shadow:0 0 8px rgba(255,178,28,.55)}
+.board-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;font-size:16px}
+.board-top .live{color:#7CF0A0;text-shadow:0 0 8px rgba(124,240,160,.6)}
+.cells{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:18px}
+.cells div{background:rgba(255,178,28,.06);border:1px solid rgba(255,178,28,.18);border-radius:8px;padding:12px 6px 10px;text-align:center}
+.cells b{display:block;font-family:var(--led);font-weight:900;font-size:clamp(40px,4.6vw,60px);line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 0 14px rgba(255,178,28,.7)}
+.cells small{display:block;font-family:var(--led);font-weight:900;font-size:13px;letter-spacing:.1em;text-transform:uppercase;opacity:.85;margin-top:8px}
+.segs{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:18px}
+.segs span{height:16px;border-radius:3px;border:1px solid rgba(255,178,28,.3);background:rgba(255,178,28,.06)}
+.segs span.on{background:var(--amber);box-shadow:0 0 10px rgba(255,178,28,.7);border-color:var(--amber)}
+.board .caption{font-size:14px;color:#C8D1DE;margin-top:14px}
+
+/* path steps */
+.path{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:28px;counter-reset:step}
+.path li{border-top:4px solid var(--ink);padding-top:18px;counter-increment:step}
+.path li::before{content:counter(step,decimal-leading-zero);display:block;font-family:var(--led);font-weight:900;font-size:20px;color:var(--cobalt);margin-bottom:8px}
+.path h3{font-size:30px;text-transform:uppercase}
+.path p{color:var(--muted);margin-top:10px;font-size:16px}
+
+/* cards */
+.card{background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:22px;display:flex;flex-direction:column;gap:10px}
+.card h3{font-size:30px;text-transform:uppercase}
+.card .meta{color:var(--muted);font-size:15px}
+.card .btns{margin-top:auto;padding-top:8px}
+
+/* badges */
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;letter-spacing:.02em;padding:4px 10px;border-radius:999px;background:var(--ground);color:var(--ink);white-space:nowrap}
+.badge.ok{background:#DDF3E4;color:#14532D}
+.badge.wait{background:#FFF1D0;color:#6B4A00}
+.badge.bad{background:#FDE2E1;color:#8A1C1C}
+.badge.info{background:#E2E7FF;color:#1B2FA8}
+.badges{display:flex;flex-wrap:wrap;gap:6px}
+
+/* event list */
+.evs{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
+.evs>li{display:grid;grid-template-columns:110px minmax(0,1fr) minmax(0,auto);gap:20px;align-items:start;padding:22px 4px;border-bottom:1px solid var(--rule)}
+.date b{display:block;font-family:var(--display);font-weight:900;font-size:44px;line-height:.9}
+.date span{color:var(--muted);font-size:14px}
+.ev h3{font-size:28px;text-transform:uppercase}
+.ev p{color:var(--muted);margin-top:6px;font-size:16px}
+.ev .badges{margin-top:10px}
+.ev .note{margin-top:10px;background:#FDE2E1;color:#5E1414;border-radius:6px;padding:10px 12px;font-size:15px}
+.ev-actions{display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:280px}
+.ev-actions .why{font-size:14px;color:var(--muted);text-align:right}
+.empty{padding:28px 4px;color:var(--muted);border-bottom:1px solid var(--rule)}
+
+/* tables */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:16px}
+th,td{text-align:left;padding:14px 12px 14px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:14px;color:var(--muted);font-weight:600;border-bottom:2px solid var(--ink)}
+
+/* forms */
+form .field{display:flex;flex-direction:column;gap:6px;margin-bottom:20px}
+.field label,.field .label{font-weight:600}
+.field .hint{font-size:14px;color:var(--muted)}
+input[type=text],input[type=email],input[type=date],input[type=time],input[type=number],select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:2px solid var(--rule);border-radius:6px;padding:10px 12px;min-height:48px;width:100%}
+textarea{min-height:110px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cobalt);box-shadow:0 0 0 3px rgba(36,64,224,.2)}
+.check{display:flex;gap:12px;align-items:flex-start;margin-bottom:20px;font-weight:500}
+.check input{width:22px;height:22px;margin:2px 0 0;flex:none;accent-color:var(--cobalt)}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 20px}
+.error{color:#8A1C1C;font-weight:600;margin-bottom:16px}
+.error:empty{display:none}
+fieldset{border:0;padding:0;margin:0 0 24px}
+legend{font-weight:700;margin-bottom:10px;padding:0}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border:1px solid var(--rule);border-radius:6px;margin-bottom:8px;cursor:pointer;background:var(--paper)}
+.opt input{width:20px;height:20px;margin:2px 0 0;flex:none;accent-color:var(--cobalt)}
+.opt.right{border-color:#2E7D4F;background:#EAF7EF}
+.opt.wrong{border-color:#B42318;background:#FDECEB}
+details.inline{margin-top:4px;width:100%}
+details.inline summary{cursor:pointer;font-weight:700;color:var(--cobalt);text-decoration:underline;text-underline-offset:4px;padding:10px 0;text-align:right;list-style:none}
+details.inline summary::-webkit-details-marker{display:none}
+details.inline form{margin-top:8px;text-align:left}
+
+/* training */
+.steps{list-style:none;margin:0;padding:0;border-top:2px solid var(--ink)}
+.steps li{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:16px;align-items:center;padding:18px 4px;border-bottom:1px solid var(--rule)}
+.steps .n{font-family:var(--led);font-weight:900;font-size:20px;color:var(--muted)}
+.steps li.done .n{color:#2E7D4F}
+.steps h3{font-size:26px;text-transform:uppercase}
+.steps p{color:var(--muted);font-size:15px;margin-top:4px}
+.draft{display:inline-block;background:var(--amber);color:var(--ink);font-weight:700;font-size:14px;padding:4px 10px;border-radius:4px}
+.points{margin:16px 0 0;padding-left:22px}
+.points li{margin-bottom:10px}
+.terms{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:20px 22px;max-height:420px;overflow:auto;font-size:16px}
+.terms h3{font-family:var(--body);font-weight:700;font-size:17px;margin:18px 0 6px;letter-spacing:0;line-height:1.3}
+.terms h3:first-child{margin-top:0}
+.terms p+p{margin-top:8px}
+.notice{background:var(--amber);color:var(--ink);border-radius:8px;padding:14px 18px;font-weight:600;margin-bottom:20px}
+
+/* certificate */
+.cert{background:var(--navy);color:var(--paper);border-radius:12px;padding:32px;box-shadow:inset 0 0 0 3px var(--amber),inset 0 0 0 9px var(--navy),inset 0 0 0 10px rgba(255,178,28,.5)}
+.cert .led{font-family:var(--led);font-weight:900;color:var(--amber);letter-spacing:.1em;text-transform:uppercase;font-size:15px;text-shadow:0 0 8px rgba(255,178,28,.5)}
+.cert h2{font-size:clamp(40px,5vw,60px);text-transform:uppercase;margin:12px 0 6px}
+.cert .who{font-family:var(--display);font-size:34px;font-weight:700}
+.cert dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px 24px;margin:24px 0 0}
+.cert dt{font-size:13px;color:#B9C3D1}
+.cert dd{margin:2px 0 0;font-weight:700}
+
+/* cta band */
+.band{background:var(--amber);border-radius:12px;padding:48px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px 48px;align-items:center}
+.band h2{font-size:clamp(40px,5vw,72px);text-transform:uppercase}
+.band p{font-size:19px;margin-top:14px;max-width:56ch}
+
+/* admin jump links */
+.jump{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.jump button{font:inherit;font-size:15px;font-weight:600;border:1px solid var(--rule);background:var(--paper);border-radius:999px;padding:8px 16px;cursor:pointer;min-height:44px}
+.jump button:hover{border-color:var(--ink)}
+
+/* guide */
+.guide{list-style:none;margin:0;padding:0;counter-reset:g}
+.guide li{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:16px;align-items:center;padding:18px 4px;border-bottom:1px solid var(--rule);counter-increment:g}
+.guide li::before{content:counter(g,decimal-leading-zero);font-family:var(--led);font-weight:900;font-size:22px;color:var(--cobalt)}
+.guide b{display:block}
+.guide span{color:var(--muted);font-size:15px}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:30;max-width:min(560px,calc(100% - 32px));background:var(--ink);color:var(--paper);border-radius:8px;padding:14px 20px;font-weight:600;box-shadow:0 12px 30px -10px rgba(0,0,0,.5);pointer-events:none}
+.toast:empty{display:none}
+
+/* footer */
+footer{background:var(--ink);color:var(--paper);padding:64px 0 36px}
+.f-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:48px;margin-bottom:44px}
+.f-grid p{color:#B9C3D1;max-width:52ch;margin-top:18px}
+.f-grid h4{margin:0 0 10px;font-family:var(--display);font-size:24px;text-transform:uppercase;color:var(--amber)}
+.f-grid a{display:block;padding:5px 0;text-decoration:none}
+.f-grid a:hover{text-decoration:underline}
+.legal{padding-top:22px;border-top:1px solid #2A3A52;font-size:14px;color:#9FAABB}
+
+@media (max-width:960px){
+  .hero,.split{grid-template-columns:1fr;gap:44px}
+  .path{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .evs>li{grid-template-columns:88px minmax(0,1fr)}
+  .ev-actions{grid-column:2;align-items:flex-start;max-width:none}
+  .ev-actions .why{text-align:left}
+  details.inline summary{text-align:left}
+  .band{grid-template-columns:1fr;padding:36px}
+  .f-grid{grid-template-columns:1fr 1fr}.f-grid>div:first-child{grid-column:1/-1}
+}
+@media (max-width:640px){
+  .wrap{padding:0 16px}
+  body{font-size:16px}
+  .demo .links{margin-left:0}
+  .path,.grid2,.grid3,.row2,.row3{grid-template-columns:1fr}
+  .panel{padding:20px}
+  .band{padding:28px 20px}
+  .date b{font-size:36px}
+  .steps li{grid-template-columns:36px minmax(0,1fr)}
+  .steps li>:last-child{grid-column:2}
+  .guide li{grid-template-columns:40px minmax(0,1fr)}
+  .guide li>button{grid-column:2;justify-self:start}
+  .cert{padding:24px 20px}
+  .f-grid{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.btn{transition:none}}
+</style>
+</head>
+<body>
+<div class="demo">
+  <div class="wrap">
+    <span class="tag">Prototype · sample data</span>
+    <label>Viewing as <select id="viewer"></select></label>
+    <div class="links">
+      <a href="#/guide">Demo script</a>
+      <button type="button" data-act="reset">Reset demo</button>
+    </div>
+  </div>
+</div>
+<div class="wrap">
+  <header class="top">
+    <a href="#/" class="logo">Sober AF<small>Chapters</small></a>
+    <nav aria-label="Primary" id="nav"></nav>
+  </header>
+</div>
+<main id="main"><div class="wrap" id="view"></div></main>
+<footer>
+  <div class="wrap">
+    <div class="f-grid">
+      <div>
+        <a href="/soberafe/" class="logo">Sober AF</a>
+        <p>Sober AF Entertainment (SAFE) is a 501(c)(3) recovery community organization. This prototype shows how trained, certified hosts could bring sober sections to more cities through local chapters.</p>
+      </div>
+      <div>
+        <h4>Sober AF</h4>
+        <a href="/soberafe/">Homepage concept</a>
+        <a href="https://soberafe.com/events/">Events</a>
+        <a href="https://soberafe.com/peer-training/">Peer training</a>
+      </div>
+      <div>
+        <h4>Reach us</h4>
+        <a href="tel:+13038889019">(303) 888-9019</a>
+        <a href="mailto:kylan@soberafe.com">kylan@soberafe.com</a>
+      </div>
+    </div>
+    <p class="legal">Prototype by Positive Tribes. People, venues and upcoming events are sample data, saved only in this browser. Training and waiver text is draft language for SAFE to replace.</p>
+  </div>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(function(){
+'use strict';
+
+var KEY = 'safe-chapters-demo-v1';
+var DAY = 864e5;
+var pad = function(n){ return String(n).padStart(2, '0'); };
+
+// Upcoming sample events are placed relative to today so the demo never goes stale.
+function at(days, time){
+  var d = new Date(Date.now() + days * DAY);
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + time;
+}
+function ago(days){ return new Date(Date.now() - days * DAY).toISOString(); }
+
+var AGREEMENT_VERSION = 'Host agreement v0.1 (sample)';
+var SITE_WAIVER_VERSION = 'Host site waiver v0.1 (sample)';
+
+var MODULES = [
+  {id:'m1', title:'The SAFE model', short:'SAFE model',
+    intro:'SAFE creates sober sections: a block of seats or a space at a concert, festival, game or social where everyone has chosen a substance-free experience, with trained peers on site. Connection to community is a key part of long-term recovery, and sober sections make the good stuff possible without alcohol or drugs around.',
+    points:['Anyone who wants a substance-free experience is welcome. No one has to prove sobriety or share their story.','Certified hosts organize and run events under the Sober AF name, with SAFE\'s support and approval.','Chapters group hosts by city or region, led by an experienced certified host.'],
+    quiz:[
+      {q:'What is a SAFE sober section?', o:['A substance-free seating area or space with trained peers on site','A treatment program held at a venue','A VIP area with alcohol-free drinks'], a:0},
+      {q:'Who is welcome in a sober section?', o:['Only people with a year or more of sobriety','Anyone who wants a substance-free experience','Only trained peers and their families'], a:1},
+      {q:'Who approves a host\'s event before it is published?', o:['The host, once they are certified','The venue','SAFE or the chapter lead'], a:2}
+    ]},
+  {id:'m2', title:'Running a safe, substance-free section', short:'Safe sections',
+    intro:'A good sober section feels relaxed because the planning happened ahead of time.',
+    points:['Walk the space with the venue contact before the event: section location, exits, first aid, accessible seating and restrooms.','Keep the section substance-free. Agree with the venue in advance how alcohol sales near the section are handled.','Check in with every peer before doors open: roles, a meeting point, and who calls for help.','If someone is struggling or intoxicated, respond calmly and privately, and bring in venue staff when needed.'],
+    quiz:[
+      {q:'Before doors open, what should you confirm with the venue?', o:['Section location, exits, first aid and an emergency contact','Only the ticket price','Nothing, the venue handles everything'], a:0},
+      {q:'Someone in the section appears intoxicated. What is the first step?', o:['Ask them to leave over the PA system','Check in calmly and privately, and involve venue staff if needed','Ignore it to avoid a scene'], a:1},
+      {q:'Can alcohol be served inside the sober section?', o:['Yes, if it is low-alcohol','Yes, after halftime','No, the section is substance-free'], a:2}
+    ]},
+  {id:'m3', title:'Peer support and crisis response', short:'Peer support',
+    intro:'Hosts and peers are there to connect, not to treat. Knowing when and how to get help is part of the job.',
+    points:['Peers share lived experience and connect people to support. They do not diagnose or give clinical advice.','For an overdose or medical emergency, call 911 and venue medical right away. Use naloxone if you are trained and it is available.','If someone talks about harming themselves, stay with them and call or text 988. Call 911 if there is immediate danger.','Afterward, tell your chapter lead and file an incident note [SAFE to supply form].'],
+    quiz:[
+      {q:'What is a peer\'s role at an event?', o:['Diagnose and treat','Share lived experience and connect people to support','Enforce venue rules'], a:1},
+      {q:'Someone collapses and may have overdosed. What do you do first?', o:['Call 911 and venue medical, and give naloxone if trained and available','Wait to see if they wake up','Drive them to a hospital yourself'], a:0},
+      {q:'Which number reaches the 988 Suicide & Crisis Lifeline?', o:['311','411','988'], a:2}
+    ]},
+  {id:'m4', title:'Planning an event', short:'Planning',
+    intro:'Every host event follows the same path: plan it, submit it, get the venue\'s signature, get approved, then promote it.',
+    points:['Pick a venue that will sign SAFE\'s host site waiver and agree to a substance-free section.','Set capacity and the number of peers on site using SAFE\'s staffing guidance [SAFE to confirm ratio].','Tickets, donations and other money go through SAFE\'s approved process, never a personal account.','Submit the event at least [3 weeks, SAFE to confirm] ahead. It is published once it is approved and the venue has signed.'],
+    quiz:[
+      {q:'When does a host\'s event go public?', o:['As soon as it is submitted','After it is approved and the host site has signed the waiver','When the venue posts it'], a:1},
+      {q:'Where should ticket money go?', o:['Through SAFE\'s approved process','The host\'s Venmo','Cash at the door, kept by the host'], a:0},
+      {q:'How many peers should be on site?', o:['One, always','As many as show up','Follow SAFE\'s staffing guidance for expected attendance'], a:2}
+    ]},
+  {id:'m5', title:'Brand, communications and consent', short:'Brand and consent',
+    intro:'Recovery is personal. How we talk about events, and who appears in photos, matters.',
+    points:['Use the Sober AF name and logo only for approved events, following SAFE\'s brand guide [SAFE to supply].','Ask before photographing anyone, and never post faces or names without consent.','Refer press and partnership requests to SAFE.','Promote approved events where your community will see them, and link to the official event page.'],
+    quiz:[
+      {q:'Can you post a photo of attendees?', o:['Yes, it is a public venue','Only with each person\'s consent','Only if faces are blurry'], a:1},
+      {q:'A reporter asks you for a quote about SAFE. What do you do?', o:['Refer them to SAFE','Give a quote as a SAFE spokesperson','Ignore them'], a:0},
+      {q:'When can you use the Sober AF name and logo?', o:['For any sober event you run','Never','For approved events, following SAFE\'s brand guide'], a:2}
+    ]}
+];
+
+var EVENT_TYPES = ['Game day sober section','Concert sober section','Festival sober section','Sober social','Meetup'];
+
+function seed(){
+  var signed = function(name, title, org, days){ return {name:name, title:title, org:org, signedAt:ago(days)}; };
+  var agree = function(name, days){ return {name:name, signedAt:ago(days), version:AGREEMENT_VERSION}; };
+  var all = {m1:3, m2:3, m3:3, m4:3, m5:3};
+  return {
+    v: 1, seq: 100, viewer: 'visitor',
+    me: {applicant:'p-jordan', host:'p-sam', lead:'p-alex'},
+    chapters: [
+      {id:'denver', name:'Denver Metro', region:'Colorado', status:'active', leadId:'p-alex'},
+      {id:'boulder', name:'Boulder County', region:'Colorado', status:'active', leadId:'p-priya'},
+      {id:'weld', name:'Weld County', region:'Colorado', status:'active', leadId:null},
+      {id:'mesa', name:'Grand Junction', region:'Colorado', status:'active', leadId:'p-dana'}
+    ],
+    people: [
+      {id:'p-alex', name:'Alex Moreno', email:'alex@example.org', chapterId:'denver', status:'certified', scores:all, agreement:agree('Alex Moreno', 300), certifiedAt:ago(280), certId:'SAFE-H-0001', appliedAt:ago(320)},
+      {id:'p-priya', name:'Priya Shah', email:'priya@example.org', chapterId:'boulder', status:'certified', scores:all, agreement:agree('Priya Shah', 250), certifiedAt:ago(230), certId:'SAFE-H-0002', appliedAt:ago(270)},
+      {id:'p-dana', name:'Dana Kim', email:'dana@example.org', chapterId:'mesa', status:'certified', scores:all, agreement:agree('Dana Kim', 200), certifiedAt:ago(180), certId:'SAFE-H-0003', appliedAt:ago(220)},
+      {id:'p-sam', name:'Sam Whitaker', email:'sam@example.org', chapterId:'boulder', status:'certified', scores:all, agreement:agree('Sam Whitaker', 120), certifiedAt:ago(100), certId:'SAFE-H-0004', appliedAt:ago(140)},
+      {id:'p-morgan', name:'Morgan Ellis', email:'morgan@example.org', chapterId:'denver', status:'certified', scores:all, agreement:agree('Morgan Ellis', 90), certifiedAt:ago(70), certId:'SAFE-H-0005', appliedAt:ago(110)},
+      {id:'p-chris', name:'Chris Ortega', email:'chris@example.org', chapterId:'denver', status:'training', scores:all, agreement:agree('Chris Ortega', 12), shadowEventId:'e-indie', appliedAt:ago(40)},
+      {id:'p-jordan', name:'Jordan Reyes', email:'jordan@example.org', chapterId:'denver', status:'training', scores:{m1:3, m2:2}, agreement:null, appliedAt:ago(20),
+        why:'I got sober two years ago and live music was the hardest thing to give up. I want other people to know they don\'t have to.'},
+      {id:'p-riley', name:'Riley Chen', email:'riley@example.org', chapterId:'weld', status:'training', scores:{m1:3}, agreement:null, appliedAt:ago(9)},
+      {id:'p-taylor', name:'Taylor Brooks', email:'taylor@example.org', chapterId:'denver', status:'applied', scores:{}, appliedAt:ago(2),
+        recovery:'In recovery', why:'I run a weekly run club and half of us are sober. I\'d love to host sober watch parties for Nuggets games.'}
+    ],
+    events: [
+      {id:'e-ttu', title:'Texas Tech Red Raiders vs. Colorado Buffaloes', type:EVENT_TYPES[0], start:'2026-10-03T13:00', venue:'Folsom Field', city:'Boulder, CO', chapterId:'boulder', capacity:60, peers:5, hostId:null, status:'approved', createdAt:ago(60),
+        site:{contactName:'Venue partnerships', email:'venue@example.org', waiver:'signed', signer:signed('Venue representative', 'Events manager', 'Sample venue', 55)}},
+      {id:'e-cmu', title:'Colorado Mesa vs. Colorado School of Mines', type:EVENT_TYPES[0], start:'2026-10-16T19:00', venue:'Community Hospital Unity Field', city:'Grand Junction, CO', chapterId:'mesa', capacity:40, peers:4, hostId:null, status:'approved', createdAt:ago(60),
+        site:{contactName:'Venue partnerships', email:'venue@example.org', waiver:'signed', signer:signed('Venue representative', 'Events manager', 'Sample venue', 50)}},
+      {id:'e-brunch', title:'Sunday Sober Brunch and Board Games', type:'Sober social', start:at(12, '11:00'), venue:'Sample café', city:'Boulder, CO', chapterId:'boulder', capacity:30, peers:2, hostId:'p-sam', status:'approved', createdAt:ago(20),
+        site:{contactName:'Jamie Fox', email:'jamie@example.com', waiver:'signed', signer:signed('Jamie Fox', 'Owner', 'Sample café', 16)}},
+      {id:'e-indie', title:'Sober Section: Local Indie Night', type:'Concert sober section', start:at(18, '19:30'), venue:'Sample music hall', city:'Denver, CO', chapterId:'denver', capacity:40, peers:3, hostId:'p-alex', status:'approved', createdAt:ago(25),
+        site:{contactName:'Robin Hale', email:'robin@example.com', waiver:'signed', signer:signed('Robin Hale', 'Talent buyer', 'Sample music hall', 21)}},
+      {id:'e-hoops', title:'Sober Section: College Basketball Night', type:EVENT_TYPES[0], start:at(26, '18:00'), venue:'Sample arena', city:'Grand Junction, CO', chapterId:'mesa', capacity:50, peers:4, hostId:'p-dana', status:'approved', createdAt:ago(14),
+        site:{contactName:'Lee Park', email:'lee@example.com', waiver:'signed', signer:signed('Lee Park', 'Event services', 'Sample arena', 10)}},
+      {id:'e-trivia', title:'Sober Trivia Night', type:'Sober social', start:at(33, '19:00'), venue:'Sample community hall', city:'Boulder, CO', chapterId:'boulder', capacity:60, peers:3, hostId:'p-sam', status:'pending', createdAt:ago(3),
+        site:{contactName:'Casey Grant', email:'casey@example.com', waiver:'sent'}},
+      {id:'e-holiday', title:'Holiday Sober Social', type:'Sober social', start:at(40, '18:30'), venue:'Sample rec center', city:'Denver, CO', chapterId:'denver', capacity:80, peers:4, hostId:'p-morgan', status:'pending', createdAt:ago(4),
+        site:{contactName:'Avery Lane', email:'avery@example.com', waiver:'signed', signer:signed('Avery Lane', 'Facility coordinator', 'Sample rec center', 2)}},
+      {id:'e-nye', title:'New Year\'s Eve Sober Countdown', type:'Sober social', start:at(55, '21:00'), venue:'Sample event space', city:'Boulder, CO', chapterId:'boulder', capacity:120, peers:3, hostId:'p-sam', status:'changes', createdAt:ago(6),
+        note:'Please plan for at least 5 peers at 120 people, and confirm the venue\'s exit plan for a late-night crowd.',
+        site:{contactName:'Drew Silva', email:'drew@example.com', waiver:'sent'}}
+    ],
+    requests: [
+      {id:'r-austin', name:'Marcus Lee', email:'marcus@example.org', city:'Austin', region:'Texas', ideas:'Two campus recovery programs and a music venue that already runs alcohol-free nights.', willHost:true, at:ago(5), done:false},
+      {id:'r-slc', name:'Jo Alvarez', email:'jo@example.org', city:'Salt Lake City', region:'Utah', ideas:'SAFE\'s sober section at the Notre Dame vs. BYU game brought a lot of interest from our recovery group.', willHost:false, at:ago(11), done:false}
+    ]
+  };
+}
+
+// ---- state (browser storage is a convenience; the seed is always the fallback) ----
+var S;
+function load(){
+  try { var raw = localStorage.getItem(KEY); if (raw) { var s = JSON.parse(raw); if (s && s.v === 1) return s; } } catch (e) {}
+  return seed();
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+S = load();
+
+// ---- helpers ----
+function h(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function byId(list, id){ for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+function chapter(id){ return byId(S.chapters, id); }
+function person(id){ return byId(S.people, id); }
+function eventById(id){ return byId(S.events, id); }
+function nextId(prefix){ S.seq += 1; return prefix + S.seq; }
+function isPast(e){ return new Date(e.start).getTime() < Date.now(); }
+function passed(p, mid){ return ((p.scores || {})[mid] || 0) >= 2; }
+function leadOf(chapterId){ var c = chapter(chapterId); return c && c.leadId ? person(c.leadId) : null; }
+function chapterLedBy(pid){ for (var i = 0; i < S.chapters.length; i++) if (S.chapters[i].leadId === pid) return S.chapters[i]; return null; }
+function chapterName(id){ var c = chapter(id); return c ? c.name : 'No chapter yet'; }
+function certified(){ return S.people.filter(function(p){ return p.status === 'certified'; }); }
+function upcomingApproved(){
+  return S.events.filter(function(e){ return e.status === 'approved' && !isPast(e); }).sort(byStart);
+}
+function byStart(a, b){ return a.start < b.start ? -1 : a.start > b.start ? 1 : 0; }
+function dateParts(s){
+  var d = new Date(s);
+  return {day:d.toLocaleDateString('en-US', {month:'short', day:'numeric'}),
+    rest:d.toLocaleDateString('en-US', {weekday:'short'}) + ', ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})};
+}
+function stamp(iso){ return new Date(iso).toLocaleString('en-US', {month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit'}); }
+function shortDate(iso){ return new Date(iso).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); }
+function steps(p){
+  return MODULES.map(function(m){ return {label:m.short, done:passed(p, m.id)}; }).concat([
+    {label:'Host agreement', done:!!p.agreement},
+    {label:'Shadow event', done:!!p.shadowEventId},
+    {label:'Sign-off', done:p.status === 'certified'}
+  ]);
+}
+function stepsDone(p){ return steps(p).filter(function(s){ return s.done; }).length; }
+function sameName(a, b){ return a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase(); }
+
+var ROLE_LABEL = {visitor:'Visitor', applicant:'Applicant', host:'Certified host', lead:'Chapter lead', admin:'SAFE admin'};
+var ROLE_HOME = {visitor:'#/', applicant:'#/training', host:'#/host', lead:'#/lead', admin:'#/admin'};
+function me(){ return S.viewer === 'applicant' || S.viewer === 'host' || S.viewer === 'lead' ? person(S.me[S.viewer]) : null; }
+
+// ---- shared bits of markup ----
+var ICON_PIN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+var ICON_CHECK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+
+function statusBadge(e){
+  if (e.status === 'approved') return isPast(e) ? '<span class="badge">Past</span>' : '<span class="badge ok">' + ICON_CHECK + 'Approved</span>';
+  if (e.status === 'changes') return '<span class="badge bad">Changes requested</span>';
+  return '<span class="badge wait">Pending review</span>';
+}
+function waiverBadge(e){
+  return e.site.waiver === 'signed' ? '<span class="badge ok">' + ICON_CHECK + 'Site waiver signed</span>' : '<span class="badge wait">Site waiver sent, not signed</span>';
+}
+function hostName(e){ var p = e.hostId && person(e.hostId); return p ? p.name : 'SAFE staff'; }
+
+function eventRow(e, opts){
+  opts = opts || {};
+  var d = dateParts(e.start);
+  return '<li><div class="date"><b>' + h(d.day) + '</b><span>' + h(d.rest) + '</span></div>' +
+    '<div class="ev"><h3>' + h(e.title) + '</h3>' +
+    '<p>' + h(e.venue) + ', ' + h(e.city) + ' · ' + h(e.peers) + ' peers · ' + h(e.capacity) + ' seats</p>' +
+    '<p>Hosted by ' + h(hostName(e)) + ' · ' + h(chapterName(e.chapterId)) + ' chapter</p>' +
+    (opts.status ? '<div class="badges">' + statusBadge(e) + waiverBadge(e) + '</div>' : '') +
+    (e.status === 'changes' && e.note ? '<p class="note"><b>Reviewer note:</b> ' + h(e.note) + '</p>' : '') +
+    '</div><div class="ev-actions">' + (opts.actions ? opts.actions(e) : '') + '</div></li>';
+}
+function eventList(list, opts, emptyText){
+  return '<ol class="evs">' + (list.length ? list.map(function(e){ return eventRow(e, opts); }).join('') : '<li class="empty">' + h(emptyText) + '</li>') + '</ol>';
+}
+function boardCells(cells){
+  return '<div class="cells">' + cells.map(function(c){ return '<div><b>' + h(pad(c[0])) + '</b><small>' + h(c[1]) + '</small></div>'; }).join('') + '</div>';
+}
+function switchTo(role, label){
+  return '<button type="button" class="btn btn-line btn-sm" data-act="viewer" data-role="' + role + '">' + h(label || 'Switch to ' + ROLE_LABEL[role]) + '</button>';
+}
+function needRole(role, what){
+  return '<div class="page-head"><h1>' + h(what) + '</h1><p class="lede">This screen belongs to the ' + h(ROLE_LABEL[role].toLowerCase()) + '. Switch views in the bar above, or here.</p></div>' + switchTo(role);
+}
+function chapterOptions(selected, includeNone){
+  return S.chapters.map(function(c){ return '<option value="' + c.id + '"' + (c.id === selected ? ' selected' : '') + '>' + h(c.name) + ', ' + h(c.region) + (c.status === 'forming' ? ' (forming)' : '') + '</option>'; }).join('') +
+    (includeNone ? '<option value=""' + (selected === '' ? ' selected' : '') + '>My city isn\'t listed</option>' : '');
+}
+
+// ---- legal text (sample language only) ----
+var LEGAL_NOTICE = '<p class="notice">Sample language, not legal advice. SAFE\'s counsel to supply final terms.</p>';
+function agreementTerms(){
+  return '<div class="terms" tabindex="0" role="region" aria-label="Host agreement terms">' +
+    '<h3>1. Code of conduct</h3><p>I will treat every guest, peer, venue partner and staff member with respect, and I will not attend or host a SAFE event under the influence of alcohol or drugs.</p>' +
+    '<h3>2. Substance-free events</h3><p>Events I host under the Sober AF name will include a substance-free section, and I will work with each venue to keep it that way.</p>' +
+    '<h3>3. Safety and emergencies</h3><p>I will follow SAFE\'s safety and crisis-response training, call emergency services when needed, and report incidents to my chapter lead within 24 hours.</p>' +
+    '<h3>4. Approval and the Sober AF name</h3><p>I will only promote events SAFE or my chapter lead has approved, and I will use the Sober AF name and logo as the brand guide describes.</p>' +
+    '<h3>5. Money</h3><p>Tickets, donations and sponsorships go through SAFE\'s approved process. I will not collect money for SAFE events personally.</p>' +
+    '<h3>6. Privacy and photos</h3><p>I will keep guests\' recovery status confidential and will not photograph or post anyone without their consent.</p>' +
+    '<h3>7. Volunteer status and release</h3><p>I host as a volunteer, not an employee. I understand the risks of organizing public events and release SAFE from claims arising from my own conduct [release wording, SAFE counsel to supply].</p>' +
+    '<h3>8. Background check and renewal</h3><p>[Background check requirement, SAFE to confirm.] Certification renews every [12 months, SAFE to confirm] with a short refresher.</p>' +
+    '</div>';
+}
+function siteTerms(e){
+  var host = hostName(e);
+  return '<div class="terms" tabindex="0" role="region" aria-label="Host site waiver terms">' +
+    '<h3>Parties and event</h3><p>This agreement is between Sober AF Entertainment ("SAFE") and the organization signing below (the "Host Site") for <b>' + h(e.title) + '</b> at ' + h(e.venue) + ', ' + h(e.city) + ', organized by SAFE certified host ' + h(host) + '.</p>' +
+    '<h3>1. Substance-free section</h3><p>The Host Site will provide a clearly marked area for the sober section and will not serve or sell alcohol inside it [handling of nearby sales, SAFE to confirm].</p>' +
+    '<h3>2. Safety and access</h3><p>The Host Site will share its emergency plan, exits and first-aid location with the host before doors open, name an on-site staff contact, and keep the section accessible.</p>' +
+    '<h3>3. Insurance</h3><p>The Host Site keeps general liability insurance of at least [amount, SAFE to confirm] and will name SAFE as additional insured on request.</p>' +
+    '<h3>4. Release and hold harmless</h3><p>Each party is responsible for its own acts and those of its staff and volunteers, and will hold the other harmless from claims arising from them [mutual indemnity wording, SAFE counsel to supply].</p>' +
+    '<h3>5. Photography and promotion</h3><p>Either party may name the other when promoting the event. Neither will photograph or post guests in the sober section without their consent.</p>' +
+    '<h3>6. Cancellation</h3><p>Either party may cancel with [7 days, SAFE to confirm] notice, or at any time for safety reasons.</p>' +
+    '</div>';
+}
+
+// ---- views ----
+var quizResult = null;  // {mid, picks:[...], score} after a quiz is graded, until the next route change
+
+var views = {};
+
+views.home = function(){
+  var up = upcomingApproved();
+  var certs = certified().length;
+  var active = S.chapters.filter(function(c){ return c.status === 'active'; }).length;
+  var cards = S.chapters.map(function(c){
+    var lead = c.leadId ? person(c.leadId) : null;
+    var hosts = S.people.filter(function(p){ return p.chapterId === c.id && p.status === 'certified'; }).length;
+    var evs = up.filter(function(e){ return e.chapterId === c.id; }).length;
+    return '<div class="card"><div class="badges">' + (c.status === 'active' ? '<span class="badge ok">Active</span>' : '<span class="badge info">Forming</span>') + '</div>' +
+      '<h3>' + h(c.name) + '</h3><p class="meta">' + ICON_PIN + ' ' + h(c.region) + '</p>' +
+      '<p>' + (lead ? 'Led by ' + h(lead.name) : '<b>Lead needed</b>') + ' · ' + hosts + ' certified host' + (hosts === 1 ? '' : 's') + ' · ' + evs + ' upcoming</p>' +
+      '<div class="btns"><a class="tlink" href="#/apply?c=' + c.id + '">Host in ' + h(c.name) + '</a></div></div>';
+  }).join('');
+  return '<section class="hero"><div>' +
+      '<span class="eyebrow">Sober AF Chapters</span>' +
+      '<h1>Bring sober sections to your city.</h1>' +
+      '<p class="lede">Train with SAFE, get certified, and host substance-free sections and socials with your local chapter. Recovery shouldn\'t mean sitting out the good stuff, anywhere.</p>' +
+      '<div class="btns"><a class="btn btn-solid" href="#/apply">Apply to host</a><a class="btn btn-line" href="#/start-chapter">Start a chapter</a></div>' +
+    '</div><section class="board" aria-label="Chapter network, sample data">' +
+      '<div class="board-top"><span class="led">Chapter network</span><span class="led live">Sample data</span></div>' +
+      boardCells([[S.chapters.length, 'Chapters'], [certs, 'Certified hosts'], [up.length, 'Upcoming']]) +
+      '<p class="caption">' + active + ' active chapters today. Counts update as you use the demo.</p>' +
+    '</section></section>' +
+
+    '<section class="section"><div class="section-head"><h2 class="h2">The path to host</h2></div>' +
+    '<ol class="path">' +
+      '<li><h3>Apply</h3><p>Tell us about you and where you want to host. SAFE reviews every application.</p></li>' +
+      '<li><h3>Train</h3><p>Five short online modules with quick checks: the SAFE model, safety, peer support, planning, and consent.</p></li>' +
+      '<li><h3>Agree and sign</h3><p>Sign the host agreement and liability waiver. Every venue signs a host site waiver too.</p></li>' +
+      '<li><h3>Shadow</h3><p>Co-host one event alongside an experienced host. Your chapter lead signs off.</p></li>' +
+      '<li><h3>Host</h3><p>You\'re certified. Submit events, get them approved, and fill the section. Leads can grow a chapter.</p></li>' +
+    '</ol></section>' +
+
+    '<section class="section"><div class="section-head"><h2 class="h2">Chapters</h2><a class="btn btn-line btn-sm" href="#/start-chapter">Don\'t see your city?</a></div>' +
+    '<div class="grid3">' + cards + '</div></section>' +
+
+    '<section class="section"><div class="section-head"><h2 class="h2">Hosted by the community</h2></div>' +
+    eventList(up, {actions:function(){ return '<span class="badge info">Sample event</span>'; }}, 'No upcoming events yet.') + '</section>' +
+
+    '<section class="section"><div class="band"><div><h2>No chapter near you?</h2><p>Tell us where. When enough people raise their hands, SAFE forms a chapter and trains its first hosts.</p></div>' +
+    '<a class="btn btn-solid" href="#/start-chapter">Start a chapter</a></div></section>';
+};
+
+views.apply = function(params){
+  var pre = params.c && chapter(params.c) ? params.c : 'denver';
+  return '<div class="split"><div><div class="page-head"><span class="eyebrow">Step 1 of 5</span><h1>Apply to host</h1>' +
+    '<p class="lede">Hosts bring sober sections and socials to their own communities, trained and backed by SAFE. Lived experience is welcome, and so are allies.</p></div>' +
+    '<div class="panel"><form data-form="apply" novalidate>' +
+      '<div class="row2"><div class="field"><label for="a-name">Full name</label><input id="a-name" name="name" type="text" required autocomplete="name"></div>' +
+      '<div class="field"><label for="a-email">Email</label><input id="a-email" name="email" type="email" required autocomplete="email"></div></div>' +
+      '<div class="field"><label for="a-ch">Chapter</label><select id="a-ch" name="chapterId">' + chapterOptions(pre, true) + '</select></div>' +
+      '<div class="field"><label for="a-city">City and state</label><span class="hint" id="a-city-hint">Only needed if your city isn\'t listed.</span><input id="a-city" name="city" type="text" aria-describedby="a-city-hint" autocomplete="address-level2"></div>' +
+      '<div class="field"><label for="a-rec">Your connection to recovery</label><span class="hint" id="a-rec-hint">Optional. This stays private to SAFE staff.</span><select id="a-rec" name="recovery" aria-describedby="a-rec-hint"><option value="">Prefer not to say</option><option>In recovery</option><option>Family member or friend of someone in recovery</option><option>Ally or supporter</option></select></div>' +
+      '<div class="field"><label for="a-why">Why do you want to host?</label><textarea id="a-why" name="why" required></textarea></div>' +
+      '<label class="check"><input type="checkbox" name="conduct" required> I agree to follow SAFE\'s code of conduct and keep events substance-free.</label>' +
+      '<p class="error" role="alert"></p>' +
+      '<button class="btn btn-solid" type="submit">Submit application</button>' +
+    '</form></div></div>' +
+    '<aside class="panel stack"><h2>What happens next</h2>' +
+      '<p>SAFE reviews your application, usually within [a week, SAFE to confirm].</p>' +
+      '<p>Once approved, you get access to five short training modules. Most people finish them in about [2 hours, SAFE to confirm].</p>' +
+      '<p>Then you sign the host agreement and shadow one event with an experienced host before you\'re certified.</p>' +
+    '</aside></div>';
+};
+
+views.startChapter = function(){
+  return '<div class="split"><div><div class="page-head"><h1>Start a chapter</h1>' +
+    '<p class="lede">Chapters are how sober sections reach new cities. Tell us where you are and what you see locally.</p></div>' +
+    '<div class="panel"><form data-form="request" novalidate>' +
+      '<div class="row2"><div class="field"><label for="r-name">Your name</label><input id="r-name" name="name" type="text" required autocomplete="name"></div>' +
+      '<div class="field"><label for="r-email">Email</label><input id="r-email" name="email" type="email" required autocomplete="email"></div></div>' +
+      '<div class="row2"><div class="field"><label for="r-city">City or region</label><input id="r-city" name="city" type="text" required autocomplete="address-level2"></div>' +
+      '<div class="field"><label for="r-state">State</label><input id="r-state" name="region" type="text" required autocomplete="address-level1"></div></div>' +
+      '<div class="field"><label for="r-ideas">Venues, campuses or groups you have in mind</label><textarea id="r-ideas" name="ideas"></textarea></div>' +
+      '<label class="check"><input type="checkbox" name="willHost"> I\'d like to train as one of the chapter\'s first hosts.</label>' +
+      '<p class="error" role="alert"></p>' +
+      '<button class="btn btn-solid" type="submit">Send to SAFE</button>' +
+    '</form></div></div>' +
+    '<aside class="panel stack"><h2>How chapters form</h2>' +
+      '<p><b>Forming:</b> SAFE creates the chapter and names a lead, a certified host who coordinates locally.</p>' +
+      '<p><b>Active:</b> the chapter has trained hosts and approved events on the calendar.</p>' +
+      '<p>Chapter leads review their hosts\' events and sign off on new hosts after they shadow an event.</p>' +
+    '</aside></div>';
+};
+
+views.training = function(){
+  if (S.viewer !== 'applicant') return needRole('applicant', 'Host training');
+  var p = me();
+  if (!p) return needRole('applicant', 'Host training');
+  if (p.status === 'applied') {
+    return '<div class="page-head"><span class="eyebrow">Hi, ' + h(p.name.split(' ')[0]) + '</span><h1>Application received</h1>' +
+      '<p class="lede">SAFE reviews every host application. You\'ll get an email when yours is approved, and your training will open here.</p></div>' +
+      '<section class="board" aria-label="Application status" style="max-width:560px"><div class="board-top"><span class="led">Status</span><span class="led live">Under review</span></div>' +
+      boardCells([[1, 'of 5 steps']]) + '<p class="caption">Submitted ' + h(stamp(p.appliedAt)) + '</p></section>' +
+      '<p class="section muted">In the demo, SAFE approves applications from the admin view.</p><div class="btns" style="margin-top:16px">' + switchTo('admin', 'Approve it as SAFE admin') + '</div>';
+  }
+  if (p.status === 'declined') {
+    return '<div class="page-head"><h1>Application closed</h1><p class="lede">SAFE wasn\'t able to approve this application right now. You\'re welcome at any sober section, and you can apply again later.</p></div>';
+  }
+  if (p.status === 'certified') return certificateView(p, true);
+
+  var done = stepsDone(p), st = steps(p);
+  var nextModule = null;
+  var moduleRows = MODULES.map(function(m, i){
+    var ok = passed(p, m.id);
+    var locked = i > 0 && !passed(p, MODULES[i - 1].id);
+    if (!ok && !locked && !nextModule) nextModule = m;
+    var action = ok ? '<span class="badge ok">' + ICON_CHECK + 'Passed ' + p.scores[m.id] + '/3</span>' :
+      locked ? '<span class="badge">Locked</span>' : '<a class="btn btn-solid btn-sm" href="#/training/' + m.id + '">' + ((p.scores || {})[m.id] != null ? 'Retake' : 'Start') + '</a>';
+    return '<li class="' + (ok ? 'done' : '') + '"><span class="n">' + pad(i + 1) + '</span><div><h3>' + h(m.title) + '</h3><p>Reading and a 3-question check. Pass 2 of 3.</p></div>' + action + '</li>';
+  }).join('');
+  var allModules = MODULES.every(function(m){ return passed(p, m.id); });
+  var agreeRow = '<li class="' + (p.agreement ? 'done' : '') + '"><span class="n">06</span><div><h3>Host agreement and waiver</h3><p>' +
+    (p.agreement ? 'Signed ' + h(stamp(p.agreement.signedAt)) + ' · ' + h(p.agreement.version) : 'Read and sign once your modules are done.') + '</p></div>' +
+    (p.agreement ? '<span class="badge ok">' + ICON_CHECK + 'Signed</span>' : allModules ? '<a class="btn btn-solid btn-sm" href="#/training/agreement">Read and sign</a>' : '<span class="badge">Locked</span>') + '</li>';
+
+  var shadowBlock = '';
+  var lead = leadOf(p.chapterId);
+  var signer = lead ? lead.name + ', your chapter lead,' : 'SAFE staff';
+  if (p.agreement && !p.shadowEventId) {
+    var opts = upcomingApproved().filter(function(e){ return e.hostId && e.hostId !== p.id; });
+    opts.sort(function(a, b){ return (b.chapterId === p.chapterId) - (a.chapterId === p.chapterId); });
+    shadowBlock = '<section class="section"><div class="section-head"><h2 class="h2">Pick an event to shadow</h2></div>' +
+      '<p class="lede" style="margin-bottom:24px">Co-host one event with an experienced host. Events in your chapter are listed first.</p>' +
+      eventList(opts, {actions:function(e){ return '<button type="button" class="btn btn-solid btn-sm" data-act="shadow" data-id="' + e.id + '">Shadow this event</button>'; }}, 'No upcoming events to shadow yet.') + '</section>';
+  }
+  var shadowEv = p.shadowEventId && eventById(p.shadowEventId);
+  var shadowRow = '<li class="' + (shadowEv ? 'done' : '') + '"><span class="n">07</span><div><h3>Shadow an event</h3><p>' +
+    (shadowEv ? h(shadowEv.title) + ', ' + h(dateParts(shadowEv.start).day) + ' with ' + h(hostName(shadowEv)) : 'Co-host one event with an experienced host.') + '</p></div>' +
+    (shadowEv ? '<button type="button" class="tlink" data-act="unshadow">Change event</button>' : '<span class="badge">' + (p.agreement ? 'Choose below' : 'Locked') + '</span>') + '</li>';
+  var signRow = '<li><span class="n">08</span><div><h3>Sign-off</h3><p>' + (shadowEv ? 'Waiting for ' + h(signer) + ' to confirm you co-hosted.' : h(lead ? lead.name : 'SAFE staff') + ' confirms you co-hosted, and you\'re certified.') + '</p></div>' +
+    (shadowEv ? '<span class="badge wait">Waiting</span>' : '<span class="badge">Locked</span>') + '</li>';
+
+  return '<div class="split"><div class="page-head"><span class="eyebrow">' + h(p.name) + ' · ' + h(chapterName(p.chapterId)) + '</span><h1>Host training</h1>' +
+      '<p class="lede">' + (nextModule ? 'Next up: ' + h(nextModule.title) + '.' : shadowEv ? 'Almost there. Your sign-off comes after the event.' : p.agreement ? 'Pick an event to shadow below.' : 'Modules done. Sign the host agreement next.') + '</p>' +
+      (shadowEv ? '<div class="btns" style="margin-top:24px">' + switchTo('lead', 'Sign off as chapter lead') + '</div>' : '') + '</div>' +
+    '<section class="board" aria-label="Training progress"><div class="board-top"><span class="led">Progress</span><span class="led live">' + done + ' of ' + st.length + '</span></div>' +
+      '<div class="segs">' + st.map(function(s){ return '<span class="' + (s.done ? 'on' : '') + '" title="' + h(s.label) + '"></span>'; }).join('') + '</div>' +
+      '<p class="caption">' + st.filter(function(s){ return s.done; }).map(function(s){ return h(s.label); }).join(' · ') + '</p></section></div>' +
+    '<section class="section"><div class="section-head"><h2 class="h2">Your steps</h2><span class="draft">Draft, SAFE to supply curriculum</span></div>' +
+    '<ol class="steps">' + moduleRows + agreeRow + shadowRow + signRow + '</ol></section>' + shadowBlock;
+};
+
+views.module = function(params, mid){
+  if (S.viewer !== 'applicant') return needRole('applicant', 'Host training');
+  var p = me(), m = byId(MODULES, mid), i = MODULES.indexOf(m);
+  if (!p || !m || p.status !== 'training') return '<p><a class="tlink" href="#/training">Back to training</a></p>';
+  if (i > 0 && !passed(p, MODULES[i - 1].id)) return '<div class="page-head"><h1>Locked</h1><p class="lede">Finish ' + h(MODULES[i - 1].title) + ' first.</p></div><a class="tlink" href="#/training">Back to training</a>';
+  var r = quizResult && quizResult.mid === mid ? quizResult : null;
+  var questions = m.quiz.map(function(q, qi){
+    return '<fieldset><legend>' + (qi + 1) + '. ' + h(q.q) + '</legend>' + q.o.map(function(o, oi){
+      var cls = '';
+      if (r) { if (oi === q.a) cls = ' right'; else if (r.picks[qi] === oi) cls = ' wrong'; }
+      return '<label class="opt' + cls + '"><input type="radio" name="q' + qi + '" value="' + oi + '"' + (r && r.picks[qi] === oi ? ' checked' : '') + (r ? ' disabled' : '') + ' required>' + h(o) + '</label>';
+    }).join('') + '</fieldset>';
+  }).join('');
+  var result = '';
+  if (r) {
+    var ok = r.score >= 2;
+    result = '<div class="panel" style="margin-bottom:24px;border-color:' + (ok ? '#2E7D4F' : '#B42318') + '" tabindex="-1" id="quiz-result"><h3>' + (ok ? 'Passed, ' : 'Not yet, ') + r.score + ' of 3</h3>' +
+      '<p class="muted" style="margin-top:8px">' + (ok ? 'Correct answers are marked green.' : 'You need 2 of 3. Review the reading and try again.') + '</p>' +
+      '<div class="btns" style="margin-top:16px">' + (ok ? (MODULES[i + 1] ? '<a class="btn btn-solid btn-sm" href="#/training/' + MODULES[i + 1].id + '">Next module</a>' : '<a class="btn btn-solid btn-sm" href="#/training/agreement">Sign the host agreement</a>') + '<a class="btn btn-line btn-sm" href="#/training">Back to training</a>' :
+        '<button type="button" class="btn btn-solid btn-sm" data-act="retry">Try again</button>') + '</div></div>';
+  }
+  return '<p style="margin-bottom:20px"><a class="tlink" href="#/training">Back to training</a></p>' +
+    '<div class="split"><div><div class="page-head"><span class="eyebrow">Module ' + (i + 1) + ' of ' + MODULES.length + '</span><h1>' + h(m.title) + '</h1></div>' +
+    '<div class="panel"><span class="draft">Draft, SAFE to supply curriculum</span><p style="margin-top:16px">' + h(m.intro) + '</p><ul class="points">' + m.points.map(function(x){ return '<li>' + h(x) + '</li>'; }).join('') + '</ul></div></div>' +
+    '<div><h2 class="h2" style="font-size:44px;margin-bottom:20px">Quick check</h2>' + result +
+    '<form data-form="quiz" data-id="' + m.id + '">' + questions + '<p class="error" role="alert"></p>' + (r ? '' : '<button class="btn btn-solid" type="submit">Check answers</button>') + '</form></div></div>';
+};
+
+views.agreement = function(){
+  if (S.viewer !== 'applicant') return needRole('applicant', 'Host agreement');
+  var p = me();
+  if (!p || p.status !== 'training') return '<p><a class="tlink" href="#/training">Back to training</a></p>';
+  if (!MODULES.every(function(m){ return passed(p, m.id); })) return '<div class="page-head"><h1>Not yet</h1><p class="lede">Finish all five modules before signing.</p></div><a class="tlink" href="#/training">Back to training</a>';
+  return '<p style="margin-bottom:20px"><a class="tlink" href="#/training">Back to training</a></p>' +
+    '<div class="page-head"><span class="eyebrow">Step 3 of 5</span><h1>Host agreement and waiver</h1><p class="lede">Read the terms, then sign by typing your full name.</p></div>' +
+    '<div class="split"><div>' + LEGAL_NOTICE + agreementTerms() + '</div>' +
+    '<div class="panel">' + (p.agreement ? '<h3>Signed</h3><p class="muted" style="margin-top:8px">' + h(p.agreement.name) + ', ' + h(stamp(p.agreement.signedAt)) + '</p>' :
+      '<form data-form="agree" novalidate><p class="muted small" style="margin-bottom:16px">' + h(AGREEMENT_VERSION) + '</p>' +
+      '<label class="check"><input type="checkbox" name="ok" required> I have read and agree to the host agreement and release.</label>' +
+      '<div class="field"><label for="g-sig">Type your full name to sign</label><span class="hint" id="g-sig-hint">Must match your application: ' + h(p.name) + '</span><input id="g-sig" name="sig" type="text" required aria-describedby="g-sig-hint" autocomplete="off"></div>' +
+      '<p class="error" role="alert"></p><button class="btn btn-solid" type="submit">Sign agreement</button></form>') + '</div></div>';
+};
+
+function certificateView(p, own){
+  var c = chapter(p.chapterId);
+  return '<div class="page-head"><span class="eyebrow">Congratulations, ' + h(p.name.split(' ')[0]) + '</span><h1>You\'re a certified host</h1>' +
+    '<p class="lede">You can now submit events for the ' + h(c ? c.name : '') + ' chapter. Each goes live once it\'s approved and the venue signs the host site waiver.</p></div>' +
+    '<div class="cert" style="max-width:720px"><span class="led">Sober AF Entertainment</span><h2>Certified host</h2><div class="who">' + h(p.name) + '</div>' +
+    '<dl><div><dt>Chapter</dt><dd>' + h(c ? c.name + ', ' + c.region : 'Unassigned') + '</dd></div><div><dt>Certified</dt><dd>' + h(shortDate(p.certifiedAt)) + '</dd></div>' +
+    '<div><dt>Certificate</dt><dd>' + h(p.certId) + '</dd></div><div><dt>Renews</dt><dd>[Yearly, SAFE to confirm]</dd></div></dl></div>' +
+    (own ? '<div class="btns" style="margin-top:32px"><button type="button" class="btn btn-solid" data-act="become-host">Go to my host dashboard</button></div>' : '');
+}
+
+views.host = function(){
+  if (S.viewer !== 'host' && S.viewer !== 'lead') return needRole('host', 'Host dashboard');
+  var p = me();
+  if (!p || p.status !== 'certified') return needRole('host', 'Host dashboard');
+  var mine = S.events.filter(function(e){ return e.hostId === p.id; }).sort(byStart);
+  var c = chapter(p.chapterId);
+  var actions = function(e){
+    var out = '';
+    if (e.site.waiver !== 'signed') out += '<a class="btn btn-line btn-sm" href="#/site-waiver/' + e.id + '">Preview the venue\'s waiver link</a><button type="button" class="tlink small" data-act="resend" data-id="' + e.id + '">Resend to ' + h(e.site.contactName) + '</button>';
+    if (e.status === 'changes') out += '<button type="button" class="btn btn-solid btn-sm" data-act="resubmit" data-id="' + e.id + '">I made the changes, resubmit</button>';
+    return out;
+  };
+  var today = new Date(Date.now() + DAY);
+  var minDate = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
+  return '<div class="split"><div class="page-head"><span class="eyebrow">' + h(p.name) + ' · ' + h(c ? c.name : '') + ' chapter</span><h1>Host dashboard</h1>' +
+      '<p class="lede">Submit events for review. Each one needs an approval and a signed host site waiver before it goes public.</p></div>' +
+    '<section class="board" aria-label="Your hosting"><div class="board-top"><span class="led">' + h(p.certId) + '</span><span class="led live">Certified</span></div>' +
+      boardCells([[mine.filter(function(e){ return e.status === 'approved' && !isPast(e); }).length, 'Live'], [mine.filter(function(e){ return e.status !== 'approved'; }).length, 'In review'], [mine.filter(function(e){ return e.site.waiver !== 'signed'; }).length, 'Waivers out']]) + '</section></div>' +
+    '<section class="section"><div class="section-head"><h2 class="h2">My events</h2><button type="button" class="btn btn-solid btn-sm" data-act="jump" data-id="create">New event</button></div>' +
+    eventList(mine, {status:true, actions:actions}, 'No events yet. Create your first one below.') + '</section>' +
+    '<section class="section" id="create"><div class="split"><div><h2 class="h2" style="margin-bottom:24px">Create an event</h2><div class="panel"><form data-form="event" novalidate>' +
+      '<div class="field"><label for="e-title">Event name</label><input id="e-title" name="title" type="text" required></div>' +
+      '<div class="row2"><div class="field"><label for="e-type">Type</label><select id="e-type" name="type">' + EVENT_TYPES.map(function(t){ return '<option>' + h(t) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label for="e-city">City</label><input id="e-city" name="city" type="text" required value="' + h(c && c.region === 'Colorado' ? c.name.replace(' County', '').replace(' Metro', '') + ', CO' : '') + '"></div></div>' +
+      '<div class="row2"><div class="field"><label for="e-date">Date</label><input id="e-date" name="date" type="date" required min="' + minDate + '"></div>' +
+      '<div class="field"><label for="e-time">Start time</label><input id="e-time" name="time" type="time" required value="19:00"></div></div>' +
+      '<div class="field"><label for="e-venue">Venue</label><input id="e-venue" name="venue" type="text" required></div>' +
+      '<div class="row2"><div class="field"><label for="e-cap">Seats in the sober section</label><input id="e-cap" name="capacity" type="number" min="1" max="5000" required value="40"></div>' +
+      '<div class="field"><label for="e-peers">Peers on site</label><input id="e-peers" name="peers" type="number" min="1" max="100" required value="3"></div></div>' +
+      '<h3 style="font-size:26px;margin:12px 0 6px;text-transform:uppercase">Host site contact</h3><p class="muted small" style="margin-bottom:16px">The person who can sign for the venue. We send them the host site waiver.</p>' +
+      '<div class="row2"><div class="field"><label for="e-cn">Contact name</label><input id="e-cn" name="contactName" type="text" required></div>' +
+      '<div class="field"><label for="e-ce">Contact email</label><input id="e-ce" name="email" type="email" required></div></div>' +
+      '<p class="error" role="alert"></p><button class="btn btn-solid" type="submit">Submit for review</button>' +
+    '</form></div></div><aside class="panel stack"><h2>Before you submit</h2>' +
+      '<p>Walk the space with the venue and confirm exits, first aid and an on-site staff contact.</p>' +
+      '<p>Plan peers using SAFE\'s staffing guidance [SAFE to confirm ratio].</p>' +
+      '<p>Your chapter lead' + (c && c.leadId && c.leadId !== p.id ? ' (' + h(person(c.leadId).name) + ')' : ' or SAFE') + ' reviews it. It can\'t be approved until the venue signs.</p></aside></div></section>';
+};
+
+function reviewActions(e, reviewerId){
+  if (e.status !== 'pending') return '';
+  if (reviewerId && e.hostId === reviewerId) return '<span class="why">Your own event. SAFE reviews it.</span>';
+  var canApprove = e.site.waiver === 'signed';
+  return '<button type="button" class="btn btn-solid btn-sm" data-act="approve" data-id="' + e.id + '"' + (canApprove ? '' : ' disabled aria-describedby="why-' + e.id + '"') + '>Approve</button>' +
+    (canApprove ? '' : '<span class="why" id="why-' + e.id + '">Approve unlocks when the host site signs the waiver. <a class="tlink" href="#/site-waiver/' + e.id + '">Preview their link</a></span>') +
+    '<details class="inline"><summary>Request changes</summary><form data-form="changes" data-id="' + e.id + '" novalidate><div class="field"><label for="n-' + e.id + '">Note to the host</label><textarea id="n-' + e.id + '" name="note" required></textarea></div><p class="error" role="alert"></p><button class="btn btn-line btn-sm" type="submit">Send back</button></form></details>';
+}
+function signoffActions(p){
+  return '<button type="button" class="btn btn-solid btn-sm" data-act="signoff" data-id="' + p.id + '">Confirm and certify</button>';
+}
+function signoffList(people){
+  return '<ol class="evs">' + (people.length ? people.map(function(p){
+    var e = eventById(p.shadowEventId);
+    return '<li><div class="date"><b>' + h(stepsDone(p)) + '/8</b><span>steps</span></div><div class="ev"><h3>' + h(p.name) + '</h3><p>Shadowed ' + h(e ? e.title : 'an event') + (e ? ', ' + h(dateParts(e.start).day) + ' with ' + h(hostName(e)) : '') + '</p><p>' + h(chapterName(p.chapterId)) + ' · agreement signed ' + h(shortDate(p.agreement.signedAt)) + '</p></div><div class="ev-actions">' + signoffActions(p) + '</div></li>';
+  }).join('') : '<li class="empty">No one is waiting for sign-off.</li>') + '</ol>';
+}
+function awaitingSignoff(filter){
+  return S.people.filter(function(p){ return p.status === 'training' && p.shadowEventId && p.agreement && filter(p); });
+}
+
+views.lead = function(){
+  if (S.viewer !== 'lead') return needRole('lead', 'My chapter');
+  var p = me(), c = p && chapterLedBy(p.id);
+  if (!c) return '<div class="page-head"><h1>My chapter</h1><p class="lede">' + h(p ? p.name : 'This person') + ' doesn\'t lead a chapter right now. SAFE assigns chapter leads from the admin view.</p></div>' + switchTo('admin');
+  var members = S.people.filter(function(x){ return x.chapterId === c.id && x.status !== 'declined'; });
+  var evs = S.events.filter(function(e){ return e.chapterId === c.id; });
+  var pending = evs.filter(function(e){ return e.status === 'pending'; }).sort(byStart);
+  var signoffs = awaitingSignoff(function(x){ return x.chapterId === c.id; });
+  var roster = members.map(function(x){
+    var role = x.id === c.leadId ? 'Chapter lead' : x.status === 'certified' ? 'Certified host' : x.status === 'training' ? 'In training' : 'Applied';
+    return '<tr><td><b>' + h(x.name) + '</b><br><span class="muted small">' + h(x.email) + '</span></td><td>' + h(role) + '</td><td>' + (x.status === 'applied' ? 'Awaiting SAFE review' : stepsDone(x) + ' of 8') + '</td><td>' + h(S.events.filter(function(e){ return e.hostId === x.id; }).length) + '</td></tr>';
+  }).join('');
+  return '<div class="split"><div class="page-head"><span class="eyebrow">' + h(p.name) + ', chapter lead</span><h1>' + h(c.name) + '</h1>' +
+      '<p class="lede">Review your hosts\' events and sign off on new hosts after they shadow an event.</p></div>' +
+    '<section class="board" aria-label="Chapter at a glance"><div class="board-top"><span class="led">' + h(c.name) + '</span><span class="led live">' + h(c.status) + '</span></div>' +
+      boardCells([[members.filter(function(x){ return x.status === 'certified'; }).length, 'Hosts'], [members.filter(function(x){ return x.status === 'training'; }).length, 'Training'], [pending.length + signoffs.length, 'To review']]) + '</section></div>' +
+    '<section class="section"><div class="section-head"><h2 class="h2">Events to review</h2></div>' +
+      eventList(pending, {status:true, actions:function(e){ return reviewActions(e, p.id); }}, 'Nothing waiting. New host events appear here.') + '</section>' +
+    '<section class="section"><div class="section-head"><h2 class="h2">Shadow sign-offs</h2></div>' + signoffList(signoffs) + '</section>' +
+    '<section class="section"><div class="section-head"><h2 class="h2">Roster</h2></div><div class="panel table-wrap"><table><thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Progress</th><th scope="col">Events</th></tr></thead><tbody>' + roster + '</tbody></table></div></section>' +
+    '<section class="section"><div class="section-head"><h2 class="h2">Chapter calendar</h2></div>' +
+      eventList(evs.filter(function(e){ return e.status === 'approved' && !isPast(e); }).sort(byStart), {status:true}, 'No approved upcoming events.') + '</section>';
+};
+
+views.admin = function(){
+  if (S.viewer !== 'admin') return needRole('admin', 'SAFE admin');
+  var apps = S.people.filter(function(p){ return p.status === 'applied'; });
+  var pendingEvs = S.events.filter(function(e){ return e.status === 'pending'; }).sort(byStart);
+  var otherEvs = S.events.filter(function(e){ return e.status !== 'pending'; }).sort(byStart);
+  var signoffs = awaitingSignoff(function(){ return true; });
+  var reqs = S.requests.filter(function(r){ return !r.done; });
+  var leadChoices = function(selected){
+    return '<option value="">No lead yet</option>' + certified().map(function(x){ return '<option value="' + x.id + '"' + (x.id === selected ? ' selected' : '') + '>' + h(x.name) + ' (' + h(chapterName(x.chapterId)) + ')</option>'; }).join('');
+  };
+  var appRows = apps.length ? apps.map(function(p){
+    return '<li><div class="date"><b>' + h(dateParts(p.appliedAt).day) + '</b><span>applied</span></div><div class="ev"><h3>' + h(p.name) + '</h3><p>' + h(p.email) + ' · ' + h(p.chapterId ? chapterName(p.chapterId) : 'No chapter yet' + (p.city ? ' (' + p.city + ')' : '')) + (p.recovery ? ' · ' + h(p.recovery) : '') + '</p>' +
+      (p.why ? '<p>&ldquo;' + h(p.why) + '&rdquo;</p>' : '') + '</div><div class="ev-actions"><button type="button" class="btn btn-solid btn-sm" data-act="app-ok" data-id="' + p.id + '">Approve for training</button><button type="button" class="tlink" data-act="app-no" data-id="' + p.id + '">Decline</button></div></li>';
+  }).join('') : '<li class="empty">No applications waiting.</li>';
+  var reqRows = reqs.length ? reqs.map(function(r){
+    return '<li><div class="date"><b>' + h(dateParts(r.at).day) + '</b><span>requested</span></div><div class="ev"><h3>' + h(r.city) + ', ' + h(r.region) + '</h3><p>' + h(r.name) + ' · ' + h(r.email) + (r.willHost ? ' · wants to host' : '') + '</p>' + (r.ideas ? '<p>' + h(r.ideas) + '</p>' : '') + '</div>' +
+      '<div class="ev-actions"><details class="inline"><summary>Create chapter</summary><form data-form="mkchapter" data-id="' + r.id + '" novalidate><div class="field"><label for="c-n-' + r.id + '">Chapter name</label><input id="c-n-' + r.id + '" name="name" type="text" required value="' + h(r.city) + '"></div>' +
+      '<div class="field"><label for="c-l-' + r.id + '">Lead</label><select id="c-l-' + r.id + '" name="leadId">' + leadChoices('') + '</select></div><p class="error" role="alert"></p><button class="btn btn-solid btn-sm" type="submit">Create as forming</button></form></details>' +
+      '<button type="button" class="tlink" data-act="req-close" data-id="' + r.id + '">Close request</button></div></li>';
+  }).join('') : '<li class="empty">No open chapter requests.</li>';
+  var chapterRows = S.chapters.map(function(c){
+    return '<tr><td><b>' + h(c.name) + '</b><br><span class="muted small">' + h(c.region) + '</span></td><td>' + (c.status === 'active' ? '<span class="badge ok">Active</span>' : '<span class="badge info">Forming</span>') + '</td>' +
+      '<td><form data-form="setlead" data-id="' + c.id + '" class="btns" style="flex-wrap:nowrap"><label class="sr" for="l-' + c.id + '" style="position:absolute;left:-9999px">Lead for ' + h(c.name) + '</label><select id="l-' + c.id + '" name="leadId" style="min-width:200px">' + leadChoices(c.leadId) + '</select><button class="btn btn-line btn-sm" type="submit">Save</button></form></td>' +
+      '<td>' + (c.status === 'forming' ? '<button type="button" class="btn btn-line btn-sm" data-act="activate" data-id="' + c.id + '">Mark active</button>' : '') + '</td></tr>';
+  }).join('');
+  var hostAgreements = S.people.filter(function(p){ return p.agreement; });
+  var waiverRows = S.events.slice().sort(byStart).map(function(e){
+    var s = e.site;
+    return '<tr><td><b>' + h(e.title) + '</b><br><span class="muted small">' + h(e.venue) + ', ' + h(dateParts(e.start).day) + '</span></td><td>' + (s.waiver === 'signed' ? h(s.signer.name) + ', ' + h(s.signer.title) + '<br><span class="muted small">' + h(s.signer.org) + '</span>' : h(s.contactName) + '<br><span class="muted small">' + h(s.email) + '</span>') + '</td>' +
+      '<td>' + (s.waiver === 'signed' ? '<span class="badge ok">Signed ' + h(shortDate(s.signer.signedAt)) + '</span>' : '<a class="tlink" href="#/site-waiver/' + e.id + '">Sent, preview link</a>') + '</td></tr>';
+  }).join('');
+  return '<div class="split"><div class="page-head"><span class="eyebrow">SAFE staff</span><h1>Network admin</h1><p class="lede">Approve new hosts, review events across chapters, form new chapters, and keep the signed waivers in one place.</p></div>' +
+    '<section class="board" aria-label="Network at a glance"><div class="board-top"><span class="led">Nationwide</span><span class="led live">Sample data</span></div>' +
+      boardCells([[S.chapters.length, 'Chapters'], [certified().length, 'Hosts'], [S.people.filter(function(p){ return p.status === 'training'; }).length, 'Training'], [upcomingApproved().length, 'Upcoming']]) + '</section></div>' +
+    '<div class="jump" style="margin-top:40px">' + [['adm-apps', 'Applications (' + apps.length + ')'], ['adm-events', 'Events (' + pendingEvs.length + ' to review)'], ['adm-sign', 'Sign-offs (' + signoffs.length + ')'], ['adm-req', 'Chapter requests (' + reqs.length + ')'], ['adm-ch', 'Chapters'], ['adm-waivers', 'Waivers']].map(function(j){ return '<button type="button" data-act="jump" data-id="' + j[0] + '">' + h(j[1]) + '</button>'; }).join('') + '</div>' +
+    '<section class="section" id="adm-apps"><div class="section-head"><h2 class="h2">Host applications</h2></div><ol class="evs">' + appRows + '</ol></section>' +
+    '<section class="section" id="adm-events"><div class="section-head"><h2 class="h2">Events to review</h2></div>' + eventList(pendingEvs, {status:true, actions:function(e){ return reviewActions(e, null); }}, 'Nothing waiting.') +
+      '<h3 style="font-size:30px;text-transform:uppercase;margin:40px 0 14px">All other events</h3>' + eventList(otherEvs, {status:true}, 'None.') + '</section>' +
+    '<section class="section" id="adm-sign"><div class="section-head"><h2 class="h2">Shadow sign-offs</h2></div><p class="muted" style="margin-bottom:20px">Chapter leads usually sign off. SAFE can sign off for chapters without a lead.</p>' + signoffList(signoffs) + '</section>' +
+    '<section class="section" id="adm-req"><div class="section-head"><h2 class="h2">Chapter requests</h2></div><ol class="evs">' + reqRows + '</ol></section>' +
+    '<section class="section" id="adm-ch"><div class="section-head"><h2 class="h2">Chapters</h2></div><div class="panel table-wrap"><table><thead><tr><th scope="col">Chapter</th><th scope="col">Status</th><th scope="col">Lead</th><th scope="col"><span style="position:absolute;left:-9999px">Actions</span></th></tr></thead><tbody>' + chapterRows + '</tbody></table></div></section>' +
+    '<section class="section" id="adm-waivers"><div class="section-head"><h2 class="h2">Waivers</h2></div>' +
+      '<h3 style="font-size:30px;text-transform:uppercase;margin-bottom:14px">Host site waivers</h3><div class="panel table-wrap"><table><thead><tr><th scope="col">Event</th><th scope="col">Site signer</th><th scope="col">Status</th></tr></thead><tbody>' + waiverRows + '</tbody></table></div>' +
+      '<h3 style="font-size:30px;text-transform:uppercase;margin:36px 0 14px">Host agreements</h3><div class="panel table-wrap"><table><thead><tr><th scope="col">Host</th><th scope="col">Version</th><th scope="col">Signed</th></tr></thead><tbody>' +
+      hostAgreements.map(function(p){ return '<tr><td><b>' + h(p.name) + '</b><br><span class="muted small">' + h(chapterName(p.chapterId)) + '</span></td><td>' + h(p.agreement.version) + '</td><td>' + h(stamp(p.agreement.signedAt)) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+    '</section>';
+};
+
+views.siteWaiver = function(params, id){
+  var e = eventById(id);
+  if (!e) return '<div class="page-head"><h1>Link not found</h1><p class="lede">This waiver link is no longer valid.</p></div>';
+  var s = e.site, d = dateParts(e.start);
+  var head = '<p class="small muted" style="margin-bottom:20px">This is the page the venue contact gets by email. In the demo, nothing is sent. <button type="button" class="tlink" data-act="back">Go back</button></p>' +
+    '<div class="page-head"><span class="eyebrow">For ' + h(s.contactName) + ' · sent on behalf of ' + h(hostName(e)) + '</span><h1>Host site waiver</h1>' +
+    '<p class="lede">' + h(e.title) + ' · ' + h(d.day) + ', ' + h(d.rest) + ' · ' + h(e.venue) + ', ' + h(e.city) + '</p></div>';
+  if (s.waiver === 'signed') {
+    return head + '<div class="panel" style="max-width:720px"><h2>Signed</h2><p style="margin-top:12px">' + h(s.signer.name) + ', ' + h(s.signer.title) + ', ' + h(s.signer.org) + '</p><p class="muted">' + h(stamp(s.signer.signedAt)) + ' · ' + h(SITE_WAIVER_VERSION) + '</p>' +
+      '<p style="margin-top:12px">Thanks. ' + h(hostName(e)) + ' and SAFE are notified. In the full system, both parties get a PDF copy by email.</p></div>';
+  }
+  return head + '<div class="split"><div>' + LEGAL_NOTICE + siteTerms(e) + '</div><div class="panel"><form data-form="sitesign" data-id="' + e.id + '" novalidate>' +
+    '<div class="field"><label for="s-name">Your full name</label><input id="s-name" name="name" type="text" required value="' + h(s.contactName) + '" autocomplete="name"></div>' +
+    '<div class="field"><label for="s-title">Title</label><input id="s-title" name="title" type="text" required autocomplete="organization-title"></div>' +
+    '<div class="field"><label for="s-org">Organization</label><input id="s-org" name="org" type="text" required value="' + h(e.venue) + '" autocomplete="organization"></div>' +
+    '<label class="check"><input type="checkbox" name="ok" required> I am authorized to sign for this organization and agree to these terms.</label>' +
+    '<div class="field"><label for="s-sig">Type your full name to sign</label><input id="s-sig" name="sig" type="text" required autocomplete="off"></div>' +
+    '<p class="error" role="alert"></p><button class="btn btn-solid" type="submit">Sign waiver</button></form></div></div>';
+};
+
+views.guide = function(){
+  var step = function(title, body, role, to){
+    return '<li><div><b>' + h(title) + '</b><span>' + h(body) + '</span></div><button type="button" class="btn btn-line btn-sm" data-act="viewer" data-role="' + role + '" data-to="' + to + '">Go as ' + h(ROLE_LABEL[role].toLowerCase()) + '</button></li>';
+  };
+  return '<div class="page-head"><h1>Demo script</h1><p class="lede">A ten-minute walk through the whole program. Use Reset demo in the top bar to start over at any time.</p></div>' +
+    '<ol class="guide">' +
+      step('See the network', 'Chapters, the path to host, and community events. Submit a "Start a chapter" request too.', 'visitor', '#/') +
+      step('Apply to host', 'Fill in the form. You become the applicant, waiting for review.', 'visitor', '#/apply') +
+      step('Approve the application', 'Approve it under Host applications. Also try creating a chapter from the Austin request.', 'admin', '#/admin') +
+      step('Train', 'Pass the five module checks (get one wrong to see a retry), then sign the host agreement and pick an event to shadow.', 'applicant', '#/training') +
+      step('Sign off', 'Confirm the shadow event. The applicant becomes a certified host.', 'lead', '#/lead') +
+      step('Host an event', 'Back as the applicant, open the host dashboard and submit an event. A waiver link goes to the venue.', 'applicant', '#/training') +
+      step('Try to approve it', 'As SAFE admin, Approve stays locked until the venue signs. Preview their link and sign as the venue.', 'admin', '#/admin') +
+      step('Approve and publish', 'Approve the event. It shows on the public chapters page.', 'admin', '#/admin') +
+      step('Request changes', 'Send an event back with a note, then see the note on the host dashboard and resubmit.', 'host', '#/host') +
+    '</ol>';
+};
+
+// ---- router ----
+function parse(){
+  var raw = (location.hash || '#/').slice(1);
+  var qi = raw.indexOf('?'), path = qi >= 0 ? raw.slice(0, qi) : raw, params = {};
+  if (qi >= 0) raw.slice(qi + 1).split('&').forEach(function(kv){ var p = kv.split('='); if (p[0]) params[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ''); });
+  return {path:path || '/', params:params};
+}
+function pick(r){
+  var m;
+  if (r.path === '/' || r.path === '') return [views.home];
+  if (r.path === '/apply') return [views.apply];
+  if (r.path === '/start-chapter') return [views.startChapter];
+  if (r.path === '/training') return [views.training];
+  if (r.path === '/training/agreement') return [views.agreement];
+  if ((m = r.path.match(/^\/training\/(m\d)$/))) return [views.module, m[1]];
+  if (r.path === '/host') return [views.host];
+  if (r.path === '/lead') return [views.lead];
+  if (r.path === '/admin') return [views.admin];
+  if ((m = r.path.match(/^\/site-waiver\/([\w-]+)$/))) return [views.siteWaiver, m[1]];
+  if (r.path === '/guide') return [views.guide];
+  return null;
+}
+
+var lastPath = null;
+function render(){
+  var r = parse(), view = document.getElementById('view');
+  var picked = pick(r);
+  var changed = r.path !== lastPath;
+  if (changed) quizResult = null;
+  view.innerHTML = picked ? picked[0](r.params, picked[1]) : '<div class="page-head"><h1>Not found</h1></div><a class="tlink" href="#/">Back to chapters</a>';
+  lastPath = r.path;
+  renderChrome(r.path);
+  if (changed) {
+    window.scrollTo(0, 0);
+    var h1 = view.querySelector('h1');
+    if (h1) { h1.setAttribute('tabindex', '-1'); h1.focus({preventScroll:true}); }
+  }
+}
+function renderChrome(path){
+  var links = {visitor:[['#/', 'Chapters'], ['#/apply', 'Apply to host'], ['#/start-chapter', 'Start a chapter']],
+    applicant:[['#/', 'Chapters'], ['#/training', 'My training']],
+    host:[['#/', 'Chapters'], ['#/host', 'Host dashboard']],
+    lead:[['#/', 'Chapters'], ['#/lead', 'My chapter'], ['#/host', 'My events']],
+    admin:[['#/', 'Chapters'], ['#/admin', 'SAFE admin']]}[S.viewer];
+  document.getElementById('nav').innerHTML = links.map(function(l){
+    var cur = '#' + path === l[0] || (l[0] !== '#/' && ('#' + path).indexOf(l[0] + '/') === 0);
+    return '<a href="' + l[0] + '"' + (cur ? ' aria-current="page"' : '') + '>' + h(l[1]) + '</a>';
+  }).join('') + '<a href="/soberafe/">Sober AF home</a>';
+  var sel = document.getElementById('viewer');
+  sel.innerHTML = ['visitor', 'applicant', 'host', 'lead', 'admin'].map(function(role){
+    var p = (role === 'applicant' || role === 'host' || role === 'lead') && person(S.me[role]);
+    var extra = p ? ' (' + p.name + (role === 'lead' && chapterLedBy(p.id) ? ', ' + chapterLedBy(p.id).name : '') + ')' : '';
+    return '<option value="' + role + '"' + (role === S.viewer ? ' selected' : '') + '>' + h(ROLE_LABEL[role] + extra) + '</option>';
+  }).join('');
+}
+
+function go(hash){ if (location.hash === hash) render(); else location.hash = hash; }
+function setViewer(role, to){ S.viewer = role; save(); go(to || ROLE_HOME[role]); }
+var toastTimer;
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.textContent = ''; }, 5000);
+}
+function commit(msg){ save(); render(); if (msg) toast(msg); }
+
+// ---- actions ----
+var acts = {
+  reset: function(){ if (!confirm('Reset the demo to its sample data? Anything you added is cleared.')) return; S = seed(); save(); toast('Demo reset.'); go('#/'); },
+  viewer: function(d){ setViewer(d.role, d.to); },
+  back: function(){ history.back(); },
+  jump: function(d){ var el = document.getElementById(d.id); if (el) { el.scrollIntoView({behavior:'smooth'}); var hd = el.querySelector('h2'); if (hd) { hd.setAttribute('tabindex', '-1'); hd.focus({preventScroll:true}); } } },
+  retry: function(){ quizResult = null; render(); var f = document.querySelector('form[data-form="quiz"] input'); if (f) f.focus(); },
+  shadow: function(d){ var p = me(); p.shadowEventId = d.id; commit('Shadow event chosen. Your lead signs off after it.'); },
+  unshadow: function(){ var p = me(); p.shadowEventId = null; commit(); },
+  'become-host': function(){ S.me.host = S.me.applicant; setViewer('host'); },
+  resend: function(d){ var e = eventById(d.id); toast('In the full system, the waiver link is emailed again to ' + e.site.email + '.'); },
+  resubmit: function(d){ var e = eventById(d.id); e.status = 'pending'; e.note = ''; commit('Resubmitted for review.'); },
+  approve: function(d){ var e = eventById(d.id); if (e.site.waiver !== 'signed') return; e.status = 'approved'; e.note = ''; commit('Approved. "' + e.title + '" is now on the public chapters page.'); },
+  signoff: function(d){
+    var p = person(d.id);
+    p.status = 'certified'; p.certifiedAt = new Date().toISOString();
+    p.certId = 'SAFE-H-' + String(certified().length).padStart(4, '0');
+    commit(p.name + ' is now a certified host.');
+  },
+  'app-ok': function(d){ var p = person(d.id); p.status = 'training'; p.scores = p.scores || {}; commit(p.name + ' is approved and can start training.'); },
+  'app-no': function(d){ var p = person(d.id); if (!confirm('Decline ' + p.name + '\'s application?')) return; p.status = 'declined'; commit('Application declined.'); },
+  'req-close': function(d){ byId(S.requests, d.id).done = true; commit('Request closed.'); },
+  activate: function(d){ chapter(d.id).status = 'active'; commit('Chapter marked active.'); }
+};
+document.addEventListener('click', function(ev){
+  var b = ev.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  var fn = acts[b.dataset.act];
+  if (fn) { ev.preventDefault(); fn(b.dataset); }
+});
+document.getElementById('viewer').addEventListener('change', function(ev){ setViewer(ev.target.value); });
+
+// ---- forms ----
+function fail(form, msg){ var e = form.querySelector('.error'); e.textContent = msg; var bad = form.querySelector(':invalid'); if (bad) bad.focus(); }
+function val(fd, k){ return String(fd.get(k) || '').trim(); }
+var forms = {
+  apply: function(f, fd){
+    if (!f.checkValidity()) return fail(f, 'Please fill in your name, a valid email, why you want to host, and agree to the code of conduct.');
+    if (!fd.get('chapterId') && !val(fd, 'city')) { f.querySelector('#a-city').focus(); return fail(f, 'Tell us your city and state, since it isn\'t listed.'); }
+    var p = {id:nextId('p-'), name:val(fd, 'name'), email:val(fd, 'email'), chapterId:fd.get('chapterId') || null, city:val(fd, 'city'), recovery:val(fd, 'recovery'), why:val(fd, 'why'), status:'applied', scores:{}, agreement:null, appliedAt:new Date().toISOString()};
+    S.people.push(p); S.me.applicant = p.id; S.viewer = 'applicant';
+    save(); go('#/training'); toast('Application submitted.');
+  },
+  request: function(f, fd){
+    if (!f.checkValidity()) return fail(f, 'Please fill in your name, a valid email, city and state.');
+    S.requests.push({id:nextId('r-'), name:val(fd, 'name'), email:val(fd, 'email'), city:val(fd, 'city'), region:val(fd, 'region'), ideas:val(fd, 'ideas'), willHost:!!fd.get('willHost'), at:new Date().toISOString(), done:false});
+    save(); go('#/'); toast('Thanks. SAFE will be in touch about a chapter in ' + val(fd, 'city') + '.');
+  },
+  quiz: function(f, fd){
+    var m = byId(MODULES, f.dataset.id);
+    if (!f.checkValidity()) return fail(f, 'Answer all three questions.');
+    var picks = m.quiz.map(function(q, i){ return Number(fd.get('q' + i)); });
+    var score = picks.filter(function(pk, i){ return pk === m.quiz[i].a; }).length;
+    var p = me();
+    p.scores[m.id] = Math.max(score, (p.scores[m.id] || 0));
+    quizResult = {mid:m.id, picks:picks, score:score};
+    save(); render();
+    var r = document.getElementById('quiz-result'); if (r) { r.scrollIntoView({block:'center'}); r.focus({preventScroll:true}); }
+  },
+  agree: function(f, fd){
+    var p = me();
+    if (!f.checkValidity()) return fail(f, 'Check the box and type your full name.');
+    if (!sameName(val(fd, 'sig'), p.name)) { f.querySelector('#g-sig').focus(); return fail(f, 'The typed name must match your application: ' + p.name + '.'); }
+    p.agreement = {name:val(fd, 'sig'), signedAt:new Date().toISOString(), version:AGREEMENT_VERSION};
+    save(); go('#/training'); toast('Agreement signed. Now pick an event to shadow.');
+  },
+  event: function(f, fd){
+    if (!f.checkValidity()) return fail(f, 'Please complete every field. Contact email must be valid.');
+    var start = val(fd, 'date') + 'T' + val(fd, 'time');
+    if (new Date(start).getTime() <= Date.now()) { f.querySelector('#e-date').focus(); return fail(f, 'Pick a date in the future.'); }
+    var p = me();
+    var e = {id:nextId('e-'), title:val(fd, 'title'), type:val(fd, 'type'), start:start, venue:val(fd, 'venue'), city:val(fd, 'city'), chapterId:p.chapterId, capacity:Number(fd.get('capacity')), peers:Number(fd.get('peers')), hostId:p.id, status:'pending', createdAt:new Date().toISOString(),
+      site:{contactName:val(fd, 'contactName'), email:val(fd, 'email'), waiver:'sent'}};
+    S.events.push(e);
+    commit('Submitted for review. A waiver link is on its way to ' + e.site.contactName + '.');
+  },
+  changes: function(f, fd){
+    if (!val(fd, 'note')) return fail(f, 'Add a note so the host knows what to change.');
+    var e = eventById(f.dataset.id); e.status = 'changes'; e.note = val(fd, 'note');
+    commit('Sent back to ' + hostName(e) + ' with your note.');
+  },
+  mkchapter: function(f, fd){
+    if (!val(fd, 'name')) return fail(f, 'Name the chapter.');
+    var r = byId(S.requests, f.dataset.id);
+    var c = {id:nextId('c-'), name:val(fd, 'name'), region:r.region, status:'forming', leadId:fd.get('leadId') || null};
+    S.chapters.push(c); r.done = true;
+    commit(c.name + ' chapter created as forming.');
+  },
+  setlead: function(f, fd){
+    var c = chapter(f.dataset.id); c.leadId = fd.get('leadId') || null;
+    commit(c.leadId ? person(c.leadId).name + ' now leads ' + c.name + '.' : c.name + ' has no lead.');
+  },
+  sitesign: function(f, fd){
+    if (!f.checkValidity()) return fail(f, 'Please fill in every field and check the box.');
+    if (!sameName(val(fd, 'sig'), val(fd, 'name'))) { f.querySelector('#s-sig').focus(); return fail(f, 'The typed signature must match your full name.'); }
+    var e = eventById(f.dataset.id);
+    e.site.waiver = 'signed';
+    e.site.signer = {name:val(fd, 'name'), title:val(fd, 'title'), org:val(fd, 'org'), signedAt:new Date().toISOString()};
+    commit('Waiver signed. The event can now be approved.');
+  }
+};
+document.addEventListener('submit', function(ev){
+  var f = ev.target, fn = forms[f.dataset.form];
+  if (!fn) return;
+  ev.preventDefault();
+  f.querySelector('.error') && (f.querySelector('.error').textContent = '');
+  fn(f, new FormData(f));
+});
+
+window.addEventListener('hashchange', render);
+render();
+})();
+</script>
+</body>
+</html>
