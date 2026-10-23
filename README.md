@@ -20,7 +20,7 @@ The existing `contact-worker.mjs` serves static assets and handles `/api/contact
 
 Run `python3 -m http.server 8765 --bind 127.0.0.1` and open http://127.0.0.1:8765. This previews the static homepage; email delivery requires Cloudflare bindings. The contact dialog and browser validation can be checked locally. Do not use the static server to test real email delivery.
 
-The homepage "What we're building" section describes current work in progress with nonprofit partners (names left out until a partner agrees to share); "What we could build" ideas are potential partnerships, not completed client work. List no prices on the site. Organization and developer contact details remain available at `#developer`.
+The homepage "What we're building" section describes current work in progress with nonprofit partners (names left out until a partner agrees to share); the "Ideas we'd like to explore" list on the Our projects page is potential partnerships, not completed client work. PulseLift and Volunteer Connect live under "From our lab" on that page. List no prices on the site. Organization and developer contact details remain available at `#developer`.
 
 ## Contact form and Salesforce
 
