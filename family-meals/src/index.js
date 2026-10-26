@@ -67,7 +67,14 @@ const starterMealsVersion = "family-dinners-v1";
 const rosterSeedVersion = "family-members-v1";
 
 const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
-async function ensureSchema(db){await db.batch([
+// Schema setup is about 30 D1 calls; doing it on every request pushed the Worker past the
+// free plan's 10 ms CPU limit (error 1102). Run it once per database binding per isolate.
+const schemaReady=new WeakMap();
+function ensureSchema(db){
+  if(!schemaReady.has(db))schemaReady.set(db,createSchema(db).catch((error)=>{schemaReady.delete(db);throw error;}));
+  return schemaReady.get(db);
+}
+async function createSchema(db){await db.batch([
 db.prepare("CREATE TABLE IF NOT EXISTS meals (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,notes TEXT DEFAULT '',recipe_url TEXT DEFAULT '',suggested_by TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"),
 db.prepare("CREATE TABLE IF NOT EXISTS ratings (id INTEGER PRIMARY KEY AUTOINCREMENT,meal_id INTEGER NOT NULL,member TEXT NOT NULL,rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),comment TEXT DEFAULT '',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(meal_id,member))"),
 db.prepare("CREATE TABLE IF NOT EXISTS meal_votes (id INTEGER PRIMARY KEY AUTOINCREMENT,meal_id INTEGER NOT NULL,member TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(meal_id,member))"),
