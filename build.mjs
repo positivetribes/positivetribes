@@ -46,9 +46,11 @@ if (measurementId) {
 // Up ENDing Parkinson's scheduling prototype, copied as-is with the same GA4 tag as Coyote.
 await cp('uep', 'public/uep', { recursive: true });
 if (measurementId) {
-  const uep = await readFile('public/uep/index.html', 'utf8');
-  if (!uep.includes('</head>')) throw new Error('uep/index.html is missing </head>.');
-  await writeFile('public/uep/index.html', uep.replace('</head>', analytics + '</head>'));
+  for (const page of ['uep/index.html', 'uep/v3/index.html']) {
+    const uep = await readFile('public/' + page, 'utf8');
+    if (!uep.includes('</head>')) throw new Error(page + ' is missing </head>.');
+    await writeFile('public/' + page, uep.replace('</head>', analytics + '</head>'));
+  }
 }
 // United Rocks copy of the same scheduling prototype, with the same GA4 tag.
 await cp('unitedrocks', 'public/unitedrocks', { recursive: true });
