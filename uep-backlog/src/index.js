@@ -7,6 +7,8 @@ const TIERS = ['must', 'nice', 'idea'];
 // review = new and not sorted yet, prototype = next prototype round, full = full build, later = parked.
 const PHASES = ['review', 'prototype', 'full', 'later'];
 const KINDS = ['question', 'change'];
+// Separate lists on the page: the climb scheduler and the April 2027 fundraising pages.
+const AREAS = ['scheduler', 'fundraising'];
 
 // Applied once per database, only when the backlog has never been seeded.
 // [tier, title, details, owner, phase, answer]. All are open questions added by Eric after the Oct 9 call and Gymdesk walkthrough.
@@ -68,6 +70,10 @@ const kindOf = value => {
   if (!KINDS.includes(value)) throw new InputError('Choose question or change.');
   return value;
 };
+const areaOf = value => {
+  if (!AREAS.includes(value)) throw new InputError('Choose scheduler or fundraising.');
+  return value;
+};
 
 async function body(request) {
   let result;
@@ -100,6 +106,7 @@ async function ensureSchema(db) {
       answer TEXT NOT NULL DEFAULT '',
       tier TEXT NOT NULL CHECK(tier IN ('must','nice','idea')),
       phase TEXT NOT NULL DEFAULT 'review',
+      area TEXT NOT NULL DEFAULT 'scheduler' CHECK(area IN ('scheduler','fundraising')),
       position INTEGER NOT NULL,
       done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0,1)),
       added_by TEXT NOT NULL DEFAULT '',
@@ -109,6 +116,16 @@ async function ensureSchema(db) {
     db.prepare('CREATE INDEX IF NOT EXISTS backlog_items_tier ON backlog_items(kind, tier, position)'),
     db.prepare('CREATE TABLE IF NOT EXISTS app_seeds (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)')
   ]);
+  // Lists made before areas existed get the column; their items are all scheduler items.
+  const { results: columns } = await db.prepare('PRAGMA table_info(backlog_items)').all();
+  if (!columns.some(column => column.name === 'area')) {
+    try {
+      await db.prepare(`ALTER TABLE backlog_items ADD COLUMN area TEXT NOT NULL DEFAULT 'scheduler' CHECK(area IN ('scheduler','fundraising'))`).run();
+    } catch (error) {
+      // A simultaneous first request may have added it already.
+      if (!/duplicate column/i.test(String(error && error.message))) throw error;
+    }
+  }
   // One transaction: the inserts and the marker succeed together, so a second
   // simultaneous first request cannot seed twice, and removed items never return.
   await db.batch([
@@ -122,9 +139,9 @@ async function ensureSchema(db) {
 
 async function listItems(db) {
   const { results } = await db.prepare(
-    `SELECT id, kind, title, details, owner, answer, tier, phase, position, done, added_by, created_at, updated_at
+    `SELECT id, kind, area, title, details, owner, answer, tier, phase, position, done, added_by, created_at, updated_at
      FROM backlog_items
-     ORDER BY kind DESC, CASE tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, done, position, id`
+     ORDER BY area DESC, kind DESC, CASE tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, done, position, id`
   ).all();
   return results.map(item => ({ ...item, done: Boolean(item.done) }));
 }
@@ -137,10 +154,10 @@ async function requireItem(db, value) {
   return item;
 }
 
-// Order is kept per kind and tier: questions and changes are listed separately.
-const nextPosition = (db, kind, tier) => db.prepare(
-  'SELECT COALESCE(MAX(position), 0) + 1 AS next FROM backlog_items WHERE kind = ? AND tier = ?'
-).bind(kind, tier).first().then(row => row.next);
+// Order is kept per area, kind and tier: each area's questions and changes are listed separately.
+const nextPosition = (db, area, kind, tier) => db.prepare(
+  'SELECT COALESCE(MAX(position), 0) + 1 AS next FROM backlog_items WHERE area = ? AND kind = ? AND tier = ?'
+).bind(area, kind, tier).first().then(row => row.next);
 
 export default {
   async fetch(request, env) {
@@ -169,10 +186,11 @@ export default {
         const phase = b.phase === undefined ? 'review' : phaseOf(b.phase);
         const kind = b.kind === undefined ? 'change' : kindOf(b.kind);
         const owner = text(b.owner, 60, { label: 'Who answers' });
+        const area = b.area === undefined ? 'scheduler' : areaOf(b.area);
         await db.prepare(
-          `INSERT INTO backlog_items (kind, title, details, owner, tier, phase, position, added_by)
-           VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM backlog_items WHERE kind = ? AND tier = ?), ?)`
-        ).bind(kind, title, details, owner, tier, phase, kind, tier, by).run();
+          `INSERT INTO backlog_items (kind, area, title, details, owner, tier, phase, position, added_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM backlog_items WHERE area = ? AND kind = ? AND tier = ?), ?)`
+        ).bind(kind, area, title, details, owner, tier, phase, area, kind, tier, by).run();
         return json({ ok: true, items: await listItems(db) }, 201);
       }
 
@@ -185,9 +203,9 @@ export default {
         const phase = b.phase === undefined ? null : phaseOf(b.phase);
         const neighbor = await db.prepare(
           `SELECT id, position FROM backlog_items
-           WHERE kind = ? AND tier = ? AND done = ? AND position ${up ? '<' : '>'} ? AND (? IS NULL OR phase = ?)
+           WHERE area = ? AND kind = ? AND tier = ? AND done = ? AND position ${up ? '<' : '>'} ? AND (? IS NULL OR phase = ?)
            ORDER BY position ${up ? 'DESC' : 'ASC'} LIMIT 1`
-        ).bind(item.kind, item.tier, item.done, item.position, phase, phase).first();
+        ).bind(item.area, item.kind, item.tier, item.done, item.position, phase, phase).first();
         if (neighbor) {
           await db.batch([
             db.prepare('UPDATE backlog_items SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(neighbor.position, item.id),
@@ -208,11 +226,12 @@ export default {
         const phase = b.phase === undefined ? item.phase : phaseOf(b.phase);
         const owner = b.owner === undefined ? item.owner : text(b.owner, 60, { label: 'Who answers' });
         const answer = b.answer === undefined ? item.answer : text(b.answer, 2000, { label: 'Answer' });
-        // A change of tier lands at the bottom of the new tier so it never jumps ahead of settled priorities.
-        const position = tier === item.tier ? item.position : await nextPosition(db, item.kind, tier);
+        const area = b.area === undefined ? item.area : areaOf(b.area);
+        // A change of tier or area lands at the bottom of the new list so it never jumps ahead of settled priorities.
+        const position = tier === item.tier && area === item.area ? item.position : await nextPosition(db, area, item.kind, tier);
         await db.prepare(
-          `UPDATE backlog_items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-        ).bind(title, details, owner, answer, done, tier, phase, position, item.id).run();
+          `UPDATE backlog_items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, area = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        ).bind(title, details, owner, answer, done, tier, phase, area, position, item.id).run();
         return json({ ok: true, items: await listItems(db) });
       }
 

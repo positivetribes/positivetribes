@@ -243,3 +243,51 @@ test('the committed backlog page has no analytics tag baked in; deploy adds it f
   // The viewer cannot rely on browser confirm dialogs, so deleting asks on the page itself.
   assert.equal(html.includes('confirm('), false);
 });
+
+test('scheduler and fundraising are separate lists with their own order', async () => {
+  const { sqlite, db } = database();
+  try {
+    let list = await items(db);
+    assert.ok(list.every(i => i.area === 'scheduler'));
+    await call(db, 'POST', '/items', { title: 'Scheduler change', tier: 'must' });
+    const added = await call(db, 'POST', '/items', { title: 'Team totals by gym', tier: 'must', area: 'fundraising' });
+    assert.equal(added.status, 201);
+    await call(db, 'POST', '/items', { title: 'Volunteers see fundraising only', tier: 'must', area: 'fundraising' });
+    list = await items(db);
+    const fund = list.filter(i => i.area === 'fundraising').map(i => [i.title, i.position]);
+    assert.deepEqual(fund, [['Team totals by gym', 1], ['Volunteers see fundraising only', 2]]);
+    // Moving a fundraising item never swaps with a scheduler item in the same tier.
+    const v = list.find(i => i.title === 'Volunteers see fundraising only');
+    await call(db, 'POST', `/items/${v.id}/move`, { direction: 'up' });
+    list = await items(db);
+    assert.deepEqual(list.filter(i => i.area === 'fundraising').map(i => i.title), ['Volunteers see fundraising only', 'Team totals by gym']);
+    assert.equal(list.find(i => i.title === 'Scheduler change').position, 1);
+    // Moving an item to the other list puts it at the bottom there.
+    const s = list.find(i => i.title === 'Scheduler change');
+    assert.equal((await call(db, 'PATCH', '/items/' + s.id, { area: 'fundraising' })).status, 200);
+    list = await items(db);
+    const moved = list.find(i => i.title === 'Scheduler change');
+    assert.equal(moved.area, 'fundraising');
+    assert.equal(moved.position, 3);
+    assert.equal((await call(db, 'POST', '/items', { title: 'ok', area: 'events' })).status, 400);
+    assert.equal((await call(db, 'PATCH', '/items/' + s.id, { area: 'events' })).status, 400);
+  } finally { sqlite.close(); }
+});
+
+test('a list made before areas existed gets the column, with every item in the scheduler list', async () => {
+  const { sqlite, db } = database();
+  try {
+    sqlite.exec(`CREATE TABLE backlog_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL DEFAULT 'change' CHECK(kind IN ('question','change')),
+      title TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', owner TEXT NOT NULL DEFAULT '', answer TEXT NOT NULL DEFAULT '',
+      tier TEXT NOT NULL CHECK(tier IN ('must','nice','idea')), phase TEXT NOT NULL DEFAULT 'review', position INTEGER NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0,1)), added_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+    sqlite.exec(`INSERT INTO backlog_items (title, tier, position) VALUES ('Old item', 'must', 1)`);
+    const list = await items(db);
+    assert.equal(list.find(i => i.title === 'Old item').area, 'scheduler');
+    await items(db);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM pragma_table_info('backlog_items') WHERE name = 'area'").get().n, 1);
+  } finally { sqlite.close(); }
+});

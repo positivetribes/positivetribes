@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>UEP Scheduler Backlog</title>
+<title>UEP Backlog</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
@@ -92,9 +92,9 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
 <main class="wrap">
   <header class="stack">
     <div class="eyebrow">Positive Tribes &middot; Up ENDing Parkinson's</div>
-    <h1>Scheduler backlog</h1>
-    <p class="lede">Open questions about the climber scheduling app, and every suggested change to the prototype. Answer a question, add your own suggestions, and move items up or down to show what comes first.</p>
-    <p class="proto"><a class="btn" href="https://positivetribes.org/uep/" target="_blank" rel="noopener">Try the prototype</a> <span class="muted">Opens in a new tab. Have it open while you add suggestions.</span></p>
+    <h1>UEP backlog</h1>
+    <p class="lede">Open questions about the climber scheduling app and the fundraising pages, and every suggested change to the prototype. Scheduler and Fundraising are kept as separate lists. Answer a question, add your own suggestions, and move items up or down to show what comes first.</p>
+    <p class="proto"><a class="btn" id="proto-link" href="https://positivetribes.org/uep/" target="_blank" rel="noopener">Try the prototype</a> <span class="muted">Opens in a new tab. Have it open while you add suggestions.</span></p>
   </header>
 
   <div id="gate" class="card stack" hidden>
@@ -107,6 +107,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
   </div>
 
   <div id="app" hidden class="stack">
+    <div class="kinds" id="areas" role="group" aria-label="Show the scheduler or fundraising list"></div>
     <div class="kinds" id="kinds" role="group" aria-label="Show questions or suggestions"></div>
 
     <ul class="legend card" id="tier-legend"></ul>
@@ -153,9 +154,11 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
       ['nice', 'Nice to have', 'Makes it better and we would like it in the first release if there is room.'],
       ['idea', 'Idea for now', 'Worth remembering. Not decided, not promised.']]
   };
+  // Separate lists, each with its own questions, changes and order. Fundraising is shown in prototype v3.
+  const AREAS = [['scheduler', 'Scheduler', 'https://positivetribes.org/uep/'], ['fundraising', 'Fundraising', 'https://positivetribes.org/uep/v3/']];
   const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
   const $ = id => document.getElementById(id);
-  let passcode = '', items = [], editing = null, filter = 'all', kind = 'question', confirming = null;
+  let passcode = '', items = [], editing = null, filter = 'all', kind = 'question', area = 'scheduler', confirming = null;
 
   // Visitor counting. gtag exists only when the site is deployed with the GA4 tag, so this does nothing otherwise.
   // Events never include the passcode, names, or anything typed into an item.
@@ -273,10 +276,11 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     const owner = isQ(item) && h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'edit-owner' });
     const answer = isQ(item) && h('textarea', { maxlength: 2000, id: 'edit-answer', placeholder: 'What did we learn?' }, item.answer);
     const answered = isQ(item) && h('input', { type: 'checkbox', id: 'edit-answered', ...(item.done ? { checked: true } : {}) });
+    const list = h('select', { id: 'edit-area' }, AREAS.map(([key, label]) => h('option', { value: key, ...(key === item.area ? { selected: true } : {}) }, label)));
     return h('form', { class: 'card stack', onsubmit: async event => {
       event.preventDefault();
       editing = null;
-      const changes = { title: title.value, details: details.value };
+      const changes = { title: title.value, details: details.value, area: list.value };
       if (isQ(item)) Object.assign(changes, { owner: owner.value, answer: answer.value, done: answered.checked });
       await act('/items/' + item.id, patch(changes));
       render();
@@ -285,6 +289,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
       h('div', {}, h('label', { for: 'edit-details' }, isQ(item) ? 'Why it matters' : 'Details'), details),
       isQ(item) && h('div', {}, h('label', { for: 'edit-owner' }, 'Who can answer?'), owner),
       isQ(item) && h('div', {}, h('label', { for: 'edit-answer' }, 'Answer'), answer),
+      h('div', {}, h('label', { for: 'edit-area' }, 'List'), list),
       isQ(item) && h('label', { for: 'edit-answered', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, answered, 'This question is answered'),
       h('div', { class: 'row' },
         h('button', { class: 'btn', type: 'submit' }, 'Save'),
@@ -303,9 +308,17 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
   }
 
   function render() {
-    const mine = items.filter(i => i.kind === kind);
+    const here = items.filter(i => i.area === area);
+    const mine = here.filter(i => i.kind === kind);
+    $('areas').replaceChildren(...AREAS.map(([key, label]) => {
+      const n = items.filter(i => i.area === key && !i.done).length;
+      return h('button', { type: 'button', 'aria-pressed': String(area === key), onclick: () => {
+        area = key; store.set('uep-backlog-area', key); filter = 'all'; editing = null; render();
+      } }, label + ' (' + n + ')');
+    }));
+    $('proto-link').href = AREAS.find(a => a[0] === area)[2];
     $('kinds').replaceChildren(...[['question', 'Open questions'], ['change', 'Suggested changes']].map(([key, label]) => {
-      const n = items.filter(i => i.kind === key && !i.done).length;
+      const n = here.filter(i => i.kind === key && !i.done).length;
       return h('button', { type: 'button', 'aria-pressed': String(kind === key), onclick: () => { kind = key; filter = 'all'; editing = null; renderForm(); render(); } }, label + ' (' + n + ')');
     }));
     const open = mine.filter(i => !i.done).length;
@@ -360,11 +373,11 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     showError('');
     try {
       const tier = $('tier').value;
-      const payload = { kind, title: $('title').value, details: $('details').value, tier, added_by: name };
+      const payload = { kind, area, title: $('title').value, details: $('details').value, tier, added_by: name };
       if (kind === 'question') payload.owner = $('owner').value;
       const data = await api('/items', post(payload));
       items = data.items;
-      track('backlog_item_added', { tier, kind });
+      track('backlog_item_added', { tier, kind, area });
       $('title').value = '';
       $('details').value = '';
       $('owner').value = '';
@@ -372,6 +385,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     } catch (error) { showError(error.message); }
   });
 
+  if (AREAS.some(a => a[0] === store.get('uep-backlog-area'))) area = store.get('uep-backlog-area');
   renderForm();
   const savedName = store.get('uep-backlog-name');
   $('who').value = savedName;
