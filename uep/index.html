@@ -125,6 +125,7 @@ label.f{display:flex;flex-direction:column;gap:6px;font-family:var(--display);fo
 input[type=text],input[type=email],input[type=tel],input[type=time],input[type=number],input[type=date],textarea,select{font:inherit;font-family:var(--body);font-size:16px;font-weight:400;letter-spacing:0;color:var(--fg);background:var(--surface);border:0;border-bottom:2px solid var(--ink);border-radius:0;padding:12px;width:100%;min-height:50px;transition:transform .25s var(--ease),background .25s var(--ease)}
 input:focus,textarea:focus,select:focus{transform:scale(1.015);background:#ffffff}
 textarea{min-height:80px;resize:vertical}
+input[type=date]{min-width:0;max-width:100%}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{border:1px solid var(--ink);background:var(--surface);padding:9px 14px;font-size:15px;min-height:44px;transition:background .2s var(--ease),color .2s var(--ease)}
 .chip:hover{background:var(--paper)}
@@ -487,7 +488,8 @@ function awayForm(){
   const A=state.aw;
   return `<div class="card" style="background:var(--surface)"><h3>Going to be away?</h3>
     <p class="muted small">Those dates open up for others, and your booking picks up again when you're back.</p>
-    <div class="grid2"><label class="f" for="awfrom">Away from<input type="date" id="awfrom" data-bind="aw.from" value="${esc(A.from)}" min="${iso(today)}"></label><label class="f" for="awto">Through<input type="date" id="awto" data-bind="aw.to" value="${esc(A.to)}" min="${iso(today)}"></label></div>
+    <label class="f" for="awfrom">Away from<input type="date" id="awfrom" data-bind="aw.from" value="${esc(A.from)}" min="${iso(today)}"></label>
+    <label class="f" for="awto">Away through<input type="date" id="awto" data-bind="aw.to" value="${esc(A.to)}" min="${iso(today)}"></label>
     <button class="btn sm" data-act="awaysave" ${A.from&&A.to&&A.to>=A.from?'':'disabled'}>Save away dates</button>
     <label class="f" for="awend">Or stop this booking after<input type="date" id="awend" data-bind="aw.end" value="${esc(A.end)}" min="${iso(today)}"></label>
     <button class="btn ghost sm" data-act="endsave" ${A.end?'':'disabled'}>Set an end date</button>
