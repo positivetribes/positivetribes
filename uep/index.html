@@ -386,13 +386,14 @@ const ACCOUNTS=[
 function signIn(){
   const L=state.login;
   if(L.step===1)return `
-    <div class="stack" style="gap:6px"><h2>Sign in</h2><p class="muted">One sign-in for everyone. No password to remember.</p></div>
+    <div class="stack" style="gap:6px"><h2>Sign in</h2><p class="muted">One sign-in for everyone. No password to remember, and you stay signed in on this device.</p></div>
     <label class="f" for="email">Email or mobile number<input type="text" id="email" data-bind="email" value="${esc(L.email)}" autocomplete="username" placeholder="you@example.org or (303) 555-0100"></label>
     <button class="btn full" data-act="sendcode" ${L.email.trim()?'':'disabled'}>Send me a code</button>
     <div class="card"><h3>Try a sample account</h3><p class="muted small">The app works out who you are from your account. There is no climber or manager choice. New here? Follow the five-minute tour beside or below this screen.</p>
       <div class="stack" style="gap:8px">${ACCOUNTS.map(([e,l])=>`<button class="btn quiet sm full" data-act="fill" data-v="${e}" style="text-align:left">${esc(l)}<br><span class="muted small">${e}</span></button>`).join('')}</div></div>`;
   return `
     <div class="stack" style="gap:6px"><h2>Check your messages</h2><p class="muted">We sent a 6-digit code ${digits(L.sent).length>=10&&!L.sent.includes('@')?'by text ':''}to <b>${esc(L.sent)}</b>. It works for 10 minutes.</p></div>
+    <p class="muted small">After this, you stay signed in on this phone or computer for 90 days, so you won't need a code each time.</p>
     <label class="f" for="code">Code<input type="text" id="code" class="code" inputmode="numeric" maxlength="6" data-bind="code" value="${esc(L.code)}"></label>
     <p class="muted small">In this prototype the code is filled in for you.</p>
     <button class="btn full" data-act="verify" ${L.code.length===6?'':'disabled'}>Sign in</button>
@@ -734,7 +735,7 @@ const TOUR=[
 ];
 const NOTES={
   out:{h:'One sign-in, no role picker',p:'Climbers, care partners, lead volunteers and staff all sign in the same way. The system looks up the account and opens the right view.',
-    b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Email, mobile number or a second email all sign in to the same account, so nobody ends up with two.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two or more leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
+    b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','People stay signed in on their own device, so they only need a code on a new device or after 90 days away. Leads and staff, who see other people\'s details, sign in again every 30 days.','Email, mobile number or a second email all sign in to the same account, so nobody ends up with two.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two or more leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
     t:'Sign in as Sam to see sign-up and the waiver. Then try Pat, a lead volunteer.',r:'Sign-in'},
   climber:{h:'Book once, stay booked',p:'Climbers pick a regular session once and stay booked every week, instead of booking week by week.',
     b:['A text goes out 3 days before, with a one-tap link to cancel and free the spot.','Full sessions offer a waitlist, and the lead volunteer is emailed.','Regular bookings hold 2 months at a time. Climbers confirm to keep going, so spots don\'t sit empty.','Climbers can set away dates or an end date, and cancel any single date as soon as they know.','Climbers can book at other sites without a second sign-up.','Sign-up is free through UEP. Each site shows what the gym charges and who funds it.'],
