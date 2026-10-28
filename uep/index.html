@@ -285,6 +285,21 @@ function andList(a){return a.length>1?a.slice(0,-1).join(', ')+' and '+a.at(-1):
 // Standing bookings always run 2 months ahead and roll forward each week
 const AHEAD=61;
 function bookedThrough(r){const ds=nextDates(r,40).filter(d=>d<=addDays(today,AHEAD));return ds.at(-1)}
+// Each standing booking holds 2 months from the climber's last confirmation, minus away dates, up to any end date
+const CONFIRM_SOON=14;
+const holdEnd=(p,id)=>p.until&&p.until[id]?fromIso(p.until[id]):addDays(today,AHEAD);
+const awayOn=(p,id,d)=>(p.away||[]).some(a=>a.id===id&&iso(d)>=a.from&&iso(d)<=a.to);
+function standDates(p,id){
+  const s=sess(id),lim=holdEnd(p,id),end=p.end&&p.end[id];
+  return nextDates(s.rule,40).filter(d=>d<=lim&&d<=addDays(today,AHEAD)&&(!end||iso(d)<=end)&&!awayOn(p,id,d));
+}
+const confirmDue=(p,id)=>(holdEnd(p,id)-today)/DAY<=CONFIRM_SOON;
+// Sign-in finds one person by email, second email or mobile number
+const digits=v=>String(v||'').replace(/\D/g,'').replace(/^1(?=\d{10}$)/,'');
+function findPerson(id){
+  const k=id.trim().toLowerCase(),d=digits(k);
+  return Object.keys(state.people).find(e=>{const p=state.people[e];return e===k||(p.email2||'').toLowerCase()===k||(d.length>=10&&digits(p.phone)===d)});
+}
 
 /* ---------- Sample data ---------- */
 const SITES=[
@@ -305,7 +320,7 @@ const S=(id,siteId,name,rule,from,to,cap,booked,tbc=false,wait=0)=>({id,site:sit
 const state={
   user:null, mode:null, tab:{}, toast:'',
   login:{step:1,email:'',code:'',sent:''},
-  waiver:{step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dobM:'',dobD:'',dobY:'',home:'',ecName:'',ecPhone:'',type:'',address:''},
+  waiver:{step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dobM:'',dobD:'',dobY:'',home:'',ecName:'',ecPhone:'',type:'',address:'',phone:''},
   findSite:'gol',
   sessions:[
     S('s1','gol','Morning climb',{freq:'weekly',days:[3],interval:1},'10:00','11:30',14,14,false,2),
@@ -318,9 +333,12 @@ const state={
     S('s8','pdx','Evening climb',{freq:'monthly',nth:[1,3],day:2},'18:00','19:30',12,8)
   ],
   people:{
-    'ruth@example.org':{name:'Ruth Alvarez',type:'climber',address:'14 Ford St, Golden, CO',wl:[],roles:['climber'],home:'gol',waiver:'2026-03-14',ec:'Luis Alvarez, (303) 555-0142',standing:['s1'],once:[],missed:[]},
-    'sam@example.org':{name:'Sam Okoye',type:'',address:'',wl:[],roles:['climber'],home:null,waiver:null,ec:'',standing:[],once:[],missed:[]},
-    'pat@example.org':{name:'Pat Rivera',type:'climber',address:'802 Arapahoe St, Golden, CO',wl:[],roles:['climber','lead'],lead:'gol',home:'gol',waiver:'2025-11-02',ec:'Ann Rivera, (720) 555-0177',standing:['s2'],once:[],missed:[]},
+    'ruth@example.org':{name:'Ruth Alvarez',phone:'(303) 555-0198',type:'climber',address:'14 Ford St, Golden, CO',wl:[],roles:['climber'],home:'gol',waiver:'2026-03-14',ec:'Luis Alvarez, (303) 555-0142',standing:['s1'],until:{s1:iso(addDays(today,9))},away:[],end:{},once:[],missed:[]},
+    'sam@example.org':{name:'Sam Okoye',type:'',address:'',wl:[],roles:['climber'],home:null,waiver:null,ec:'',standing:[],until:{},away:[],end:{},once:[],missed:[]},
+    'pat@example.org':{name:'Pat Rivera',phone:'(720) 555-0131',type:'climber',address:'802 Arapahoe St, Golden, CO',wl:[],roles:['climber','lead'],lead:'gol',home:'gol',waiver:'2025-11-02',ec:'Ann Rivera, (720) 555-0177',standing:['s2'],until:{s2:iso(addDays(today,40))},away:[],end:{},once:[],missed:[]},
+    'george@example.org':{name:'George Tanaka',phone:'(303) 555-0110',type:'climber',address:'',wl:[],roles:['climber'],home:'gol',waiver:'2026-01-20',ec:'Helen Tanaka, (303) 555-0111',standing:['s1','s2'],until:{s1:iso(addDays(today,30)),s2:iso(addDays(today,30))},away:[],end:{},once:[],missed:[]},
+    'helen@example.org':{name:'Helen Tanaka',phone:'(303) 555-0111',type:'partner',address:'',wl:[],roles:['climber'],home:'gol',waiver:'2026-01-20',ec:'George Tanaka, (303) 555-0110',standing:['s1'],until:{s1:iso(addDays(today,30))},away:[],end:{},once:[],missed:[]},
+    'ken@example.org':{name:'Ken Sato',phone:'(410) 555-0175',type:'climber',address:'',wl:[],roles:['climber'],home:'tim',waiver:'2025-12-03',ec:'',standing:['s4'],until:{s4:iso(addDays(today,22))},away:[],end:{},once:[],missed:[]},
     'molly@example.org':{name:'Molly (sample admin)',roles:['admin'],home:null,waiver:null,standing:[],once:[],missed:[]}
   },
   roster:[
@@ -329,7 +347,8 @@ const state={
     {n:'Frances Cole',w:true,cp:false},{n:'Marty Fields',w:true,cp:false},{n:'Joan Pryor',w:true,cp:true},
     {n:'Walt Pryor',w:true,cp:false},{n:'Ed Kowalski',w:true,cp:false}
   ],
-  rosters:{}, leadDay:0, walkin:'', addName:'',
+  rosters:{}, leadDay:null, walkin:'', addName:'',
+  awayEdit:null, aw:{from:'',to:'',end:''}, adminQ:'', adminPick:null, newSite:null, added:0,
   draft:null,
   drift:[
     {n:'Ken Sato',site:'tim',last:'5 weeks ago',was:'Every Sunday'},
@@ -348,6 +367,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const me=()=>state.people[state.user];
 const sess=id=>state.sessions.find(s=>s.id===id);
+const siteCount=()=>85+state.added;
 const nextOf=s=>nextDates(s.rule,1)[0];
 const spots=s=>Math.max(0,s.cap-s.booked);
 const CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent-fg)"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -357,6 +377,7 @@ function say(m){state.toast=m;clearTimeout(toastTimer);toastTimer=setTimeout(()=
 /* ---------- Screens: sign in ---------- */
 const ACCOUNTS=[
   ['ruth@example.org','Ruth, climber'],
+  ['(303) 555-0198','Ruth again, signing in with her mobile'],
   ['sam@example.org','Sam, new climber'],
   ['pat@example.org','Pat, site lead who also climbs'],
   ['molly@example.org','Molly, admin']
@@ -365,12 +386,12 @@ function signIn(){
   const L=state.login;
   if(L.step===1)return `
     <div class="stack" style="gap:6px"><h2>Sign in</h2><p class="muted">One sign-in for everyone. No password to remember.</p></div>
-    <label class="f" for="email">Email or mobile number<input type="email" id="email" data-bind="email" value="${esc(L.email)}" autocomplete="email" placeholder="you@example.org"></label>
+    <label class="f" for="email">Email or mobile number<input type="text" id="email" data-bind="email" value="${esc(L.email)}" autocomplete="username" placeholder="you@example.org or (303) 555-0100"></label>
     <button class="btn full" data-act="sendcode" ${L.email.trim()?'':'disabled'}>Send me a code</button>
     <div class="card"><h3>Try a sample account</h3><p class="muted small">The app works out who you are from your account. There is no climber or manager choice. New here? Follow the five-minute tour beside or below this screen.</p>
       <div class="stack" style="gap:8px">${ACCOUNTS.map(([e,l])=>`<button class="btn quiet sm full" data-act="fill" data-v="${e}" style="text-align:left">${esc(l)}<br><span class="muted small">${e}</span></button>`).join('')}</div></div>`;
   return `
-    <div class="stack" style="gap:6px"><h2>Check your messages</h2><p class="muted">We sent a 6-digit code to <b>${esc(L.sent)}</b>. It works for 10 minutes.</p></div>
+    <div class="stack" style="gap:6px"><h2>Check your messages</h2><p class="muted">We sent a 6-digit code ${digits(L.sent).length>=10&&!L.sent.includes('@')?'by text ':''}to <b>${esc(L.sent)}</b>. It works for 10 minutes.</p></div>
     <label class="f" for="code">Code<input type="text" id="code" class="code" inputmode="numeric" maxlength="6" data-bind="code" value="${esc(L.code)}"></label>
     <p class="muted small">In this prototype the code is filled in for you.</p>
     <button class="btn full" data-act="verify" ${L.code.length===6?'':'disabled'}>Sign in</button>
@@ -395,6 +416,7 @@ function waiverFlow(){
       </div>
       <p class="muted small" style="margin-top:6px">So UEP can wish you a happy birthday.</p></div>
     <label class="f" for="home">Home site<select id="home" data-bind="home"><option value="" ${W.home?'':'selected'}>Choose your site</option>${SITES.map(s=>`<option value="${s.id}" ${W.home===s.id?'selected':''}>${esc(s.city)} · ${esc(s.gym)}</option>`).join('')}</select></label>
+    <label class="f" for="wphone">Mobile number<input type="tel" id="wphone" data-bind="phone" value="${esc(W.phone)}" autocomplete="tel" placeholder="For reminder texts"></label>
     <label class="f" for="address">Home address<input type="text" id="address" data-bind="address" value="${esc(W.address)}" autocomplete="street-address"></label>
     <label class="f" for="ecName">Emergency contact name<input type="text" id="ecName" data-bind="ecName" value="${esc(W.ecName)}"></label>
     <label class="f" for="ecPhone">Emergency contact phone<input type="tel" id="ecPhone" data-bind="ecPhone" value="${esc(W.ecPhone)}"></label>
@@ -423,7 +445,7 @@ function waiverFlow(){
 /* ---------- Screens: climber ---------- */
 function myUpcoming(p){
   const items=[];
-  p.standing.forEach(id=>{const s=sess(id);nextDates(s.rule,3).forEach(d=>items.push({s,d,standing:true}))});
+  p.standing.forEach(id=>{const s=sess(id);standDates(p,id).forEach(d=>items.push({s,d,standing:true}))});
   p.once.forEach(o=>{const s=sess(o.id);items.push({s,d:fromIso(o.date),standing:false})});
   return items.filter(x=>x.d>=today).sort((a,b)=>a.d-b.d);
 }
@@ -442,17 +464,34 @@ function climberHome(){
   }else{
     html+=`<div class="hero"><div class="big">No climbs booked yet</div><p>Pick a regular session and you'll be booked every week.</p><button class="btn" data-act="tab" data-v="find">Find a session</button></div>`;
   }
+  const due=p.standing.filter(id=>confirmDue(p,id));
+  html+=due.map(id=>{const s=sess(id);return `<div class="notice"><b>Keep your spot at ${esc(s.name)}?</b>Your regular booking runs through ${esc(fmt(standDates(p,id).at(-1)||holdEnd(p,id)))}. Confirm to stay booked for 2 more months. We sent you a text about this too.
+    <div class="row" style="margin-top:10px;justify-content:flex-start"><button class="btn sm" data-act="keep" data-v="${id}">Yes, keep me booked</button><button class="btn quiet sm" data-act="unstand" data-v="${id}">No, cancel it</button></div></div>`}).join('');
   if(p.standing.length){
-    html+=`<div class="card"><h3>Your regular sessions</h3><p class="muted small">You stay booked automatically, always 2 months ahead. We text you 3 days before each climb. That text is your confirmation, and one tap cancels if you can't come.</p>
-      ${p.standing.map(id=>{const s=sess(id),bt=bookedThrough(s.rule);return `<div class="row" style="border-top:1px solid var(--line);padding-top:10px"><div><b>${esc(s.name)}</b><div class="muted small">${esc(ruleText(s.rule))} · ${esc(site(s.site).city)}</div>${bt?`<div class="muted small">Booked through ${esc(fmt(bt))}</div>`:''}</div><button class="btn quiet sm" data-act="unstand" data-v="${id}">Stop</button></div>`}).join('')}</div>`;
+    html+=`<div class="card"><h3>Your regular sessions</h3><p class="muted small">You're booked for 2 months at a time. Before that runs out, we ask you to confirm by text or here, so spots don't sit empty. We also text you 3 days before each climb, and one tap cancels if you can't come.</p>
+      ${p.standing.map(id=>{const s=sess(id),ds=standDates(p,id),bt=ds.at(-1),aw=(p.away||[]).map((a,j)=>({...a,j})).filter(a=>a.id===id),end=p.end&&p.end[id];
+        return `<div class="stack" style="border-top:1px solid var(--line);padding-top:10px;gap:8px"><div class="row"><div><b>${esc(s.name)}</b><div class="muted small">${esc(ruleText(s.rule))} · ${esc(site(s.site).city)}</div>${bt?`<div class="muted small">Booked through ${esc(fmt(bt))}${confirmDue(p,id)?' · <b>confirm to keep going</b>':''}</div>`:''}</div>
+          <div class="row" style="justify-content:flex-end"><button class="btn quiet sm" data-act="awayopen" data-v="${id}">Away dates</button><button class="btn quiet sm" data-act="unstand" data-v="${id}">Cancel</button></div></div>
+          ${aw.length||end?`<div class="chips">${aw.map(a=>`<span class="pill sun">Away ${esc(fmt(fromIso(a.from)))} to ${esc(fmt(fromIso(a.to)))} <button class="linkbtn" data-act="awaydel" data-v="${a.j}" aria-label="Remove these away dates" style="padding:0 0 0 6px">Remove</button></span>`).join('')}${end?`<span class="pill sun">Ends after ${esc(fmt(fromIso(end)))} <button class="linkbtn" data-act="enddel" data-v="${id}" aria-label="Remove the end date" style="padding:0 0 0 6px">Remove</button></span>`:''}</div>`:''}
+          ${state.awayEdit===id?awayForm():''}</div>`}).join('')}</div>`;
   }
   if(up.length>1){
-    html+=`<div class="card"><h3>Coming up</h3>${up.slice(1,5).map(x=>{const m=p.missed.includes(x.s.id+'|'+iso(x.d));return `<div class="row small"><span>${esc(fmt(x.d))} · ${esc(x.s.name)}</span>${m?'<span class="pill plain">Not coming</span>':x.standing?'<span class="pill">Weekly</span>':'<span class="pill sun">One time</span>'}</div>`}).join('')}</div>`;
+    html+=`<div class="card"><h3>Coming up</h3><p class="muted small">Can't come on a date? Cancel it as soon as you know, so someone else can have the spot.</p>${up.slice(1,9).map(x=>{const k=x.s.id+'|'+iso(x.d),m=p.missed.includes(k);return `<div class="row small" style="border-top:1px solid var(--line);padding-top:8px"><span>${esc(fmt(x.d))} · ${esc(x.s.name)} ${m?'<span class="pill plain">Not coming</span>':x.standing?'<span class="pill">Regular</span>':'<span class="pill sun">One time</span>'}</span>${m?`<button class="btn quiet sm" data-act="undomiss" data-v="${k}">Undo</button>`:x.standing?`<button class="btn quiet sm" data-act="miss" data-v="${k}" aria-label="Cancel ${esc(fmt(x.d))}">Can't come</button>`:`<button class="btn quiet sm" data-act="oncedel" data-v="${k}" aria-label="Cancel ${esc(fmt(x.d))}">Cancel</button>`}</div>`}).join('')}</div>`;
   }
   if(nx&&!missing){
     html+=`<div class="card"><h3>Text you'll get 3 days before</h3><p class="small" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px">UEP: Reminder, you're climbing ${esc(fmt(nx.d))} at ${nx.s.tbc?'(time to be confirmed)':t12(nx.s.from)} at ${esc(site(nx.s.site).gym)}. Can't make it? Tap to cancel: uep.link/c/4821</p><p class="muted small">Sent by text 3 days before. One tap cancels and frees your spot for someone on the waitlist. No sign-in needed.</p></div>`;
   }
   return html;
+}
+function awayForm(){
+  const A=state.aw;
+  return `<div class="card" style="background:var(--surface)"><h3>Going to be away?</h3>
+    <p class="muted small">Those dates open up for others, and your booking picks up again when you're back.</p>
+    <div class="grid2"><label class="f" for="awfrom">Away from<input type="date" id="awfrom" data-bind="aw.from" value="${esc(A.from)}" min="${iso(today)}"></label><label class="f" for="awto">Through<input type="date" id="awto" data-bind="aw.to" value="${esc(A.to)}" min="${iso(today)}"></label></div>
+    <button class="btn sm" data-act="awaysave" ${A.from&&A.to&&A.to>=A.from?'':'disabled'}>Save away dates</button>
+    <label class="f" for="awend">Or stop this booking after<input type="date" id="awend" data-bind="aw.end" value="${esc(A.end)}" min="${iso(today)}"></label>
+    <button class="btn ghost sm" data-act="endsave" ${A.end?'':'disabled'}>Set an end date</button>
+    <button class="linkbtn" data-act="awayclose" style="align-self:flex-start">Close</button></div>`;
 }
 function climberFind(){
   const p=me(),sid=state.findSite;
@@ -478,6 +517,11 @@ function climberProfile(){
     <div class="card"><div class="row"><b>Waiver</b>${p.waiver?'<span class="pill ok">Signed</span>':'<span class="pill bad">Not signed</span>'}</div>
       <p class="muted small">${!p.waiver?'Needed before booking.':p.signedAt?`Signed "${esc(p.signedName)}" on ${esc(p.signedAt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' at '+p.signedAt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZoneName:'short'}))}, version ${p.wver}. Identity confirmed by the code sent to ${esc(state.user)}. A copy of the exact text is saved. Covers every UEP site.`:'Signed '+esc(fmt(fromIso(p.waiver)))+', version 2026-1. Covers every UEP site.'}</p>
       ${p.signedAt?'<button class="btn quiet sm" data-act="wcopy" style="align-self:flex-start">View signed copy</button>':''}</div>
+    <div class="card"><b>How you sign in</b>
+      <div class="small">Email: ${state.user.includes('@')?esc(state.user):'Not added'}</div>
+      <div class="small">Mobile: ${esc(p.phone||'Not added')}</div>
+      <label class="f" for="email2">Second email (optional)<input type="email" id="email2" data-bind="email2" value="${esc(p.email2||'')}" placeholder="Another email you use"></label>
+      <p class="muted small">Any of these signs you in to this same account, so you never end up with two.</p></div>
     <div class="card"><b>I'm signed up as</b><p>${p.type==='partner'?'A care partner':'A climber with Parkinson\'s'}</p></div>
     <div class="card"><b>Home site</b><p>${esc(site(p.home).city)} · ${esc(site(p.home).gym)}</p></div>
     <div class="card"><b>Address</b><p>${esc(p.address||'Not added')}</p></div>
@@ -492,35 +536,40 @@ function waitNotice(){
 }
 function draftFrom(s){const r=s.rule;return {editId:s.id,name:s.name,freq:r.freq,days:r.days||[3],interval:r.interval||1,nth:[].concat(r.nth||1).map(Number),mday:r.day??6,date:r.date||iso(addDays(today,14)),from:s.from,to:s.to,cap:s.cap,tbc:s.tbc,skip:[...(r.skip||[])]}}
 function leadSessions(){return state.sessions.filter(s=>s.site===me().lead)}
-function leadDates(){return leadSessions().flatMap(s=>nextDates(s.rule,6).map(d=>({s,d}))).sort((a,b)=>a.d-b.d).slice(0,8)}
+function leadDates(){
+  const ss=leadSessions();
+  // The last 2 sessions stay open, so a lead can check people in afterwards from a paper list
+  const past=ss.flatMap(s=>nextDates(s.rule,6,addDays(today,-28)).filter(d=>d<today).map(d=>({s,d,past:true}))).sort((a,b)=>a.d-b.d).slice(-2);
+  return [...past,...ss.flatMap(s=>nextDates(s.rule,6).map(d=>({s,d}))).sort((a,b)=>a.d-b.d).slice(0,8)];
+}
 // Each date has its own sign-up list. Later dates start shorter, since fewer people have booked that far out.
 function leadDay(){
   const ds=leadDates();if(!ds.length)return null;
-  const i=Math.min(state.leadDay,ds.length-1),x=ds[i],k=x.s.id+'|'+iso(x.d);
-  const K=state.rosters[k]||(state.rosters[k]={list:i===0?state.roster:state.roster.filter((_,j)=>(j+i)%3!==0).map(r=>({...r})),checked:new Set(),done:false});
-  return {ds,i,x,K,first:i===0};
+  const f=ds.findIndex(y=>!y.past),i=state.leadDay==null?f:Math.min(state.leadDay,ds.length-1),x=ds[i],k=x.s.id+'|'+iso(x.d),rel=Math.abs(i-f);
+  const K=state.rosters[k]||(state.rosters[k]={list:rel===0?state.roster:state.roster.filter((_,j)=>(j+rel)%3!==0).map(r=>({...r})),checked:new Set(),done:false});
+  return {ds,i,x,K,first:i===f,past:!!x.past,open:i===f||!!x.past};
 }
 const POOL=['Nina Park','Oscar Reyes','Lou Hart','Bea Wolfe'];
 function leadCheckin(){
   const L=leadDay();
   if(!L)return `<div class="notice info"><b>No sessions scheduled</b>Add one in the Schedule tab.</div>`;
-  const {ds,i,x,K,first}=L,R=K.list,n=K.checked.size,isToday=iso(x.d)===iso(today),when=fmt(x.d);
+  const {ds,i,x,K,first,past,open}=L,R=K.list,n=K.checked.size,isToday=iso(x.d)===iso(today),when=fmt(x.d);
   const add=POOL.filter(nm=>!R.some(r=>r.n===nm));
-  return `<div class="chips" role="group" aria-label="Pick a day">${ds.map((y,j)=>`<button class="chip" data-act="lday" data-v="${j}" aria-pressed="${j===i}">${esc(fmt(y.d))}</button>`).join('')}</div>
+  return `<div class="chips" role="group" aria-label="Pick a day">${ds.map((y,j)=>`<button class="chip" data-act="lday" data-v="${j}" aria-pressed="${j===i}">${esc(fmt(y.d))}${y.past?' (past)':''}</button>`).join('')}</div>
     <div class="row"><div><h2>${esc(x.s.name)}</h2><div class="muted">${isToday?'Today':esc(fmtLong(x.d))} · ${x.s.tbc?'Time to be confirmed':t12(x.s.from)} · ${esc(site(x.s.site).city)}</div></div>
-      <div style="text-align:right">${first?`<div class="tally">${n}<span> / ${R.length}</span></div><div class="muted small">here / booked</div>`:`<div class="tally">${R.length}</div><div class="muted small">signed up</div>`}</div></div>
-    ${first?(isToday?'':'<p class="muted small">Check-in normally opens on the day. It\'s open now so you can try it.</p>'):'<p class="muted small">Who\'s signed up so far. Check-in opens on the day.</p>'}
+      <div style="text-align:right">${open?`<div class="tally">${n}<span> / ${R.length}</span></div><div class="muted small">here / booked</div>`:`<div class="tally">${R.length}</div><div class="muted small">signed up</div>`}</div></div>
+    ${past?'<p class="muted small">This session is over. If you used a paper sign-in sheet, check people in from it now and save.</p>':first?(isToday?'':'<p class="muted small">Check-in normally opens on the day. It\'s open now so you can try it.</p>'):'<p class="muted small">Who\'s signed up so far. Check-in opens on the day.</p>'}
     ${waitNotice()}
     ${K.done?`<div class="notice ok"><b>Attendance saved</b>${n} of ${R.length} checked in. It now shows on the program dashboard.</div>`:''}
-    ${first?'<p class="small">Tap each person as they arrive.</p>':''}
+    ${first?'<p class="small">Tap each person as they arrive.</p>':past?'<p class="small">Tap each person on the paper list.</p>':''}
     <div class="roster">${R.map((r,j)=>{const inner=`<span style="min-width:0"><span class="nm">${esc(r.n)}</span>
           <span class="meta">${r.cp?'<span class="pill plain">Care partner</span>':''}${r.w?'':'<span class="pill bad">Waiver not signed</span>'}${r.walk?'<span class="pill sun">Walk-in</span>':''}${r.byLead?'<span class="pill">Signed up by a lead</span>':''}</span></span>`;
-      return `<div class="rrow">${first?`<button class="person" data-act="toggle" data-v="${j}" aria-pressed="${K.checked.has(r.n)}"><span class="tick">${CHECK}</span>${inner}</button>`:`<div class="person">${inner}</div>`}
-        <button class="btn quiet sm" data-act="lcancel" data-v="${j}" aria-label="Cancel ${esc(r.n)} for ${esc(when)}">Cancel</button></div>`}).join('')}</div>
-    <div class="card"><h3>Sign someone up</h3><p class="muted small">For a climber who asks you to book them, such as someone without a smartphone.</p>
+      return `<div class="rrow">${open?`<button class="person" data-act="toggle" data-v="${j}" aria-pressed="${K.checked.has(r.n)}"><span class="tick">${CHECK}</span>${inner}</button>`:`<div class="person">${inner}</div>`}
+        ${past?'':`<button class="btn quiet sm" data-act="lcancel" data-v="${j}" aria-label="Cancel ${esc(r.n)} for ${esc(when)}">Cancel</button>`}</div>`}).join('')}</div>
+    ${past?'':`<div class="card"><h3>Sign someone up</h3><p class="muted small">For a climber who asks you to book them, such as someone without a smartphone.</p>
       <label class="f" for="addName">Climber<select id="addName" data-bind="addName"><option value="">Choose a climber</option>${add.map(nm=>`<option ${state.addName===nm?'selected':''}>${esc(nm)}</option>`).join('')}</select></label>
-      <div class="row"><button class="btn sm" style="flex:1" data-act="lsign" data-v="stand" ${state.addName?'':'disabled'}>Book every time</button><button class="btn ghost sm" data-act="lsign" data-v="once" ${state.addName?'':'disabled'}>Just ${esc(when)}</button></div></div>
-    ${first?`<div class="card"><label class="f" for="walkin">Someone here who didn't book?<input type="text" id="walkin" data-bind="walkin" value="${esc(state.walkin)}" placeholder="Their name"></label>
+      <div class="row"><button class="btn sm" style="flex:1" data-act="lsign" data-v="stand" ${state.addName?'':'disabled'}>Book every time</button><button class="btn ghost sm" data-act="lsign" data-v="once" ${state.addName?'':'disabled'}>Just ${esc(when)}</button></div></div>`}
+    ${open?`<div class="card"><label class="f" for="walkin">${past?'Someone on the paper list who didn\'t book?':'Someone here who didn\'t book?'}<input type="text" id="walkin" data-bind="walkin" value="${esc(state.walkin)}" placeholder="Their name"></label>
       <button class="btn ghost sm" data-act="addwalk" ${state.walkin.trim()?'':'disabled'}>Add walk-in and check in</button>
       <p class="muted small">Walk-ins get a text link to sign the waiver if they haven't.</p></div>
     <button class="btn full" data-act="finish">Save attendance</button>`:''}`;
@@ -591,17 +640,17 @@ function adminOverview(){
   const sum=k=>ss.reduce((a,s)=>a+s[k],0);
   const booked=sum('booked'),checked=sum('checked'),sessions=sum('sessions'),rec=sum('rec'),act=sum('act'),cp=sum('cp');
   const waits=state.sessions.filter(x=>x.wait>0&&ss.some(t=>t.id===x.site));
-  const dark=ss.filter(s=>s.rec/s.sessions<.5).length;
+  const dark=ss.filter(s=>s.sessions&&s.rec/s.sessions<.5).length;
   const max=140,W=560,H=200,pad=34,bw=(W-pad-10)/WEEKS.length;
   const y=v=>H-24-(v/max)*(H-40);
   const bars=WEEKS.map(([b,c],i)=>{const x=pad+i*bw+bw*.16,w=bw*.32;return `<rect x="${x.toFixed(1)}" y="${y(b).toFixed(1)}" width="${w.toFixed(1)}" height="${(H-24-y(b)).toFixed(1)}" rx="3" fill="var(--bar2)"><title>Booked ${b}</title></rect><rect x="${(x+w+2).toFixed(1)}" y="${y(c).toFixed(1)}" width="${w.toFixed(1)}" height="${(H-24-y(c)).toFixed(1)}" rx="3" fill="var(--bar1)"><title>Checked in ${c}</title></rect><text x="${(x+w).toFixed(1)}" y="${H-6}" text-anchor="middle">${esc(fmt(addDays(weekStart(today),-(7*(WEEKS.length-1-i)))).replace(/^\w+, /,''))}</text>`}).join('');
   const grid=[0,35,70,105,140].map(v=>`<line x1="${pad}" x2="${W-6}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pad-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`).join('');
-  return `<div><h2>${esc(filterTitle(ss))}, last 4 weeks</h2><p class="muted">Showing ${ss.length} of 85 sites (sample data). Every report and export follows this filter.</p></div>
+  return `<div><h2>${esc(filterTitle(ss))}, last 4 weeks</h2><p class="muted">Showing ${ss.length} of ${siteCount()} sites (sample data). Every report and export follows this filter.</p></div>
   ${filterBar()}
   <div class="kpis">
     <div class="kpi"><span class="n">${checked}</span><span class="l">Attendance (check-ins)</span><span class="small muted">${booked} booked</span></div>
     <div class="kpi"><span class="n">${act+cp}</span><span class="l">Unique people, active</span><span class="small muted">${act} climbers · ${cp} care partners</span></div>
-    <div class="kpi"><span class="n">${sessions}</span><span class="l">Sessions held</span><span class="small muted">${Math.round(rec/sessions*100)}% with attendance taken</span></div>
+    <div class="kpi"><span class="n">${sessions}</span><span class="l">Sessions held</span><span class="small muted">${sessions?Math.round(rec/sessions*100):0}% with attendance taken</span></div>
     <div class="kpi ${dark?'flag':''}"><span class="n">${dark}</span><span class="l">Sites rarely taking attendance</span><span class="small muted">Lead volunteers to follow up with</span></div>
   </div>
   <p class="muted small">Active means attended at least once in the last 6 months, so climbers who travel for the season still count.</p>
@@ -618,7 +667,7 @@ function adminOverview(){
     <div class="card"><div class="row"><h3>Board report</h3><button class="btn sm" data-act="report" data-v="board">Download</button></div>
       <p class="muted small">Program-wide totals for the last 12 months (sample figures).</p>
       <div class="scroll-x"><table><tbody>
-        <tr><td>Locations</td><td class="num"><b>85</b></td></tr>
+        <tr><td>Locations</td><td class="num"><b>${siteCount()}</b></td></tr>
         <tr><td>Locations that are free to climb</td><td class="num"><b>36</b></td></tr>
         <tr><td>Unique people, active (climbers · care partners)</td><td class="num"><b>730 · 145</b></td></tr>
         <tr><td>Sessions held</td><td class="num"><b>3,120</b></td></tr>
@@ -629,42 +678,70 @@ function adminOverview(){
   </div>
   <div class="card"><h3>By site</h3>
     <div class="scroll-x"><table><thead><tr><th>Site</th><th>Leads</th><th>Cost to climb</th><th class="num">Sessions</th><th class="num">Booked</th><th class="num">Checked in</th><th>Attendance taken</th><th></th><th></th></tr></thead><tbody>
-    ${ss.map(s=>{const pct=s.rec/s.sessions,cls=pct<.5?'low':pct<.8?'mid':'';
+    ${ss.map(s=>{if(!s.sessions)return `<tr><td><b>${esc(s.city)}</b><div class="muted small">${esc(s.gym)}</div></td><td>${esc(s.lead)}</td><td>${esc(s.price)}</td><td colspan="6"><span class="pill sun">New location, no sessions yet</span></td></tr>`;
+      const pct=s.rec/s.sessions,cls=pct<.5?'low':pct<.8?'mid':'';
       return `<tr><td><b>${esc(s.city)}</b><div class="muted small">${esc(s.gym)}</div></td><td>${esc(s.lead)}</td><td>${esc(s.price)}</td><td class="num">${s.sessions}</td><td class="num">${s.booked}</td><td class="num">${s.checked}</td>
       <td><div class="row" style="flex-wrap:nowrap"><div class="meter ${cls}" style="flex:1"><i style="width:${Math.round(pct*100)}%"></i></div><span class="small" style="width:48px;text-align:right">${s.rec} of ${s.sessions}</span></div></td>
       <td>${pct<.5?'<span class="pill bad">Follow up</span>':pct<.8?'<span class="pill warn">Patchy</span>':'<span class="pill ok">Good</span>'}</td><td><button class="btn quiet sm" data-act="report" data-v="${s.id}">Export</button></td></tr>`}).join('')}
     </tbody></table></div></div>`;
 }
+function adminClimbers(){
+  const q=state.adminQ.trim().toLowerCase(),d=digits(q);
+  const list=Object.entries(state.people).filter(([e,p])=>!p.roles.includes('admin')&&p.waiver&&(!q||p.name.toLowerCase().includes(q)||e.includes(q)||(p.email2||'').toLowerCase().includes(q)||(d.length>=3&&digits(p.phone).includes(d))));
+  const P=state.adminPick&&state.people[state.adminPick];
+  let detail='<div class="card"><p class="muted">Pick a climber to see and change their bookings.</p></div>';
+  if(P){
+    const up=myUpcoming(P);
+    detail=`<div class="card"><div class="row"><h3>${esc(P.name)}</h3><span class="pill plain">${P.type==='partner'?'Care partner':'Climber'}</span></div>
+      <div class="small">${esc(state.adminPick.includes('@')?state.adminPick:'')}${P.phone?' · '+esc(P.phone):''}</div>
+      <div class="muted small">Home site: ${esc(site(P.home).city)} · Waiver signed</div></div>
+    <div class="card"><h3>Regular bookings</h3>${P.standing.length?P.standing.map(id=>{const s=sess(id),bt=standDates(P,id).at(-1);return `<div class="row" style="border-top:1px solid var(--line);padding-top:8px"><div><b>${esc(s.name)}</b><div class="muted small">${esc(ruleText(s.rule))} · ${esc(site(s.site).city)}${bt?' · booked through '+esc(fmt(bt)):''}</div></div><button class="btn quiet sm" data-act="aser" data-v="${id}">Cancel the series</button></div>`}).join(''):'<p class="muted small">No regular bookings.</p>'}</div>
+    <div class="card"><h3>Upcoming dates</h3>${up.length?up.slice(0,10).map(x=>{const k=x.s.id+'|'+iso(x.d),m=P.missed.includes(k);return `<div class="row small" style="border-top:1px solid var(--line);padding-top:8px"><span>${esc(fmt(x.d))} · ${esc(x.s.name)}</span>${m?'<span class="pill plain">Cancelled</span>':`<button class="btn quiet sm" data-act="adate" data-v="${k}|${x.standing?1:0}">Cancel this date</button>`}</div>`}).join(''):'<p class="muted small">Nothing booked.</p>'}
+      <p class="muted small">The climber gets a text about any cancellation.</p></div>`;
+  }
+  return `<div><h2>Climbers</h2><p class="muted">Find anyone by name, email or mobile number, then cancel one date or a whole regular booking.</p></div>
+    <div class="split"><div class="card"><label class="f" for="adminQ">Search<input type="text" id="adminQ" data-bind="adminQ" value="${esc(state.adminQ)}" placeholder="Name, email or mobile"></label>
+      <div class="stack" style="gap:8px">${list.map(([e,p])=>`<button class="person" data-act="apick" data-v="${esc(e)}" aria-pressed="${state.adminPick===e}"><span style="min-width:0"><span class="nm">${esc(p.name)}</span><span class="meta"><span class="pill plain">${esc(site(p.home).city)}</span><span class="pill plain">${p.standing.length} regular booking${p.standing.length===1?'':'s'}</span></span></span></button>`).join('')||'<p class="muted small">No one matches.</p>'}</div></div>
+      <div class="stack">${detail}</div></div>`;
+}
+function newSiteForm(){
+  const N=state.newSite;
+  return `<div class="card"><h3>Add a location</h3>
+    <div class="grid2"><label class="f" for="nsgym">Gym name<input type="text" id="nsgym" data-bind="ns.gym" value="${esc(N.gym)}"></label><label class="f" for="nslead">Lead volunteers<input type="text" id="nslead" data-bind="ns.lead" value="${esc(N.lead)}" placeholder="Can be added later"></label></div>
+    <div class="grid3"><label class="f" for="nscity">City<input type="text" id="nscity" data-bind="ns.city" value="${esc(N.city)}"></label><label class="f" for="nsst">State<input type="text" id="nsst" data-bind="ns.st" value="${esc(N.st)}" maxlength="2" placeholder="CO"></label><label class="f" for="nsreg">Region<select id="nsreg" data-bind="ns.region">${['East','Central','Mountain','West'].map(r=>`<option ${N.region===r?'selected':''}>${r}</option>`).join('')}</select></label></div>
+    <div class="grid2"><label class="f" for="nsprice">Cost to climb<input type="text" id="nsprice" data-bind="ns.price" value="${esc(N.price)}"></label><label class="f" for="nsfund">Funded by<input type="text" id="nsfund" data-bind="ns.fund" value="${esc(N.fund)}"></label></div>
+    <div class="row"><button class="btn ghost" data-act="nsclose">Cancel</button><button class="btn" style="flex:1" data-act="nssave" ${N.gym.trim()&&N.city.trim()&&N.st.trim()?'':'disabled'}>Add location</button></div></div>`;
+}
 function adminSites(){
-  return `<h2>Sites</h2><p class="muted">All 85 locations in one list, each on its own. That includes gyms grouped together in Gymdesk today, such as Sportrock and Vertical Rock's four gyms, and gyms that used their own sign-up pages.</p>
-  <div class="kpis">${SITES.map(s=>`<div class="kpi"><b>${esc(s.city)}</b><span class="l">${esc(s.gym)}</span><span class="small">${s.lead.includes(',')?'Leads':'Lead'}: ${esc(s.lead)}</span><span class="small">${esc(costText(s))}</span><span class="small">${state.sessions.filter(x=>x.site===s.id).length||'No'} recurring sessions</span>${s.logo?'<span class="pill plain" style="align-self:flex-start">Funder\'s logo</span>':''}</div>`).join('')}</div>
+  return `<div class="row"><h2>Sites</h2>${state.newSite?'':'<button class="btn sm" data-act="nsopen">Add a location</button>'}</div>${state.newSite?newSiteForm():''}<p class="muted">All ${siteCount()} locations in one list, each on its own. That includes gyms grouped together in Gymdesk today, such as Sportrock and Vertical Rock's four gyms, and gyms that used their own sign-up pages.</p>
+  <div class="kpis">${SITES.map(s=>`<div class="kpi"><b>${esc(s.city)}</b><span class="l">${esc(s.gym)}</span><span class="small">${s.lead?`${s.lead.includes(',')?'Leads':'Lead'}: ${esc(s.lead)}`:'No lead yet'}</span><span class="small">${esc(costText(s))}</span><span class="small">${state.sessions.filter(x=>x.site===s.id).length||'No'} recurring sessions</span>${s.logo?'<span class="pill plain" style="align-self:flex-start">Funder\'s logo</span>':''}</div>`).join('')}</div>
   <p class="muted small">Each site shows climbers its price, any first-visit offer and who funds it. UEP funds the first 2+ months at every new location.</p>
   <div class="split">
     <div class="card"><h3>One sign-up button</h3><p class="small">A single "Climb with us" button on upendingparkinsons.org/locations opens this app. New climbers pick their location from a list instead of hunting for a separate link per site.</p></div>
     <div class="card"><h3>Virtuous sync</h3><p class="small">Each night, new and updated people are sent to Virtuous: name, email, address, birthday, Affiliation (Climber, or Family member of a climber for care partners), and home location.</p><p class="muted small">Planned for the full build.</p></div>
   </div>
-  <p class="muted small">Adding a site, assigning its leads and copying a schedule template are planned for the full build.</p>`;
+  <p class="muted small">Copying a schedule template from another site is planned for the full build.</p>`;
 }
 
 /* ---------- Notes beside the app ---------- */
 const TOUR=[
   {k:'sam@example.org',who:'Sam, a new climber',do:['Choose "A climber with Parkinson\'s," pick a home site, add contact details, then sign the waiver with two checkboxes and a typed name.','Morning climb at Golden is full, so join the waitlist. Then book the Saturday climb every week.']},
-  {k:'ruth@example.org',who:'Ruth, a regular climber',do:['Read the reminder text she gets 3 days before, with its one-tap cancel link.','Tap "I can\'t make it this time," then book a one-time visit at another site.']},
-  {k:'pat@example.org',who:'Pat, a Golden lead volunteer',do:['Note the waitlist alert, then check in a few people and save attendance.','Open Schedule, tap Edit on Morning climb, raise the spots from 14 to 16 and save. The two people waiting move in.','Back on Check-in, tap a later date to see who\'s signed up. Cancel one person, then sign someone up for them.']},
-  {k:'molly@example.org',who:'Molly, the admin',do:['See active climbers and care partners counted separately, the board report, and the waitlists.','Under "Climbers drifting away," cancel the booking of someone who stopped coming.','Export attendance for one site\'s funder, then open Sites to see the sign-up button and Virtuous sync.']}
+  {k:'ruth@example.org',who:'Ruth, a regular climber',do:['Her 2 months are nearly up, so confirm she wants to keep her Wednesday spot.','Under "Your regular sessions," tap Away dates and set a few weeks away. Then cancel one date further out under "Coming up."','Book a one-time visit at another site. (Ruth can also sign in with her mobile number, the second sample account.)']},
+  {k:'pat@example.org',who:'Pat, a Golden lead volunteer',do:['Note the waitlist alert, then check in a few people and save attendance.','Open Schedule, tap Edit on Morning climb, raise the spots from 14 to 16 and save. The two people waiting move in.','Back on Check-in, tap a later date to see who\'s signed up. Cancel one person, then sign someone up for them.','Tap a past date and check people in from a paper sign-in sheet.']},
+  {k:'molly@example.org',who:'Molly, the admin',do:['See active climbers and care partners counted separately, the board report, and the waitlists.','Under "Climbers drifting away," cancel the booking of someone who stopped coming.','Open Climbers, search for George, and cancel one date or his whole series.','Export attendance for one site\'s funder, then open Sites and add a new location.']}
 ];
 const NOTES={
   out:{h:'One sign-in, no role picker',p:'Climbers, care partners, lead volunteers and staff all sign in the same way. The system looks up the account and opens the right view.',
-    b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two or more leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
+    b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Email, mobile number or a second email all sign in to the same account, so nobody ends up with two.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two or more leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
     t:'Sign in as Sam to see sign-up and the waiver. Then try Pat, a lead volunteer.',r:'Sign-in'},
   climber:{h:'Book once, stay booked',p:'Climbers pick a regular session once and stay booked every week, instead of booking week by week.',
-    b:['A text goes out 3 days before, with a one-tap link to cancel and free the spot.','Full sessions offer a waitlist, and the lead volunteer is emailed.','Regular bookings run 2 months ahead and roll forward each week.','Climbers can book at other sites without a second sign-up.','Sign-up is free through UEP. Each site shows what the gym charges and who funds it.'],
-    t:'Tap "I can\'t make it this time" on the next climb, then book a one-time visit at another site.',r:'Climbers and care partners'},
+    b:['A text goes out 3 days before, with a one-tap link to cancel and free the spot.','Full sessions offer a waitlist, and the lead volunteer is emailed.','Regular bookings hold 2 months at a time. Climbers confirm to keep going, so spots don\'t sit empty.','Climbers can set away dates or an end date, and cancel any single date as soon as they know.','Climbers can book at other sites without a second sign-up.','Sign-up is free through UEP. Each site shows what the gym charges and who funds it.'],
+    t:'Confirm a regular booking, set some away dates, then cancel one date further out.',r:'Climbers and care partners'},
   lead:{h:'Lead volunteers run their own site',p:'Leads check people in, see who is waiting, and change their own schedule, so Molly doesn\'t have to do it for every site.',
-    b:['Check-in is a tap per person, and care partners are marked.','A waitlist alert says when a session is full, so the site can add spots or volunteers.','Leads see who\'s signed up for any day, and can cancel or sign someone up for them.','Leads can create and edit sessions, including 1st-and-3rd-Tuesday patterns and skipped dates.','A site can have two or more leads.'],
+    b:['Check-in is a tap per person, and care partners are marked.','A waitlist alert says when a session is full, so the site can add spots or volunteers.','Leads see who\'s signed up for any day, and can cancel or sign someone up for them.','Leads can check people in after a session, from a paper sign-in sheet.','Leads can create and edit sessions, including 1st-and-3rd-Tuesday patterns and skipped dates.','A site can have two or more leads.'],
     t:'Edit Morning climb, raise the spots, and watch the waitlist move in.',r:'Lead volunteers'},
   admin:{h:'Every site in one view',p:'Molly sees attendance, active people and sessions across all 85 locations without logging into separate accounts.',
-    b:['Climbers and care partners are counted separately, for grants and headcounts.','Staff can cancel any climber\'s booking, such as a standing booking that keeps going unused.','Active means attended in the last 6 months.','Reports filter by one or more gyms, or by city, state or region.','One-click exports for the board and for sites that report to funders.','Waitlists show where the program is growing.'],
+    b:['Climbers and care partners are counted separately, for grants and headcounts.','Staff can look up any climber and cancel one date or a whole regular booking.','Staff can add a new location.','Active means attended in the last 6 months.','Reports filter by one or more gyms, or by city, state or region.','One-click exports for the board and for sites that report to funders.','Waitlists show where the program is growing.'],
     t:'Download the board report, then export attendance for one site.',r:'Reports'}
 };
 
@@ -677,7 +754,7 @@ function role(){
   if(p.roles.includes('lead'))return state.mode||'lead';
   return 'climber';
 }
-const TABS={climber:[['home','Home'],['find','Find a session'],['me','My details']],lead:[['checkin','Check-in'],['schedule','Schedule']],admin:[['overview','Overview'],['sites','Sites']]};
+const TABS={climber:[['home','Home'],['find','Find a session'],['me','My details']],lead:[['checkin','Check-in'],['schedule','Schedule']],admin:[['overview','Overview'],['climbers','Climbers'],['sites','Sites']]};
 function notesHtml(r,n){
   const foot=`<p class="foot">Everything is sample data. Changes carry from one person to the next while the page is open. Reload to start over.</p>`;
   const intro=`<div class="intro"><span class="req">${esc(n.r)}</span><h2>${esc(n.h)}</h2><p>${esc(n.p)}</p><ul>${n.b.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`;
@@ -715,7 +792,7 @@ function render(){
     tabs=`<nav class="tabbar" aria-label="App sections">${T.map(([id,l])=>`<button data-act="tab" data-v="${id}" ${id===cur?'aria-current="page"':''}>${l}</button>`).join('')}</nav>`;
     if(r==='climber')body=cur==='home'?climberHome()+PTAG:cur==='find'?climberFind():climberProfile();
     if(r==='lead')body=(cur==='checkin'?leadCheckin():leadSchedule())+GETHELP;
-    if(r==='admin')body=(cur==='overview'?adminOverview():adminSites())+GETHELP;
+    if(r==='admin')body=(cur==='overview'?adminOverview():cur==='climbers'?adminClimbers():adminSites())+GETHELP;
   }
   const sw=p&&p.roles.includes('lead')&&p.waiver?`<div class="switch" role="group" aria-label="Switch view"><button data-act="mode" data-v="climber" aria-pressed="${r==='climber'}">My climbing</button><button data-act="mode" data-v="lead" aria-pressed="${r==='lead'}">My site</button></div>`:'';
   const n=NOTES[r==='waiver'?'climber':r];
@@ -748,21 +825,35 @@ document.addEventListener('click',e=>{
   else if(a==='wstep')W.step=+v;
   else if(a==='wtype'){W.type=v}
   else if(a==='wcopy'){say('Opens a PDF of the exact waiver signed, with name, date, time and version. Coming in the full build.')}
-  else if(a==='sign'){const p=me();p.waiver=iso(today);p.ec=`${W.ecName}, ${W.ecPhone}`;p.type=W.type;p.address=W.address;p.home=W.home;state.findSite=W.home;p.birth=W.dobY&&W.dobM&&W.dobD?W.dobY+'-'+W.dobM+'-'+W.dobD:'';p.signedAt=new Date();p.signedName=W.name.trim();p.wver='2026-2';say('Waiver signed. You can book any session now.');state.tab.climber='find'}
+  else if(a==='sign'){const p=me();p.waiver=iso(today);p.ec=`${W.ecName}, ${W.ecPhone}`;p.type=W.type;p.address=W.address;p.home=W.home;if(W.phone.trim())p.phone=W.phone.trim();state.findSite=W.home;p.birth=W.dobY&&W.dobM&&W.dobD?W.dobY+'-'+W.dobM+'-'+W.dobD:'';p.signedAt=new Date();p.signedName=W.name.trim();p.wver='2026-2';say('Waiver signed. You can book any session now.');state.tab.climber='find'}
   else if(a==='miss'){me().missed.push(v);say('Got it. Your spot is free for someone on the waitlist.')}
   else if(a==='undomiss'){const p=me();p.missed=p.missed.filter(x=>x!==v);say('Great, you\'re back on the list.')}
-  else if(a==='stand'){const p=me(),s=sess(v);p.standing.push(v);s.booked++;say(`Booked: ${ruleText(s.rule)}. You're booked through ${fmt(bookedThrough(s.rule))}, and it rolls forward each week.`)}
+  else if(a==='stand'){const p=me(),s=sess(v);p.standing.push(v);(p.until||(p.until={}))[v]=iso(addDays(today,AHEAD));s.booked++;say(`Booked: ${ruleText(s.rule)}. You're booked through ${fmt(bookedThrough(s.rule))}, and we'll check with you before then to keep it going.`)}
   else if(a==='once'){const p=me(),s=sess(v);p.once.push({id:v,date:iso(nextOf(s))});s.booked++;say('Booked for '+fmt(nextOf(s))+'.')}
-  else if(a==='unstand'){const p=me(),s=sess(v);p.standing=p.standing.filter(x=>x!==v);s.booked=Math.max(0,s.booked-1);say('Weekly booking stopped.')}
+  else if(a==='unstand'){const p=me(),s=sess(v);p.standing=p.standing.filter(x=>x!==v);p.away=(p.away||[]).filter(x=>x.id!==v);if(p.end)delete p.end[v];if(state.awayEdit===v)state.awayEdit=null;s.booked=Math.max(0,s.booked-1);say('Regular booking cancelled. The spot is open for someone else.')}
+  else if(a==='keep'){const p=me();p.until[v]=iso(addDays(today,AHEAD));say(`You're booked through ${fmt(standDates(p,v).at(-1))}. We'll check with you again before then.`)}
+  else if(a==='oncedel'){const p=me(),[id,d]=v.split('|');p.once=p.once.filter(o=>!(o.id===id&&o.date===d));sess(id).booked=Math.max(0,sess(id).booked-1);say('Cancelled. The spot is open for someone else.')}
+  else if(a==='awayopen'){state.awayEdit=state.awayEdit===v?null:v;state.aw={from:'',to:'',end:''}}
+  else if(a==='awayclose')state.awayEdit=null;
+  else if(a==='awaysave'){const p=me(),A=state.aw;(p.away||(p.away=[])).push({id:state.awayEdit,from:A.from,to:A.to});state.awayEdit=null;say(`Away ${fmt(fromIso(A.from))} to ${fmt(fromIso(A.to))}. Those dates are open for others, and your booking picks up again after.`)}
+  else if(a==='endsave'){const p=me(),A=state.aw;(p.end||(p.end={}))[state.awayEdit]=A.end;state.awayEdit=null;say(`Your booking ends after ${fmt(fromIso(A.end))}. Later dates are open for others.`)}
+  else if(a==='awaydel'){me().away.splice(+v,1);say('Away dates removed. You\'re booked on those dates again.')}
+  else if(a==='enddel'){delete me().end[v];say('End date removed. Your booking carries on.')}
+  else if(a==='apick'){state.adminPick=v}
+  else if(a==='aser'){const P=state.people[state.adminPick],s=sess(v);P.standing=P.standing.filter(x=>x!==v);s.booked=Math.max(0,s.booked-1);say(`${P.name}'s ${s.name} booking is cancelled, and they got a text. The spot is open again.`)}
+  else if(a==='adate'){const P=state.people[state.adminPick],[id,d,st]=v.split('|');if(st==='1')P.missed.push(id+'|'+d);else P.once=P.once.filter(o=>!(o.id===id&&o.date===d));say(`${P.name} is cancelled for ${fmt(fromIso(d))} and got a text. Their other dates stay booked.`)}
+  else if(a==='nsopen')state.newSite={gym:'',lead:'',city:'',st:'',region:'East',price:'Free',fund:'UEP'};
+  else if(a==='nsclose')state.newSite=null;
+  else if(a==='nssave'){const N=state.newSite;SITES.push({id:'x'+Date.now(),city:N.city.trim()+', '+N.st.trim().toUpperCase(),gym:N.gym.trim(),region:N.region,lead:N.lead.trim(),free:/^free$/i.test(N.price.trim()),price:N.price.trim()||'Free',fund:N.fund.trim(),sessions:0,rec:0,booked:0,checked:0,act:0,cp:0});state.added++;state.newSite=null;say(`${N.gym.trim()} added. Climbers can pick it now, and its leads can set up sessions.`)}
   else if(a==='waitlist'){const p=me(),s=sess(v);if(!p.wl.includes(v)){p.wl.push(v);s.wait++}const ld=site(s.site).lead.split(',')[0];say(`You're on the waitlist. ${ld}, the lead volunteer, has been emailed.`)}
   else if(a==='toggle'){const K=leadDay().K,n=K.list[+v].n;K.checked.has(n)?K.checked.delete(n):K.checked.add(n);K.done=false}
   else if(a==='addwalk'){const K=leadDay().K,n=state.walkin.trim();K.list.push({n,w:false,cp:false,walk:true});K.checked.add(n);state.walkin='';K.done=false}
-  else if(a==='lday'){state.leadDay=+v;state.addName=''}
+  else if(a==='lday'){state.leadDay=+v;state.addName='';state.walkin=''}
   else if(a==='lcancel'){const {K,x}=leadDay(),[r]=K.list.splice(+v,1);K.checked.delete(r.n);x.s.booked=Math.max(0,x.s.booked-1);say(`${r.n} is cancelled for ${fmt(x.d)} and got a text. Their other bookings stay.`)}
   else if(a==='lsign'){const {K,x}=leadDay(),n=state.addName;K.list.push({n,w:true,cp:false,byLead:true});x.s.booked++;state.addName='';say(v==='stand'?`${n} is booked ${ruleText(x.s.rule).replace(/^\w/,c=>c.toLowerCase())}, and got a text.`:`${n} is booked for ${fmt(x.d)}, and got a text.`)}
   else if(a==='finish'){
-    const K=leadDay().K,g=site('gol');if(!K.done){g.rec=Math.min(g.sessions,g.rec+1);g.checked+=K.checked.size}
-    K.done=true;say('Attendance saved. Molly\'s dashboard now includes it.');
+    const {K,past,x}=leadDay(),g=site('gol');if(!K.done){g.rec=Math.min(g.sessions,g.rec+1);g.checked+=K.checked.size}
+    K.done=true;say(past?`Attendance for ${fmt(x.d)} saved from the paper list. Molly's dashboard now includes it.`:'Attendance saved. Molly\'s dashboard now includes it.');
   }
   else if(a==='newsess')state.draft=newDraft();
   else if(a==='editsess'){state.draft=draftFrom(sess(v));$('#screen')&&($('#screen').scrollTop=0)}
@@ -781,18 +872,23 @@ document.addEventListener('click',e=>{
   if(['tab','verify','signout','mode','wstep','sign','fill','sendcode','tourgo'].includes(a)){const s=$('#screen');if(s)s.scrollTop=0}
 });
 function doVerify(){
-  const L=state.login,k=L.sent.toLowerCase();
-  if(!state.people[k]){state.people[k]={name:k.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),roles:['climber'],type:'',address:'',wl:[],home:null,waiver:null,ec:'',standing:[],once:[],missed:[]}}
-  state.user=k;state.mode=null;state.leadDay=0;state.addName='';L.step=1;L.email='';L.code='';
-  state.waiver={step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dobM:'',dobD:'',dobY:'',home:'',ecName:'',ecPhone:'',type:'',address:''};
+  const L=state.login,typed=L.sent.trim().toLowerCase(),found=findPerson(typed),k=found||typed,byOther=found&&found!==typed;
+  if(!found){const ph=!typed.includes('@')&&digits(typed).length>=10;state.people[k]={name:ph?'New climber':k.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),phone:ph?L.sent.trim():'',roles:['climber'],type:'',address:'',wl:[],home:null,waiver:null,ec:'',standing:[],until:{},away:[],end:{},once:[],missed:[]}}
+  state.user=k;state.mode=null;state.leadDay=null;state.awayEdit=null;state.addName='';L.step=1;L.email='';L.code='';
+  state.waiver={step:1,ack1:false,ack2:false,name:'',proxy:false,proxyName:'',proxyRel:'Spouse or partner',dobM:'',dobD:'',dobY:'',home:'',ecName:'',ecPhone:'',type:'',address:'',phone:me().phone||''};
   state.findSite=me().home||'gol';
-  const r=role();say(r==='admin'?'Signed in. You have admin access to every site.':r==='lead'?'Signed in. You and Jo Kim lead the Golden site, and you climb there too.':r==='waiver'?'Signed in. One quick step before your first climb.':'Signed in.');
+  const r=role();if(byOther){say(`Signed in. ${L.sent.trim()} belongs to ${me().name}, so this is the same account and the same bookings.`);return}
+  say(r==='admin'?'Signed in. You have admin access to every site.':r==='lead'?'Signed in. You and Jo Kim lead the Golden site, and you climb there too.':r==='waiver'?'Signed in. One quick step before your first climb.':'Signed in.');
 }
 document.addEventListener('input',e=>{
   const k=e.target.dataset&&e.target.dataset.bind;if(!k)return;
   const val=e.target.type==='checkbox'?e.target.checked:e.target.value,W=state.waiver,D=state.draft;
   if(k==='email'){state.login.email=val;const b=$('[data-act="sendcode"]');if(b)b.disabled=!val.trim();return}
   if(k==='code'){state.login.code=val.replace(/\D/g,'').slice(0,6);const b=$('[data-act="verify"]');if(b)b.disabled=state.login.code.length!==6;return}
+  if(k.startsWith('aw.')){state.aw[k.slice(3)]=val;const A=state.aw,b=$('[data-act="awaysave"]'),c=$('[data-act="endsave"]');if(b)b.disabled=!(A.from&&A.to&&A.to>=A.from);if(c)c.disabled=!A.end;return}
+  if(k.startsWith('ns.')){const N=state.newSite;N[k.slice(3)]=val;const b=$('[data-act="nssave"]');if(b)b.disabled=!(N.gym.trim()&&N.city.trim()&&N.st.trim());return}
+  if(k==='email2'){me().email2=val.trim();return}
+  if(k==='adminQ'){state.adminQ=val;render();const q=$('#adminQ');if(q){q.focus();q.setSelectionRange(val.length,val.length)}return}
   if(k==='walkin'){state.walkin=val;const b=$('[data-act="addwalk"]');if(b)b.disabled=!val.trim();return}
   if(k==='findSite'){state.findSite=val;render();return}
   if(k==='addName'){state.addName=val;render();return}
