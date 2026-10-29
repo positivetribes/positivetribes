@@ -1031,6 +1031,18 @@ document.addEventListener('input',e=>{
 document.addEventListener('change',e=>{const k=e.target.dataset&&e.target.dataset.bind;if(k==='d.date'||k==='d.cap'||k==='d.from'||k==='d.to')render()});
 // The plain sign-up link: /uep/v3/?give opens the fundraising sign-up.
 if(/[?&]give\b/.test(location.search))state.give={step:1,name:'',email:'',aff:'',team:'',goal:CAMPAIGN.defGoal,story:''};
+// Walkthrough links: ?as=ruth signs in as a sample account; tab, mode (climber or lead) and f (page, donors or share)
+// pick the screen; ?donor=ruth opens that person's public page as a donor sees it.
+const Q=new URLSearchParams(location.search),who=v=>v.includes('@')?v:v+'@example.org';
+if(Q.get('as')&&state.people[who(Q.get('as').toLowerCase())]){
+  state.login.sent=who(Q.get('as').toLowerCase());doVerify();
+  if(['climber','lead'].includes(Q.get('mode'))&&role()==='lead')state.mode=Q.get('mode');
+  const r=role();
+  if(tabsFor(r).some(t=>t[0]===Q.get('tab')))state.tab[r]=Q.get('tab');
+  // For a fundraising-only account My page, Donations and Share are the main tabs.
+  if(TABS.fundraise.some(t=>t[0]===Q.get('f'))){if(r==='fundraise')state.tab[r]=Q.get('f');else state.fund.tab=Q.get('f')}
+}
+if(Q.get('donor')&&pageOf(who(Q.get('donor').toLowerCase())))state.fund.view=who(Q.get('donor').toLowerCase());
 render();
 </script>
 </body>
