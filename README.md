@@ -51,3 +51,36 @@ The page and API also stay closed unless these Worker secrets are set in Cloudfl
 - `STRIPE_SECRET_KEY`: Stripe secret key (`sk_test_…` for testing, `sk_live_…` for real gifts).
 - `STRIPE_WEBHOOK_SECRET`: signing secret of a Stripe webhook endpoint pointing at `https://positivetribes.org/api/stripe-webhook`, sending `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `invoice.paid`.
 - `SF_DOMAIN`, `SF_CLIENT_ID`, `SF_CLIENT_SECRET`: Salesforce My Domain URL and an External Client App with the OAuth client credentials flow enabled (run-as user needs the Fundraising Access permission set, not just the license). Until these are set, each gift is emailed to `CONTACT_TO` instead of being written to Salesforce. If a Salesforce write fails, the gift is also emailed and Stripe retries the webhook.
+
+## Admin command center
+
+`/admin/` is Eric's private view of every client: what happened, where things stand and what's next. `admin/index.html` is the page and `admin.mjs` is its API under `/api/admin/`. Both are refused unless Cloudflare Access has signed the visitor in. The Worker checks the Access token again on every request, so if Access is missing or misconfigured the admin area is closed rather than open.
+
+- **Today** shows three lists. *Needs attention* has overdue steps and Salesforce tasks, open Cases, new Leads from the last 30 days, opportunities past their target close date, and active clients with no contact in 21 days or no next step. *Coming up* covers the next 14 days and *Recent* the last 14.
+- **Clients** has a card for each business Account in Salesforce (every Account except Positive Tribes itself), with the stages of its open opportunities, the last contact and the next step. A client counts as active while it has an open opportunity.
+- **A client page** shows a timeline split at "now", next steps, opportunities, people, links, and the email domains, addresses and keywords the daily sync uses to recognize that client.
+
+Salesforce is read live and never written. Notes, next steps, links, pins and synced activity are stored in the `ADMIN_DB` D1 database (`positivetribes-admin-db`; pull request previews use `positivetribes-admin-preview-db`). Tables are created on the first request.
+
+### Setup
+
+1. In Cloudflare Zero Trust > Access > Applications, add a self-hosted application for `positivetribes.org/admin` and `positivetribes.org/api/admin`. Give it an Allow policy for eric@positivetribes.org, signing in with Google or a one-time PIN. Add a Service Auth policy for a service token named `command-center-sync`.
+2. Set two build variables, which are not secret: `ACCESS_TEAM_DOMAIN` (for example `positivetribes.cloudflareaccess.com`) and `ACCESS_AUD` (the application's Audience tag). The build output says "admin sign-in configured" once both are set.
+3. Optional: set the Worker variable `ADMIN_EMAILS` (comma-separated) to let more people in. It defaults to eric@positivetribes.org. Each person also has to be allowed by the Access policy.
+
+It uses the same Salesforce secrets as the contact form.
+
+### Daily activity sync
+
+A weekday Claude routine reads Gmail, Google Calendar and Fathom, then posts what it finds to the command center. Each run follows these steps:
+
+1. `GET /api/admin/match` returns every client with the contact emails, email domains (taken from Contacts and the Account website, plus any extras saved on the client page) and keywords used to recognize it.
+2. The routine posts to `POST /api/admin/activity` with `{ note, items: [...], steps: [...] }`:
+   - **items** (up to 200): `{ external_id, account_id, kind: "email" | "meeting" | "calendar", occurred_at, title, summary, url }`. Use a stable `external_id` such as `gmail:<thread id>`, `gcal:<event id>` or `fathom:<recording id>`. Sending an item again updates it, and `{ external_id, cancelled: true }` removes it, for example a cancelled meeting.
+   - **steps** (up to 50): `{ external_id, account_id, title, due_date }`. These are suggested next steps, such as action items from a meeting. Each one is added only once, and one Eric has dismissed does not come back.
+
+The routine signs in with the `command-center-sync` service token, sending the `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers. A service token can call only those two endpoints. The page warns when the last sync is more than 36 hours old.
+
+### Local development and tests
+
+Run `node --test test/*.test.mjs`. The tests check the Access token, run the real SQL against SQLite, and cover the Today rules. To try the page locally without Access, run `node build.mjs`, then `npx wrangler dev --local --var ADMIN_DEV:1` and open `http://localhost:8787/admin/`. The bypass works only on localhost. Never set `ADMIN_DEV` in Cloudflare. Without Salesforce secrets the page lists no clients.

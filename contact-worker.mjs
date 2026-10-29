@@ -1,6 +1,7 @@
 import { createCheckout, stripeWebhook, donationsEnabled, salesforceToken, sf, soql, quote } from './donations.mjs';
 import { handleSupport } from './support.mjs';
 import { handleCardShare } from './card-share.mjs';
+import { requireAccess, handleAdmin, isAdminPath } from './admin.mjs';
 
 // Why someone filled out the contact form. Only these values are accepted; anything else counts as general.
 const REASONS = { general: 'General question or idea', project: 'A nonprofit project idea', pulselift: 'PulseLift tester request', volunteer: 'Volunteering' };
@@ -63,6 +64,18 @@ async function readBody(request) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // The admin command center: Cloudflare Access signs people in, and the Worker checks that sign-in again on every request.
+    if (isAdminPath(url.pathname)) {
+      const who = await requireAccess(request, env, url);
+      if (who instanceof Response) return who;
+      if (/^\/api\//.test(url.pathname)) return handleAdmin(request, env, url, who);
+      if (who.service) return new Response('Not allowed.', { status: 403 });
+      const page = await env.ASSETS.fetch(request);
+      const response = new Response(page.body, page);
+      response.headers.set('Cache-Control', 'no-store');
+      response.headers.set('X-Robots-Tag', 'noindex');
+      return response;
+    }
     if (url.pathname === '/api/card-share') return handleCardShare(request, env, url, readBody);
     // card.positivetribes.org serves the /card folder at its root; shared fonts and brand files pass through.
     if (url.hostname === 'card.positivetribes.org' && !/^\/(fonts|brand)\//.test(url.pathname)) {

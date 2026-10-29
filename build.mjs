@@ -17,6 +17,14 @@ document.addEventListener('click',(event)=>{const link=event.target.closest('a[h
 const donations = process.env.DONATIONS || 'off';
 if (!['off', 'preview', 'on'].includes(donations)) throw new Error('DONATIONS must be off, preview or on.');
 
+// Admin command center: the Cloudflare Access team domain and application audience tag (not secrets).
+// Without both, the Worker refuses every /admin request.
+const accessTeam = process.env.ACCESS_TEAM_DOMAIN || '', accessAud = process.env.ACCESS_AUD || '';
+if (accessTeam && !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(accessTeam)) throw new Error('ACCESS_TEAM_DOMAIN must look like yourteam.cloudflareaccess.com.');
+if (accessAud && !/^[a-f0-9]{64}$/.test(accessAud)) throw new Error('ACCESS_AUD must be the 64-character Application Audience (AUD) tag.');
+const adminDb = { binding: 'ADMIN_DB', database_name: 'positivetribes-admin-db', database_id: 'c74ab999-3171-432b-9234-da16795e7e50' };
+const adminPreviewDb = { binding: 'ADMIN_DB', database_name: 'positivetribes-admin-preview-db', database_id: 'f6140db8-4e66-4952-bacc-9a71c293a8f9' };
+
 await mkdir('public', { recursive: true });
 const pages = ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html', 'support.html'];
 if (donations !== 'off') pages.push('donate.html');
@@ -62,11 +70,19 @@ if (measurementId) {
 await cp('soberafe', 'public/soberafe', { recursive: true });
 await cp('card', 'public/card', { recursive: true });
 // Optional folder: git drops it when empty, so skip it rather than fail the deploy.
+// Admin command center page: never indexed and never tagged for analytics.
+await mkdir('public/admin', { recursive: true });
+const admin = await readFile('admin/index.html', 'utf8');
+if (!admin.includes('</head>')) throw new Error('admin/index.html is missing </head>.');
+await writeFile('public/admin/index.html', admin.replace('</head>', '<meta name="robots" content="noindex"></head>'));
 if (existsSync('lutheran-hospital')) await cp('lutheran-hospital', 'public/lutheran-hospital', { recursive: true });
 await writeFile('wrangler.json', JSON.stringify({
   name: 'positivetribes', main: 'contact-worker.mjs', compatibility_date: '2026-09-11',
   assets: { directory: './public', binding: 'ASSETS', run_worker_first: true }, observability: { enabled: true },
-  vars: { CONTACT_TO: recipient, DONATIONS: donations },
+  vars: { CONTACT_TO: recipient, DONATIONS: donations, ...(accessTeam && { ACCESS_TEAM_DOMAIN: accessTeam }), ...(accessAud && { ACCESS_AUD: accessAud }) },
+  d1_databases: [adminDb],
+  // Pull request previews use their own database so test edits never touch real data.
+  previews: { d1_databases: [adminPreviewDb] },
   send_email: [{ name: 'CONTACT_MAIL', destination_address: recipient }],
   ratelimits: [
     { name: 'CONTACT_LIMIT', namespace_id: '914202601', simple: { limit: 5, period: 60 } },
@@ -74,4 +90,4 @@ await writeFile('wrangler.json', JSON.stringify({
     { name: 'SUPPORT_LIMIT', namespace_id: '914202603', simple: { limit: 3, period: 60 } }
   ]
 }, null, 2));
-console.log(`Prepared website assets and contact form configuration${measurementId ? ` with GA4 ${measurementId}` : ' without analytics'}, donations ${donations}.`);
+console.log(`Prepared website assets and contact form configuration${measurementId ? ` with GA4 ${measurementId}` : ' without analytics'}, donations ${donations}, admin sign-in ${accessTeam && accessAud ? 'configured' : 'not configured (admin closed)'}.`);
