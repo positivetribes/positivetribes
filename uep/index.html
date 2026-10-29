@@ -393,7 +393,7 @@ function signIn(){
       <div class="stack" style="gap:8px">${ACCOUNTS.map(([e,l])=>`<button class="btn quiet sm full" data-act="fill" data-v="${e}" style="text-align:left">${esc(l)}<br><span class="muted small">${e}</span></button>`).join('')}</div></div>`;
   return `
     <div class="stack" style="gap:6px"><h2>Check your messages</h2><p class="muted">We sent a 6-digit code ${digits(L.sent).length>=10&&!L.sent.includes('@')?'by text ':''}to <b>${esc(L.sent)}</b>. It works for 10 minutes.</p></div>
-    <p class="muted small">After this, you stay signed in on this phone or computer for 90 days, so you won't need a code each time.</p>
+    <p class="muted small">After this, you stay signed in on this phone or computer, so you won't need a code each time. Only a new device, signing out, or 90 days without a visit asks for a new one.</p>
     <label class="f" for="code">Code<input type="text" id="code" class="code" inputmode="numeric" maxlength="6" data-bind="code" value="${esc(L.code)}"></label>
     <p class="muted small">In this prototype the code is filled in for you.</p>
     <button class="btn full" data-act="verify" ${L.code.length===6?'':'disabled'}>Sign in</button>
