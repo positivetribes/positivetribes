@@ -1,13 +1,14 @@
 # Up ENDing Parkinson's scheduler backlog
 
-A small shared list where Molly at Up ENDing Parkinson's and the Positive Tribes team track open questions and suggested changes for the climber scheduling prototype at [positivetribes.org/uep](https://positivetribes.org/uep/). It is a copy of the Project Coyote backlog with one addition: items are either an **open question** or a **suggested change**.
+A small shared list where Molly at Up ENDing Parkinson's and the Positive Tribes team track open questions and suggested changes for the climber scheduling prototype at [positivetribes.org/uep](https://positivetribes.org/uep/). It is a copy of the Project Coyote backlog with one addition: items are an **open question**, a **suggested change** or a **problem**.
 
 - **Open questions** have a "who can answer" field and an answer. Their tiers read **Answer first** (the prototype or plan depends on it), **Answer before the full build**, and **Can wait**. Marking one answered moves it to a collapsed list and keeps the answer.
 - **Suggested changes** work exactly like the Coyote backlog: **Must have**, **Nice to have**, **Idea for now**.
+- **Problems** are for things that go wrong while testing, such as the Phase 1 acceptance tests. The "who can answer" field holds where it happened ("Test 3, step 5") and the answer field holds Eric's fix. Their tiers read **Stops sign-off**, **Fix before launch** and **Minor**. They start in the full build phase and have no phase buttons or filters. A `#problems` link opens this tab of the Scheduler list. Lists made before problems existed have a kind CHECK that refuses them, so the next request rebuilds the table in one transaction, keeping every row and id.
 
 Items sit in one of two separate lists, **Scheduler** and **Fundraising** (the April 2027 fundraising pages, shown in prototype v3 at [positivetribes.org/uep/v3](https://positivetribes.org/uep/v3/)). Each list has its own questions, changes and order. Lists made before this get the column on the next request, with every existing item under Scheduler.
 
-Each item also has a **phase**, separate from how much it matters: **To review** (new, not sorted yet), **Prototype**, **Full build**, or **Later**. Up and Down reorder within a tier, and questions and changes keep separate orders.
+Each item also has a **phase**, separate from how much it matters: **To review** (new, not sorted yet), **Prototype**, **Full build**, or **Later**. Up and Down reorder within a tier, and each kind keeps its own order.
 
 This is a separate Cloudflare Worker with its own D1 database, like the Coyote backlog. The main Positive Tribes website is not touched.
 

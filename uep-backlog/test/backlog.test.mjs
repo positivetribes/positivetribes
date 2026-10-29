@@ -291,3 +291,46 @@ test('a list made before areas existed gets the column, with every item in the s
     assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM pragma_table_info('backlog_items') WHERE name = 'area'").get().n, 1);
   } finally { sqlite.close(); }
 });
+
+test('problems are their own list, start in the full build and keep their own order', async () => {
+  const { sqlite, db } = database();
+  try {
+    const first = await call(db, 'POST', '/items', { kind: 'problem', title: 'Logo missing', details: 'On a phone', owner: 'Test 1, step 3', tier: 'must', added_by: 'Molly' });
+    assert.equal(first.status, 201);
+    await call(db, 'POST', '/items', { kind: 'problem', title: 'No time on waiver', tier: 'must' });
+    await call(db, 'POST', '/items', { kind: 'change', title: 'A change', tier: 'must' });
+    const problems = (await items(db)).filter(i => i.kind === 'problem');
+    assert.deepEqual(problems.map(i => [i.title, i.position, i.phase, i.area]),
+      [['Logo missing', 1, 'full', 'scheduler'], ['No time on waiver', 2, 'full', 'scheduler']]);
+    assert.equal(problems[0].owner, 'Test 1, step 3');
+    const fixed = await call(db, 'PATCH', '/items/' + problems[0].id, { done: true, answer: 'Logos loaded' });
+    assert.equal(fixed.status, 200);
+    const after = (await items(db)).find(i => i.id === problems[0].id);
+    assert.equal(after.done, true);
+    assert.equal(after.answer, 'Logos loaded');
+  } finally { sqlite.close(); }
+});
+
+test('a list made before problems existed is rebuilt to allow them, keeping every item', async () => {
+  const { sqlite, db } = database();
+  try {
+    sqlite.exec(`CREATE TABLE backlog_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL DEFAULT 'change' CHECK(kind IN ('question','change')),
+      title TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', owner TEXT NOT NULL DEFAULT '', answer TEXT NOT NULL DEFAULT '',
+      tier TEXT NOT NULL CHECK(tier IN ('must','nice','idea')), phase TEXT NOT NULL DEFAULT 'review',
+      area TEXT NOT NULL DEFAULT 'scheduler' CHECK(area IN ('scheduler','fundraising')), position INTEGER NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0 CHECK(done IN (0,1)), added_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+    sqlite.exec(`INSERT INTO backlog_items (id, kind, title, answer, tier, phase, area, position, done, added_by, created_at)
+      VALUES (42, 'question', 'Old question', 'Yes', 'nice', 'later', 'fundraising', 3, 1, 'Tammie', '2026-10-01 10:00:00')`);
+    const before = sqlite.prepare('SELECT * FROM backlog_items WHERE id = 42').get();
+    const created = await call(db, 'POST', '/items', { kind: 'problem', title: 'New problem', tier: 'must' });
+    assert.equal(created.status, 201);
+    assert.deepEqual({ ...sqlite.prepare('SELECT * FROM backlog_items WHERE id = 42').get() }, { ...before });
+    assert.ok(sqlite.prepare("SELECT sql FROM sqlite_master WHERE name = 'backlog_items'").get().sql.includes("'problem'"));
+    assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name = 'backlog_items_tier'").get().n, 1);
+    // New ids keep counting past the old ones.
+    assert.ok((await items(db)).find(i => i.title === 'New problem').id > 42);
+  } finally { sqlite.close(); }
+});

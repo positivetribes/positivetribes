@@ -1,12 +1,13 @@
 // Shared backlog for the Up ENDing Parkinson's scheduling prototype, copied from the Project Coyote backlog.
-// Two kinds of items: open questions (with who answers them and the answer) and suggested changes.
+// Three kinds of items: open questions (with who answers them and the answer), suggested changes, and
+// problems found while testing (owner holds where it happened, answer holds Eric's fix).
 // Items live in three priority tiers. Order inside a tier is the priority order, moved up or down one step at a time.
 
 const TIERS = ['must', 'nice', 'idea'];
 // When something gets built, separate from how much it matters.
 // review = new and not sorted yet, prototype = next prototype round, full = full build, later = parked.
 const PHASES = ['review', 'prototype', 'full', 'later'];
-const KINDS = ['question', 'change'];
+const KINDS = ['question', 'change', 'problem'];
 // Separate lists on the page: the climb scheduler and the April 2027 fundraising pages.
 const AREAS = ['scheduler', 'fundraising'];
 
@@ -67,7 +68,7 @@ const phaseOf = value => {
   return value;
 };
 const kindOf = value => {
-  if (!KINDS.includes(value)) throw new InputError('Choose question or change.');
+  if (!KINDS.includes(value)) throw new InputError('Choose question, change, or problem.');
   return value;
 };
 const areaOf = value => {
@@ -95,11 +96,10 @@ async function samePasscode(given, expected) {
   return diff === 0;
 }
 
-async function ensureSchema(db) {
-  await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS backlog_items (
+// Shared by the first CREATE and the rebuild that adds the problem kind.
+const TABLE_COLUMNS = `(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      kind TEXT NOT NULL DEFAULT 'change' CHECK(kind IN ('question','change')),
+      kind TEXT NOT NULL DEFAULT 'change' CHECK(kind IN ('question','change','problem')),
       title TEXT NOT NULL,
       details TEXT NOT NULL DEFAULT '',
       owner TEXT NOT NULL DEFAULT '',
@@ -112,7 +112,12 @@ async function ensureSchema(db) {
       added_by TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`),
+    )`;
+const COLUMN_NAMES = 'id, kind, title, details, owner, answer, tier, phase, area, position, done, added_by, created_at, updated_at';
+
+async function ensureSchema(db) {
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS backlog_items ${TABLE_COLUMNS}`),
     db.prepare('CREATE INDEX IF NOT EXISTS backlog_items_tier ON backlog_items(kind, tier, position)'),
     db.prepare('CREATE TABLE IF NOT EXISTS app_seeds (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)')
   ]);
@@ -124,6 +129,24 @@ async function ensureSchema(db) {
     } catch (error) {
       // A simultaneous first request may have added it already.
       if (!/duplicate column/i.test(String(error && error.message))) throw error;
+    }
+  }
+  // Lists made before problems existed have a kind CHECK that refuses 'problem'. SQLite cannot change a
+  // CHECK in place, so copy every row into a new table in one transaction, keeping ids and order.
+  const table = await db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'backlog_items'").first();
+  if (table && !table.sql.includes("'problem'")) {
+    try {
+      await db.batch([
+        db.prepare(`CREATE TABLE backlog_items_new ${TABLE_COLUMNS}`),
+        db.prepare(`INSERT INTO backlog_items_new (${COLUMN_NAMES}) SELECT ${COLUMN_NAMES} FROM backlog_items`),
+        db.prepare('DROP TABLE backlog_items'),
+        db.prepare('ALTER TABLE backlog_items_new RENAME TO backlog_items'),
+        db.prepare('CREATE INDEX IF NOT EXISTS backlog_items_tier ON backlog_items(kind, tier, position)')
+      ]);
+    } catch (error) {
+      // A simultaneous first request may have rebuilt it already; the batch rolled back, so check again.
+      const now = await db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'backlog_items'").first();
+      if (!now || !now.sql.includes("'problem'")) throw error;
     }
   }
   // One transaction: the inserts and the marker succeed together, so a second
@@ -183,8 +206,9 @@ export default {
         const details = text(b.details, 2000, { label: 'Details' });
         const tier = b.tier === undefined ? 'idea' : tierOf(b.tier);
         const by = text(b.added_by, 40, { label: 'Name' });
-        const phase = b.phase === undefined ? 'review' : phaseOf(b.phase);
         const kind = b.kind === undefined ? 'change' : kindOf(b.kind);
+        // Problems found in testing get fixed in the full build, so they skip the review step.
+        const phase = b.phase === undefined ? (kind === 'problem' ? 'full' : 'review') : phaseOf(b.phase);
         const owner = text(b.owner, 60, { label: 'Who answers' });
         const area = b.area === undefined ? 'scheduler' : areaOf(b.area);
         await db.prepare(

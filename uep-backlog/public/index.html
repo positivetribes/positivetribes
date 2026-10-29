@@ -93,7 +93,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
   <header class="stack">
     <div class="eyebrow">Positive Tribes &middot; Up ENDing Parkinson's</div>
     <h1>UEP backlog</h1>
-    <p class="lede">Open questions about the climber scheduling app and the fundraising pages, and every suggested change to the prototype. Scheduler and Fundraising are kept as separate lists. Answer a question, add your own suggestions, and move items up or down to show what comes first.</p>
+    <p class="lede">Open questions about the climber scheduling app and the fundraising pages, every suggested change to the prototype, and problems found while testing. Scheduler and Fundraising are kept as separate lists. Answer a question, add your own suggestions, and move items up or down to show what comes first.</p>
     <p class="proto"><a class="btn" id="proto-link" href="https://positivetribes.org/uep/" target="_blank" rel="noopener">Try the prototype</a> <span class="muted">Opens in a new tab. Have it open while you add suggestions.</span></p>
   </header>
 
@@ -108,11 +108,11 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
 
   <div id="app" hidden class="stack">
     <div class="kinds" id="areas" role="group" aria-label="Show the scheduler or fundraising list"></div>
-    <div class="kinds" id="kinds" role="group" aria-label="Show questions or suggestions"></div>
+    <div class="kinds" id="kinds" role="group" aria-label="Show questions, suggestions or problems"></div>
 
     <ul class="legend card" id="tier-legend"></ul>
 
-    <ul class="legend card">
+    <ul class="legend card" id="phase-legend">
       <li><span class="pill phase review">To review</span><span>New and not sorted yet. Eric will place it.</span></li>
       <li><span class="pill phase prototype">Prototype</span><span>Needed for the next round of the clickable prototype.</span></li>
       <li><span class="pill phase full">Full build</span><span>Part of the real app after the prototype is approved.</span></li>
@@ -123,11 +123,11 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
       <h2 id="add-heading">Ask a question</h2>
       <div><label for="title" id="title-label">What do we need to know?</label>
         <input id="title" type="text" maxlength="160" required></div>
-      <div><label for="details">Why it matters, or any detail <span class="muted">(optional)</span></label>
+      <div><label for="details" id="details-label">Why it matters, or any detail <span class="muted">(optional)</span></label>
         <textarea id="details" maxlength="2000"></textarea></div>
       <div class="row">
         <div><label for="tier">How much does it matter?</label><select id="tier"></select></div>
-        <div id="owner-field"><label for="owner">Who can answer?</label><input id="owner" type="text" maxlength="60" placeholder="Molly, Eric, counsel"></div>
+        <div id="owner-field"><label for="owner" id="owner-label">Who can answer?</label><input id="owner" type="text" maxlength="60" placeholder="Molly, Eric, counsel"></div>
         <div><label for="name">Your name</label><input id="name" type="text" maxlength="40" autocomplete="name"></div>
       </div>
       <div class="row"><button class="btn" type="submit" id="add-btn">Add question</button></div>
@@ -152,8 +152,14 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
       ['idea', 'Can wait', 'Worth asking eventually. Nothing depends on it yet.']],
     change: [['must', 'Must have', 'The app does not work for its purpose without it.'],
       ['nice', 'Nice to have', 'Makes it better and we would like it in the first release if there is room.'],
-      ['idea', 'Idea for now', 'Worth remembering. Not decided, not promised.']]
+      ['idea', 'Idea for now', 'Worth remembering. Not decided, not promised.']],
+    problem: [['must', 'Stops sign-off', 'A test step fails or something is wrong. The phase cannot be accepted until it is fixed.'],
+      ['nice', 'Fix before launch', 'Works, but is confusing or looks wrong. Fix before climbers use it.'],
+      ['idea', 'Minor', 'Small polish. Fine to fix later.']]
   };
+  const KIND_TABS = [['question', 'Open questions'], ['change', 'Suggested changes'], ['problem', 'Problems']];
+  // Words that differ by kind. Problems reuse owner for where it happened and answer for Eric's fix.
+  const DONE_WORD = { question: 'answered', change: 'done', problem: 'fixed' };
   // Separate lists, each with its own questions, changes and order. Fundraising is shown in prototype v3.
   const AREAS = [['scheduler', 'Scheduler', 'https://positivetribes.org/uep/'], ['fundraising', 'Fundraising', 'https://positivetribes.org/uep/v3/']];
   const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
@@ -228,6 +234,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
   const post = body => ({ method: 'POST', body: JSON.stringify(body) });
   const patch = body => ({ method: 'PATCH', body: JSON.stringify(body) });
   const isQ = item => item.kind === 'question';
+  const isP = item => item.kind === 'problem';
 
   function card(item, group) {
     if (editing === item.id) return editor(item);
@@ -238,16 +245,19 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     const moveBody = direction => post({ direction, ...(filter === 'all' ? {} : { phase: filter }) });
     const meta = isQ(item)
       ? (item.owner ? 'For ' + item.owner + ' · ' : '') + 'Asked by ' + (item.added_by || 'someone') + ' on ' + item.created_at.slice(0, 10)
-      : (item.added_by ? 'Suggested by ' + item.added_by : 'Suggested') + ' on ' + item.created_at.slice(0, 10);
+      : isP(item)
+        ? (item.owner ? item.owner + ' · ' : '') + 'Reported by ' + (item.added_by || 'someone') + ' on ' + item.created_at.slice(0, 10)
+        : (item.added_by ? 'Suggested by ' + item.added_by : 'Suggested') + ' on ' + item.created_at.slice(0, 10);
     return h('article', { class: 'card item' + (item.done ? ' is-done' : '') },
       h('div', { class: 'tools' },
-        h('span', { class: 'pill ' + (item.done ? 'done' : item.tier) }, item.done ? (isQ(item) ? 'Answered' : 'Done') : tierName),
-        h('span', { class: 'pill phase ' + item.phase }, PHASES.find(p => p[0] === item.phase)[1])),
+        h('span', { class: 'pill ' + (item.done ? 'done' : item.tier) }, item.done ? (isQ(item) ? 'Answered' : isP(item) ? 'Fixed' : 'Done') : tierName),
+        !isP(item) && h('span', { class: 'pill phase ' + item.phase }, PHASES.find(p => p[0] === item.phase)[1])),
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
       isQ(item) && item.answer && h('div', { class: 'answer' }, h('b', {}, item.done ? 'Answer' : 'What we know so far'), h('p', {}, item.answer)),
+      isP(item) && item.answer && h('div', { class: 'answer' }, h('b', {}, item.done ? 'Fix' : 'Eric\u2019s note'), h('p', {}, item.answer)),
       h('div', { class: 'meta' }, meta),
-      !item.done && h('div', { class: 'phase-row' }, h('span', { class: 'meta' }, 'When:'),
+      !item.done && !isP(item) && h('div', { class: 'phase-row' }, h('span', { class: 'meta' }, 'When:'),
         h('span', { class: 'seg', role: 'group', 'aria-label': 'Phase for ' + item.title },
           PHASES.map(([key, label]) => h('button', { type: 'button', 'aria-pressed': String(item.phase === key),
             onclick: () => item.phase !== key && act('/items/' + item.id, patch({ phase: key })) }, label)))),
@@ -262,7 +272,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
         h('span', { class: 'spacer' }),
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => { editing = item.id; render(); } }, isQ(item) && !item.done ? 'Answer or edit' : 'Edit'),
         h('button', { class: 'btn ghost small', type: 'button',
-          onclick: () => act('/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : (isQ(item) ? 'Mark answered' : 'Mark done')),
+          onclick: () => act('/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : (isQ(item) ? 'Mark answered' : isP(item) ? 'Mark fixed' : 'Mark done')),
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => { confirming = item.id; render(); } }, 'Delete')),
       confirming === item.id && h('div', { class: 'confirm', role: 'alert' },
         h('span', {}, 'Delete this for everyone? This cannot be undone.'),
@@ -273,35 +283,40 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
   function editor(item) {
     const title = h('input', { type: 'text', maxlength: 160, value: item.title, id: 'edit-title' });
     const details = h('textarea', { maxlength: 2000, id: 'edit-details' }, item.details);
-    const owner = isQ(item) && h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'edit-owner' });
-    const answer = isQ(item) && h('textarea', { maxlength: 2000, id: 'edit-answer', placeholder: 'What did we learn?' }, item.answer);
-    const answered = isQ(item) && h('input', { type: 'checkbox', id: 'edit-answered', ...(item.done ? { checked: true } : {}) });
+    const asks = isQ(item) || isP(item);
+    const owner = asks && h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'edit-owner' });
+    const answer = asks && h('textarea', { maxlength: 2000, id: 'edit-answer', placeholder: isP(item) ? 'What was fixed, or what is still needed?' : 'What did we learn?' }, item.answer);
+    const answered = asks && h('input', { type: 'checkbox', id: 'edit-answered', ...(item.done ? { checked: true } : {}) });
     const list = h('select', { id: 'edit-area' }, AREAS.map(([key, label]) => h('option', { value: key, ...(key === item.area ? { selected: true } : {}) }, label)));
     return h('form', { class: 'card stack', onsubmit: async event => {
       event.preventDefault();
       editing = null;
       const changes = { title: title.value, details: details.value, area: list.value };
-      if (isQ(item)) Object.assign(changes, { owner: owner.value, answer: answer.value, done: answered.checked });
+      if (asks) Object.assign(changes, { owner: owner.value, answer: answer.value, done: answered.checked });
       await act('/items/' + item.id, patch(changes));
       render();
     } },
-      h('div', {}, h('label', { for: 'edit-title' }, isQ(item) ? 'Question' : 'What should change?'), title),
-      h('div', {}, h('label', { for: 'edit-details' }, isQ(item) ? 'Why it matters' : 'Details'), details),
-      isQ(item) && h('div', {}, h('label', { for: 'edit-owner' }, 'Who can answer?'), owner),
-      isQ(item) && h('div', {}, h('label', { for: 'edit-answer' }, 'Answer'), answer),
+      h('div', {}, h('label', { for: 'edit-title' }, isQ(item) ? 'Question' : isP(item) ? 'What went wrong?' : 'What should change?'), title),
+      h('div', {}, h('label', { for: 'edit-details' }, isQ(item) ? 'Why it matters' : isP(item) ? 'What you did and what happened' : 'Details'), details),
+      asks && h('div', {}, h('label', { for: 'edit-owner' }, isP(item) ? 'Where? (test and step)' : 'Who can answer?'), owner),
+      asks && h('div', {}, h('label', { for: 'edit-answer' }, isP(item) ? 'Fix' : 'Answer'), answer),
       h('div', {}, h('label', { for: 'edit-area' }, 'List'), list),
-      isQ(item) && h('label', { for: 'edit-answered', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, answered, 'This question is answered'),
+      isQ(item) && h('label', { for: 'edit-answered', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, answered, isP(item) ? 'This problem is fixed' : 'This question is answered'),
       h('div', { class: 'row' },
         h('button', { class: 'btn', type: 'submit' }, 'Save'),
         h('button', { class: 'btn ghost', type: 'button', onclick: () => { editing = null; render(); } }, 'Cancel')));
   }
 
   function renderForm() {
-    const q = kind === 'question';
-    $('add-heading').textContent = q ? 'Ask a question' : 'Suggest a change';
-    $('title-label').textContent = q ? 'What do we need to know?' : 'What should change?';
-    $('add-btn').textContent = q ? 'Add question' : 'Add suggestion';
-    $('owner-field').hidden = !q;
+    const q = kind === 'question', p = kind === 'problem';
+    $('add-heading').textContent = q ? 'Ask a question' : p ? 'Report a problem' : 'Suggest a change';
+    $('title-label').textContent = q ? 'What do we need to know?' : p ? 'What went wrong?' : 'What should change?';
+    $('details-label').firstChild.textContent = p ? 'What you did and what happened, on a phone or a computer ' : 'Why it matters, or any detail ';
+    $('owner-label').textContent = p ? 'Where? (test and step)' : 'Who can answer?';
+    $('owner').placeholder = p ? 'Test 3, step 5' : 'Molly, Eric, counsel';
+    $('add-btn').textContent = q ? 'Add question' : p ? 'Add problem' : 'Add suggestion';
+    $('owner-field').hidden = !q && !p;
+    $('phase-legend').hidden = p;
     const current = $('tier').value || 'must';
     $('tier').replaceChildren(...TIER_NAMES[kind].map(([key, label]) => h('option', { value: key, ...(key === current ? { selected: true } : {}) }, label)));
     $('tier-legend').replaceChildren(...TIER_NAMES[kind].map(([key, label, meaning]) => h('li', {}, h('span', { class: 'pill ' + key }, label), h('span', {}, meaning))));
@@ -317,12 +332,14 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
       } }, label + ' (' + n + ')');
     }));
     $('proto-link').href = AREAS.find(a => a[0] === area)[2];
-    $('kinds').replaceChildren(...[['question', 'Open questions'], ['change', 'Suggested changes']].map(([key, label]) => {
+    $('kinds').replaceChildren(...KIND_TABS.map(([key, label]) => {
       const n = here.filter(i => i.kind === key && !i.done).length;
-      return h('button', { type: 'button', 'aria-pressed': String(kind === key), onclick: () => { kind = key; filter = 'all'; editing = null; renderForm(); render(); } }, label + ' (' + n + ')');
+      return h('button', { type: 'button', 'aria-pressed': String(kind === key), onclick: () => { kind = key; filter = 'all'; editing = null; history.replaceState(null, '', key === 'problem' ? '#problems' : location.pathname + location.search); renderForm(); render(); } }, label + ' (' + n + ')');
     }));
     const open = mine.filter(i => !i.done).length;
-    $('summary').textContent = open + ' open, ' + (mine.length - open) + (kind === 'question' ? ' answered' : ' done');
+    $('summary').textContent = open + ' open, ' + (mine.length - open) + ' ' + DONE_WORD[kind];
+    // Problems are all fixed in the full build, so they have no phase to filter by.
+    $('filters').hidden = kind === 'problem';
     $('filters').replaceChildren(h('span', { class: 'meta' }, 'Show:'),
       ...[['all', 'All'], ...PHASES].map(([key, label]) => {
         const n = key === 'all' ? mine.filter(i => !i.done).length : mine.filter(i => !i.done && i.phase === key).length;
@@ -337,7 +354,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
         h('h2', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'count' }, active.length + (active.length === 1 ? ' item' : ' items'))),
         active.length ? active.map(item => card(item, group)) : h('p', { class: 'empty' }, 'Nothing here yet.'),
         finished.length > 0 && h('details', { class: 'done-list' },
-          h('summary', {}, finished.length + (kind === 'question' ? ' answered' : ' done')),
+          h('summary', {}, finished.length + ' ' + DONE_WORD[kind]),
           h('div', { class: 'stack' }, finished.map(item => card(item, group))))));
     }
   }
@@ -374,7 +391,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     try {
       const tier = $('tier').value;
       const payload = { kind, area, title: $('title').value, details: $('details').value, tier, added_by: name };
-      if (kind === 'question') payload.owner = $('owner').value;
+      if (kind !== 'change') payload.owner = $('owner').value;
       const data = await api('/items', post(payload));
       items = data.items;
       track('backlog_item_added', { tier, kind, area });
@@ -386,6 +403,8 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
   });
 
   if (AREAS.some(a => a[0] === store.get('uep-backlog-area'))) area = store.get('uep-backlog-area');
+  // A #problems link (from the acceptance tests doc) opens the Problems tab of the scheduler list.
+  if (location.hash === '#problems') { kind = 'problem'; area = 'scheduler'; }
   renderForm();
   const savedName = store.get('uep-backlog-name');
   $('who').value = savedName;
