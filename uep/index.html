@@ -358,9 +358,61 @@ const state={
     {n:'Alice Burke',site:'bou',last:'3 weeks ago',was:'Every other Thursday'},
     {n:'Tom Greer',site:'chi',last:'3 weeks ago',was:'Every Monday'}
   ],
-  nudged:new Set(), dropped:new Set(), filter:{by:'all',v:'',gyms:['gol']}
+  nudged:new Set(), dropped:new Set(), filter:{by:'all',v:'',gyms:['gol']},
+  fmonth:iso(new Date(today.getFullYear(),today.getMonth()-1,1)).slice(0,7)
 };
 const WEEKS=[[96,61],[104,66],[99,58],[112,72],[108,70],[118,74],[121,79],[126,82]];
+
+/* ---------- Funder attendance ---------- */
+// Sample check-ins for every past session, from a fixed seed so the same month always downloads the same names
+const FIRSTN=['Alan','Barbara','Carl','Diane','Ellen','Frank','Gail','Hank','Irene','Jim','Karen','Larry','Marsha','Ned','Olive','Paul','Rita','Stan','Teresa','Vern','Wanda','Yusuf','Bea','Cy','Doris','Gus','June','Lou','Mae','Otto'];
+const LASTN=['Abbott','Brandt','Castillo','Dunn','Ellis','Ferris','Grant','Hollis','Ibarra','Jansen','Keller','Lowry','Mercer','Nolan','Ortiz','Pruitt','Quinn','Russo','Sato','Tran','Vance','Weber','Young','Zeller'];
+function seeded(key){let h=2166136261;for(const c of key)h=Math.imul(h^c.charCodeAt(0),16777619);
+  return()=>{h=Math.imul(h^h>>>15,2246822507);h=Math.imul(h^h>>>13,3266489909);h^=h>>>16;return(h>>>0)/4294967296}}
+function regularsOf(s){
+  const r=seeded('reg'+s.id),out=s.site==='gol'?state.roster.filter(x=>x.w).map(x=>({n:x.n,cp:x.cp})):[],seen=new Set(out.map(x=>x.n));
+  while(out.length<Math.round(s.cap*1.2)){const n=FIRSTN[Math.floor(r()*FIRSTN.length)]+' '+LASTN[Math.floor(r()*LASTN.length)];if(!seen.has(n)){seen.add(n);out.push({n,cp:r()<.15})}}
+  return out;
+}
+// Dates a session was held in a month, up to yesterday. Skipped dates don't count.
+function heldDates(s,y,m){
+  const r={...s.rule,start:iso(addDays(fromIso(s.rule.start),-728))},out=[];
+  for(let d=new Date(y,m,1);d.getMonth()===m&&d<today;d=addDays(d,1))if(matches(r,d))out.push(d);
+  return out;
+}
+function monthAttendance(sites,ym){
+  const [y,m]=ym.split('-').map(Number),ids=sites.map(s=>s.id),rows=[];
+  state.sessions.filter(s=>ids.includes(s.site)).forEach(s=>{const regs=regularsOf(s);
+    heldDates(s,y,m-1).forEach(d=>{const r=seeded(s.id+iso(d)),people=[];
+      regs.forEach(p=>{if(people.length<s.cap&&r()<.68)people.push({n:p.n,kind:p.cp?'Care partner':''})});
+      const walk=Math.floor(r()*3);for(let i=0;i<walk;i++)people.push({n:FIRSTN[Math.floor(r()*FIRSTN.length)]+' '+LASTN[Math.floor(r()*LASTN.length)],kind:'Walk-in'});
+      rows.push({d,s,people:people.sort((a,b)=>a.n.localeCompare(b.n))})})});
+  return rows.sort((a,b)=>a.d-b.d||a.s.from.localeCompare(b.s.from));
+}
+const monthName=ym=>{const [y,m]=ym.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'})};
+const lastMonths=n=>Array.from({length:n},(_,i)=>iso(new Date(today.getFullYear(),today.getMonth()-i,1)).slice(0,7));
+const siteLabel=s=>s.gym==='Partner gym'?s.city:s.gym;
+const funderTitle=ss=>state.filter.by==='gyms'&&ss.length<=3?ss.map(siteLabel).join(', '):filterTitle(ss);
+function attendanceSheet(XLSX,sites,title,ym){
+  const rows=monthAttendance(sites,ym),aoa=[[`Attendance for ${title}, ${monthName(ym)}`],['Everyone checked in at each session, including care partners and walk-ins.'],[],['Date','Site and session','Checked in']];
+  rows.forEach(x=>{aoa.push([fmt(x.d),`${siteLabel(site(x.s.site))} · ${x.s.name} · ${t12(x.s.from)}`,x.people.length]);x.people.forEach(p=>aoa.push(['',p.n,p.kind]));aoa.push([])});
+  if(!rows.length)aoa.push(['No sessions held this month.'],[]);
+  aoa.push(['Sessions',rows.length],['Check-ins',rows.reduce((a,x)=>a+x.people.length,0)],['Different people',new Set(rows.flatMap(x=>x.people.map(p=>p.n))).size]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:14},{wch:44},{wch:12}];
+  return ws;
+}
+let xlsxLoad;
+function loadXLSX(){return xlsxLoad||(xlsxLoad=new Promise((ok,no)=>{const t=document.createElement('script');t.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';t.onload=()=>ok(window.XLSX);t.onerror=()=>{xlsxLoad=null;no()};document.head.appendChild(t)}))}
+async function funderDownload(sites,title,months){
+  try{
+    const XLSX=await loadXLSX(),wb=XLSX.utils.book_new();
+    months.slice().reverse().forEach(ym=>XLSX.utils.book_append_sheet(wb,attendanceSheet(XLSX,sites,title,ym),monthName(ym)));
+    const when=months.length>1?`${monthName(months.at(-1))} to ${monthName(months[0])}`:monthName(months[0]);
+    XLSX.writeFile(wb,`UEP attendance, ${title}, ${when}.xlsx`.replace(/[\\/:*?"<>|]/g,''));
+    say(`Attendance for ${title}, ${when}, downloaded as a spreadsheet.`);
+  }catch(e){say('The download didn\'t work. Check your connection and try again.')}
+  render();
+}
 
 
 /* ---------- Helpers ---------- */
@@ -638,6 +690,14 @@ function filterBar(){const F=state.filter;
   if(F.by==='region'||F.by==='state'||F.by==='city')second=`<label class="f" for="fval">${FNAME[F.by]}<select id="fval" data-bind="fval">${fopts(F.by).map(o=>`<option ${F.v===o?'selected':''}>${esc(o)}</option>`).join('')}</select></label>`;
   return `<div class="card"><div class="grid2"><label class="f" for="fby">Show report for<select id="fby" data-bind="fby">${['all','region','state','city','gyms'].map(k=>`<option value="${k}" ${F.by===k?'selected':''}>${k==='gyms'?'One or more gyms':k==='all'?'All sites':'A '+FNAME[k].toLowerCase()}</option>`).join('')}</select></label>${second}</div>
     ${F.by==='gyms'?`<div class="chips" role="group" aria-label="Gyms to include" style="margin-top:10px">${SITES.map(s=>`<button class="chip" data-act="fgym" data-v="${s.id}" aria-pressed="${F.gyms.includes(s.id)}">${esc(s.gym==='Partner gym'?s.city:s.gym)}</button>`).join('')}</div><p class="muted small">Tap gyms to add or remove them. At least one stays selected.</p>`:''}</div>`}
+function funderCard(ss){
+  const months=state.fmonth==='six'?lastMonths(6):[state.fmonth],rows=months.flatMap(ym=>monthAttendance(ss,ym));
+  const people=new Set(rows.flatMap(x=>x.people.map(p=>p.n))).size,checks=rows.reduce((a,x)=>a+x.people.length,0);
+  return `<div class="card"><div class="row"><h3>Funder attendance</h3><button class="btn sm" data-act="funder">Download</button></div>
+    <p class="muted small">For funders who want names: every session at ${esc(funderTitle(ss))}, with its date, headcount and everyone checked in, care partners and walk-ins included. One tab per month. Change the sites with the filter above, for example all the Sportrock gyms or all of Washington.</p>
+    <label class="f" for="fmonth">Month<select id="fmonth" data-bind="fmonth">${lastMonths(6).map((ym,i)=>`<option value="${ym}" ${state.fmonth===ym?'selected':''}>${monthName(ym)}${i===0?' (so far)':''}</option>`).join('')}<option value="six" ${state.fmonth==='six'?'selected':''}>Last 6 months, a tab for each</option></select></label>
+    <p class="small" style="margin-top:8px">${rows.length?`${rows.length} sessions · ${checks.toLocaleString()} check-ins · ${people} different people`:'No sessions held at these sites in that time.'}</p></div>`;
+}
 function adminOverview(){
   const ss=sitesView();
   const sum=k=>ss.reduce((a,s)=>a+s[k],0);
@@ -679,6 +739,7 @@ function adminOverview(){
     <div class="card"><h3>Waitlists</h3><p class="muted small">Sessions that are full. The lead volunteers have been emailed, since a waitlist means a site is growing.</p>
       ${waits.length?waits.map(x=>`<div class="row" style="border-top:1px solid var(--line);padding-top:8px"><div style="min-width:0"><b>${esc(x.name)}</b><div class="muted small">${esc(site(x.site).city)} · ${x.booked} / ${x.cap} booked</div></div><span class="pill sun">${x.wait} waiting</span></div>`).join(''):'<p class="muted small">No waitlists right now.</p>'}</div>
   </div>
+  ${funderCard(ss)}
   <div class="card"><h3>By site</h3>
     <div class="scroll-x"><table><thead><tr><th>Site</th><th>Leads</th><th>Cost to climb</th><th class="num">Sessions</th><th class="num">Booked</th><th class="num">Checked in</th><th>Attendance taken</th><th></th><th></th></tr></thead><tbody>
     ${ss.map(s=>{if(!s.sessions)return `<tr><td><b>${esc(s.city)}</b><div class="muted small">${esc(s.gym)}</div></td><td>${esc(s.lead)}</td><td>${esc(s.price)}</td><td colspan="6"><span class="pill sun">New location, no sessions yet</span></td></tr>`;
@@ -731,7 +792,7 @@ const TOUR=[
   {k:'sam@example.org',who:'Sam, a new climber',do:['Choose "A climber with Parkinson\'s," pick a home site, add contact details, then sign the waiver with two checkboxes and a typed name.','Morning climb at Golden is full, so join the waitlist. Then book the Saturday climb every week.']},
   {k:'ruth@example.org',who:'Ruth, a regular climber',do:['Her 2 months are nearly up, so confirm she wants to keep her Wednesday spot.','Under "Your regular sessions," tap Away dates and set a few weeks away. Then cancel one date further out under "Coming up."','Book a one-time visit at another site. (Ruth can also sign in with her mobile number, the second sample account.)']},
   {k:'pat@example.org',who:'Pat, a Golden lead volunteer',do:['Note the waitlist alert, then check in a few people and save attendance.','Open Schedule, tap Edit on Morning climb, raise the spots from 14 to 16 and save. The two people waiting move in.','Back on Check-in, tap a later date to see who\'s signed up. Cancel one person, then sign someone up for them.','Tap a past date and check people in from a paper sign-in sheet.']},
-  {k:'molly@example.org',who:'Molly, the admin',do:['See active climbers and care partners counted separately, the board report, and the waitlists.','Under "Climbers drifting away," cancel the booking of someone who stopped coming.','Open Climbers, search for George, and cancel one date or his whole series.','Export attendance for one site\'s funder, then open Sites and add a new location.']}
+  {k:'molly@example.org',who:'Molly, the admin',do:['See active climbers and care partners counted separately, the board report, and the waitlists.','Under "Climbers drifting away," cancel the booking of someone who stopped coming.','Open Climbers, search for George, and cancel one date or his whole series.','Under "Funder attendance," pick a month and download it, then open Sites and add a new location.']}
 ];
 const NOTES={
   out:{h:'One sign-in, no role picker',p:'Climbers, care partners, lead volunteers and staff all sign in the same way. The system looks up the account and opens the right view.',
@@ -744,7 +805,7 @@ const NOTES={
     b:['Check-in is a tap per person, and care partners are marked.','A waitlist alert says when a session is full, so the site can add spots or volunteers.','Leads see who\'s signed up for any day, and can cancel or sign someone up for them.','Leads can check people in after a session, from a paper sign-in sheet.','Leads can create and edit sessions, including 1st-and-3rd-Tuesday patterns and skipped dates.','A site can have two or more leads.'],
     t:'Edit Morning climb, raise the spots, and watch the waitlist move in.',r:'Lead volunteers'},
   admin:{h:'Every site in one view',p:'Molly sees attendance, active people and sessions across all 85 locations without logging into separate accounts.',
-    b:['Climbers and care partners are counted separately, for grants and headcounts.','Staff can look up any climber and cancel one date or a whole regular booking.','Staff can add a new location.','Active means attended in the last 6 months.','Reports filter by one or more gyms, or by city, state or region.','One-click exports for the board and for sites that report to funders.','Waitlists show where the program is growing.'],
+    b:['Climbers and care partners are counted separately, for grants and headcounts.','Staff can look up any climber and cancel one date or a whole regular booking.','Staff can add a new location.','Active means attended in the last 6 months.','Reports filter by one or more gyms, or by city, state or region.','One-click exports for the board, and funder attendance with names: a tab per month, each session with its headcount and who came.','Waitlists show where the program is growing.'],
     t:'Download the board report, then export attendance for one site.',r:'Reports'}
 };
 
@@ -861,7 +922,9 @@ document.addEventListener('click',e=>{
   else if(a==='newsess')state.draft=newDraft();
   else if(a==='editsess'){state.draft=draftFrom(sess(v));$('#screen')&&($('#screen').scrollTop=0)}
   else if(a==='cancelsess')state.draft=null;
-  else if(a==='report'){say(v==='board'?'Board report downloaded as a spreadsheet.':'Attendance for '+site(v).city+' downloaded for the funder.')}
+  else if(a==='report'&&v==='board')say('Board report downloaded as a spreadsheet.');
+  else if(a==='report'){funderDownload([site(v)],siteLabel(site(v)),state.fmonth==='six'?lastMonths(6):[state.fmonth]);return}
+  else if(a==='funder'){const ss=sitesView();funderDownload(ss,funderTitle(ss),state.fmonth==='six'?lastMonths(6):[state.fmonth]);return}
   else if(a==='dfreq'){const D=state.draft;D.skip=[];if(v==='biweekly'){D.freq='weekly';D.interval=2}else if(v==='weekly'){D.freq='weekly';D.interval=1}else D.freq=v}
   else if(a==='dnth'){const D=state.draft,k=+v;D.nth=D.nth.includes(k)?(D.nth.length>1?D.nth.filter(x=>x!==k):D.nth):[...D.nth,k];D.skip=[]}
   else if(a==='dday'){const D=state.draft,i=+v;D.days=D.days.includes(i)?D.days.filter(x=>x!==i):[...D.days,i];D.skip=[]}
@@ -897,6 +960,7 @@ document.addEventListener('input',e=>{
   if(k==='addName'){state.addName=val;render();return}
   if(k==='fby'){const F=state.filter;F.by=val;if(FKEY[val])F.v=fopts(val)[0];render();return}
   if(k==='fval'){state.filter.v=val;render();return}
+  if(k==='fmonth'){state.fmonth=val;render();return}
   if(k in W){W[k]=val;if(e.target.type==='checkbox'||e.target.tagName==='SELECT')render();else{
       const b=$('[data-act="wstep"][data-v="2"]');if(b)b.disabled=!(W.type&&W.home&&W.ecName.trim()&&W.ecPhone.trim());
       const s=$('[data-act="sign"]');if(s)s.disabled=!(W.ack1&&W.ack2&&W.name.trim());}
