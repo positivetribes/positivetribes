@@ -175,7 +175,7 @@ async function salesforceOverview(env, refresh) {
     records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
     records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId != null AND IsChild = false AND (ActivityDate = LAST_N_DAYS:60 OR ActivityDate = NEXT_N_DAYS:30) ORDER BY ActivityDate LIMIT 300'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, AccountId FROM Case WHERE IsClosed = false ORDER BY CreatedDate DESC LIMIT 100'),
-    records(auth, 'SELECT Id, Name, Company, Status, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND CreatedDate = LAST_N_DAYS:30 ORDER BY CreatedDate DESC LIMIT 50')
+    records(auth, "SELECT Id, Name, Company, Status, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND Status = 'New' AND CreatedDate = LAST_N_DAYS:30 ORDER BY CreatedDate DESC LIMIT 50")
   ]);
   overviewCache = { at: Date.now(), data: { accounts, tasks, events, cases, leads } };
   return overviewCache.data;
@@ -275,7 +275,7 @@ export function buildOverview(env, sf, local, today) {
     if (!c.active) continue;
     // One entry per client, naming everything that is missing.
     const reasons = [];
-    if (!c.lastTouch || c.lastTouch < staleBefore) reasons.push(c.lastTouch ? `No contact in ${STALE_DAYS}+ days` : 'No contact on record');
+    if (!c.lastTouch || c.lastTouch < staleBefore) reasons.push(c.lastTouch ? `No activity in ${STALE_DAYS}+ days` : 'No activity logged');
     if (!c.nextStep && !c.opportunities.some(o => o.open && o.nextStep)) reasons.push('No next step');
     if (reasons.length) attention.push({ reason: reasons.join(' · '), type: 'stale', title: c.name, accountId: c.id, day: c.lastTouch || '', url: c.url });
   }
@@ -321,7 +321,8 @@ export function buildMatch(accounts, contacts, meta) {
       if (!c.Email) continue;
       const email = c.Email.toLowerCase(), domain = email.split('@')[1];
       emails.add(email);
-      if (domain && !GENERIC_DOMAINS.includes(domain)) domains.add(domain);
+      // A contact linked from another account brings their address, not their employer's whole domain.
+      if (domain && c.IsDirect !== false && !GENERIC_DOMAINS.includes(domain)) domains.add(domain);
     }
     if (a.Website) {
       try { const host = new URL(/^https?:/i.test(a.Website) ? a.Website : 'https://' + a.Website).hostname.replace(/^www\./, ''); if (host) domains.add(host); } catch {}
@@ -574,12 +575,14 @@ export async function handleAdmin(request, env, url, who) {
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
       const auth = await salesforce(env);
-      const [accounts, contacts, meta, lastSync] = await Promise.all([
+      // AccountContactRelation covers each contact's own account plus any other accounts they are linked to.
+      const [accounts, relations, meta, lastSync] = await Promise.all([
         records(auth, 'SELECT Id, Name, Website FROM Account WHERE IsPersonAccount = false AND Name != ' + quote(OWN_ACCOUNT) + ' ORDER BY Name LIMIT 200'),
-        records(auth, 'SELECT AccountId, Name, Email FROM Contact WHERE AccountId != null AND Account.IsPersonAccount = false LIMIT 2000'),
+        records(auth, 'SELECT AccountId, IsDirect, Contact.Name, Contact.Email FROM AccountContactRelation WHERE IsActive = true AND Account.IsPersonAccount = false LIMIT 2000'),
         db.prepare('SELECT * FROM client_meta').all(),
         db.prepare('SELECT ran_at FROM sync_runs ORDER BY id DESC LIMIT 1').first()
       ]);
+      const contacts = relations.map(r => ({ AccountId: r.AccountId, IsDirect: r.IsDirect, Name: r.Contact?.Name, Email: r.Contact?.Email }));
       return json({ today, timeZone: TIME_ZONE, lastSync: lastSync?.ran_at || null, clients: buildMatch(accounts, contacts, meta.results) });
     }
     if (route === 'POST /api/admin/activity') {
