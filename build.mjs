@@ -24,6 +24,17 @@ if (accessTeam && !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(accessTeam)) throw
 if (accessAud && !/^[a-f0-9]{64}$/.test(accessAud)) throw new Error('ACCESS_AUD must be the 64-character Application Audience (AUD) tag.');
 const adminDb = { binding: 'ADMIN_DB', database_name: 'positivetribes-admin-db', database_id: 'c74ab999-3171-432b-9234-da16795e7e50' };
 const adminPreviewDb = { binding: 'ADMIN_DB', database_name: 'positivetribes-admin-preview-db', database_id: 'f6140db8-4e66-4952-bacc-9a71c293a8f9' };
+// The client backlogs' own databases, read by the command center inbox. Each backlog Worker owns and writes its database.
+const backlogDbs = [
+  { binding: 'UEP_BACKLOG_DB', database_name: 'uep-backlog-db', database_id: '9bde984c-fd0c-4705-8d41-61624aec89ff' },
+  { binding: 'COYOTE_BACKLOG_DB', database_name: 'coyote-backlog-db', database_id: '41321f8f-8e42-4eb8-b288-351226f7bd9b' },
+  { binding: 'SOBERAFE_BACKLOG_DB', database_name: 'soberafe-backlog-db', database_id: '6f221a25-b48a-4121-8b24-16f72f83f802' }
+];
+const backlogPreviewDbs = [
+  { binding: 'UEP_BACKLOG_DB', database_name: 'uep-backlog-preview-db', database_id: '5a1c43e9-e4c3-4bec-8751-1d586ba0c9ec' },
+  { binding: 'COYOTE_BACKLOG_DB', database_name: 'coyote-backlog-preview-db', database_id: 'c7c4332e-c846-49ea-aa82-1af8fab82e19' },
+  { binding: 'SOBERAFE_BACKLOG_DB', database_name: 'soberafe-backlog-preview-db', database_id: '9e9b6403-0523-4f15-864e-e9777fd864dc' }
+];
 
 await mkdir('public', { recursive: true });
 const pages = ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html', 'support.html'];
@@ -80,9 +91,9 @@ await writeFile('wrangler.json', JSON.stringify({
   name: 'positivetribes', main: 'contact-worker.mjs', compatibility_date: '2026-09-11',
   assets: { directory: './public', binding: 'ASSETS', run_worker_first: true }, observability: { enabled: true },
   vars: { CONTACT_TO: recipient, DONATIONS: donations, ...(accessTeam && { ACCESS_TEAM_DOMAIN: accessTeam }), ...(accessAud && { ACCESS_AUD: accessAud }) },
-  d1_databases: [adminDb],
+  d1_databases: [adminDb, ...backlogDbs],
   // Pull request previews use their own database so test edits never touch real data.
-  previews: { d1_databases: [adminPreviewDb] },
+  previews: { d1_databases: [adminPreviewDb, ...backlogPreviewDbs] },
   send_email: [{ name: 'CONTACT_MAIL', destination_address: recipient }],
   ratelimits: [
     { name: 'CONTACT_LIMIT', namespace_id: '914202601', simple: { limit: 5, period: 60 } },
