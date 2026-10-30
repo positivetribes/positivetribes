@@ -186,7 +186,11 @@ const sf = {
   ],
   events: [{ Id: '00U1', Subject: 'UEP review', StartDateTime: '2026-11-04T17:00:00.000+0000', IsAllDayEvent: false, ActivityDate: '2026-11-04', AccountId: UEP }],
   cases: [],
-  leads: [{ Id: '00Q1', Name: 'Pat Doe', Company: '[not provided]', Status: 'Open', LeadSource: 'Web', CreatedDate: '2026-10-27T12:00:00.000+0000' }]
+  leads: [
+    { Id: '00Q1', Name: 'Pat Doe', Company: '[not provided]', Status: 'Open', Rating: null, LeadSource: 'Web', CreatedDate: '2026-10-27T12:00:00.000+0000' },
+    { Id: '00Q2', Name: 'Sam Hot', Company: 'Mountain Rescue', Status: 'Qualified', Rating: 'Hot', LeadSource: 'Referral', CreatedDate: '2026-10-20T12:00:00.000+0000' },
+    { Id: '00Q3', Name: 'Wendy Warm', Company: 'Trail Club', Status: 'Qualified', Rating: 'Warm', LeadSource: 'Web', CreatedDate: '2026-10-22T12:00:00.000+0000' }
+  ]
 };
 const local = {
   meta: [{ account_id: '001Pr0000111WhXIAU', links_json: '[]', match_json: '{}', pinned: 0, hidden: 1 }, { account_id: SAFE, links_json: '[]', match_json: '{}', pinned: 1, hidden: 0 }],
@@ -210,26 +214,29 @@ test('Today shows what needs attention, what is coming and what just happened', 
 
   const reasons = view.attention.map(a => `${a.reason}: ${a.title}`).sort();
   assert.deepEqual(reasons, [
-    'New lead: Pat Doe',
+    'Hot lead: Sam Hot (Mountain Rescue)',
     'No activity in 21+ days · No next step: SAFE',
     'Overdue Salesforce task: Call Duke',
     'Overdue step: Send revised scope',
-    'Past target close date: Opp 006B'
+    'Past target close date: Opp 006B',
+    'Unrated lead: Pat Doe',
+    'Warm lead: Wendy Warm (Trail Club)'
   ]);
   assert.deepEqual(view.upcoming.map(i => i.title), ['Prep demo', 'UEP review', 'Opp 006A']);
   assert.deepEqual(view.recent.map(i => i.title), ['Molly likes it', 'Proposal for signing']);
   assert.ok(view.attention.every(a => a.accountId !== '001Pr0000111WhXIAU'));
 });
 
-test('Now ranks deadlines, then waiting clients, then revenue, then blockers and leads', () => {
+test('Now puts satisfaction first, then Hot and Warm leads, then revenue and quiet clients', () => {
   const view = buildOverview(SF_ENV, sf, local, today);
   assert.deepEqual(view.now.map(i => `${i.title}: ${i.why}`), [
     'Call Duke: Hard deadline missed 9 days ago',
     'Send revised scope: Hard deadline missed 2 days ago',
-    'Opp 006B: Revenue: past its target close date',
-    'Opp 006A: Revenue: closes in 7 days',
-    'SAFE: An active client with nothing queued, so it blocks progress'
+    'Sam Hot (Mountain Rescue): Hot lead: fits Positive Tribes and is a high priority',
+    'Wendy Warm (Trail Club): Warm lead: a good fit, follow up',
+    'Pat Doe: Unrated lead: rate it in Salesforce (Hot, Warm or Cold)'
   ]);
+  assert.equal(rankNow(view.attention, view.upcoming, today, Date.now(), 20).at(-1).title, 'SAFE', 'quiet clients rank last');
   const meeting = { type: 'meeting', title: 'Standup', at: '2026-10-29T15:00:00Z', day: today };
   assert.equal(rankNow([], [meeting], today, Date.parse('2026-10-29T15:30:00Z'))[0].why, 'Fixed time today');
   assert.deepEqual(rankNow([], [meeting], today, Date.parse('2026-10-29T17:00:00Z')), [], 'a meeting that is over drops out');

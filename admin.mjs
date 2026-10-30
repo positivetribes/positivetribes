@@ -175,7 +175,7 @@ async function salesforceOverview(env, refresh) {
     records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
     records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId != null AND IsChild = false AND (ActivityDate = LAST_N_DAYS:60 OR ActivityDate = NEXT_N_DAYS:30) ORDER BY ActivityDate LIMIT 300'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, AccountId FROM Case WHERE IsClosed = false ORDER BY CreatedDate DESC LIMIT 100'),
-    records(auth, "SELECT Id, Name, Company, Status, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND Status = 'New' AND CreatedDate = LAST_N_DAYS:30 ORDER BY CreatedDate DESC LIMIT 50")
+    records(auth, "SELECT Id, Name, Company, Status, Rating, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND (Rating = null OR Rating != 'Cold') ORDER BY CreatedDate DESC LIMIT 50")
   ]);
   overviewCache = { at: Date.now(), data: { accounts, tasks, events, cases, leads } };
   return overviewCache.data;
@@ -241,7 +241,8 @@ const stepView = s => ({ id: s.id, accountId: s.account_id, title: s.title, dueD
 const isTouch = item => !['close', 'stage'].includes(item.type) && !(item.type === 'step' && item.open) && !(item.type === 'task' && item.open);
 
 // "Now": Eric's ranking rules, highest first. A rule returns a score and a one-line why, or null when it does not apply.
-// 1 hard deadlines (overdue or due today), 2 a client waiting on him, 3 revenue and signatures, 4 unblocking next steps, 5 new leads.
+// Customer satisfaction first (missed commitments, due today, a client waiting), then leads that fit (Salesforce Rating:
+// Hot = fits and high priority, Warm = fits; Cold never reaches here), then revenue dates, then quiet clients.
 const daysBetween = (from, to) => Math.round((Date.parse(to + 'T12:00:00Z') - Date.parse(from + 'T12:00:00Z')) / 86400e3);
 function nowRule(i, today, now) {
   // A meeting that ended (started over an hour ago) no longer needs anything right now.
@@ -251,10 +252,14 @@ function nowRule(i, today, now) {
   if (i.type === 'meeting' && i.day === today) return { score: 95, why: 'Fixed time today' };
   if ((i.type === 'step' || i.type === 'task') && i.open && i.day === today) return { score: 90, why: 'Due today' };
   if (i.reason === 'Open support case') return { score: 80, why: 'A client is waiting on you' };
-  if (i.reason === 'Past target close date') return { score: 70, why: 'Revenue: past its target close date' };
-  if (i.type === 'close' && i.day >= today && daysBetween(today, i.day) <= 7) return { score: 60, why: `Revenue: closes ${daysBetween(today, i.day) === 0 ? 'today' : 'in ' + daysBetween(today, i.day) + ' days'}` };
+  if (i.type === 'lead') {
+    if (i.rating === 'Hot') return { score: 78, why: 'Hot lead: fits Positive Tribes and is a high priority' };
+    if (i.rating === 'Warm') return { score: 72, why: 'Warm lead: a good fit, follow up' };
+    return { score: 66, why: 'Unrated lead: rate it in Salesforce (Hot, Warm or Cold)' };
+  }
+  if (i.reason === 'Past target close date') return { score: 62, why: 'Revenue: past its target close date' };
+  if (i.type === 'close' && i.day >= today && daysBetween(today, i.day) <= 7) return { score: 55, why: `Revenue: closes ${daysBetween(today, i.day) === 0 ? 'today' : 'in ' + daysBetween(today, i.day) + ' days'}` };
   if (i.type === 'stale' && i.reason.includes('No next step')) return { score: 45, why: 'An active client with nothing queued, so it blocks progress' };
-  if (i.type === 'lead') return { score: 35, why: 'New lead waiting for a first reply' };
   if (i.type === 'stale') return { score: 30, why: 'An active client you have not touched lately' };
   return null;
 }
@@ -308,7 +313,7 @@ export function buildOverview(env, sf, local, today) {
     if (!c.nextStep && !c.opportunities.some(o => o.open && o.nextStep)) reasons.push('No next step');
     if (reasons.length) attention.push({ reason: reasons.join(' · '), type: 'stale', title: c.name, accountId: c.id, day: c.lastTouch || '', url: c.url });
   }
-  for (const l of sf.leads) attention.push({ reason: 'New lead', type: 'lead', title: l.Company && l.Company !== '[not provided]' ? `${l.Name} (${l.Company})` : l.Name, detail: [l.LeadSource, l.Status].filter(Boolean).join(' · '), day: localDay(l.CreatedDate), url: sfLink(env, 'Lead', l.Id), source: 'salesforce' });
+  for (const l of sf.leads) attention.push({ reason: l.Rating ? `${l.Rating} lead` : 'Unrated lead', type: 'lead', rating: l.Rating || '', title: l.Company && l.Company !== '[not provided]' ? `${l.Name} (${l.Company})` : l.Name, detail: [l.LeadSource, l.Status].filter(Boolean).join(' · '), day: localDay(l.CreatedDate), url: sfLink(env, 'Lead', l.Id), source: 'salesforce' });
 
   // Today's items sit under "Coming up" with the rest of the next two weeks; "Recent" ends yesterday.
   const upcoming = items.filter(i => i.day >= today && i.day <= soon && i.open !== false && !['note', 'stage', 'email'].includes(i.type)).sort((x, y) => x.at.localeCompare(y.at));
