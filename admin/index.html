@@ -16,7 +16,7 @@ main{padding:28px 0 80px}.muted{color:var(--muted)}.small{font-size:13px}
 .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;align-items:start}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px}
 .count{font-family:'DM Sans',Arial,sans-serif;font-size:13px;color:var(--muted);margin-left:6px}
-ul.items{list-style:none;margin:0;padding:0}ul.items li{padding:10px 0;border-top:1px solid var(--line)}ul.items li:first-child{border-top:0;padding-top:0}
+ul.items .step-actions{margin-top:6px}ul.items{list-style:none;margin:0;padding:0}ul.items li{padding:10px 0;border-top:1px solid var(--line)}ul.items li:first-child{border-top:0;padding-top:0}
 .day{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--rust);font-weight:700;margin:16px 0 4px}.day:first-child{margin-top:0}
 .row{display:flex;gap:4px 8px;align-items:baseline;flex-wrap:wrap}.row .grow{flex:1 1 200px;min-width:0}
 .title{overflow-wrap:anywhere}.title a{text-decoration:none}.title a:hover{text-decoration:underline}
@@ -87,6 +87,8 @@ function item(i, { showClient = true, showDay = false, controls = null } = {}) {
   return `<li><div class="row"><div class="grow"><div class="title">${title}</div>
     <div class="meta">${[client, when ? esc(when) : '', i.detail ? esc(i.detail) : ''].filter(Boolean).join(' · ')}</div></div>${chip}</div>${controls ? controls(i) : ''}</li>`;
 }
+// Steps are Eric's own, so they can be completed from any list. Salesforce tasks stay read-only.
+const doneControl = i => i.type === 'step' && i.id ? `<div class="step-actions"><button type="button" data-today-done="${esc(i.id)}">Mark done</button></div>` : '';
 function byDay(items, opts) {
   if (!items.length) return '<p class="empty">Nothing here.</p>';
   let html = '', last = null;
@@ -143,7 +145,7 @@ function nowCard(data) {
   const client = top.client && top.type !== 'stale' ? `<a class="client-link" href="#/client/${esc(top.accountId)}">${esc(top.client)}</a> · ` : '';
   return `<section class="panel nowcard" aria-label="Now"><p class="label">Now</p><h2>${title}</h2>
     <p class="why">${client}<strong>${esc(top.why)}</strong>${top.detail ? ' · <span class="muted">' + esc(top.detail) + '</span>' : ''}</p>
-    <button type="button" id="now-skip" data-id="${esc(nowId(top))}">Not now</button>
+    ${top.type === 'step' && top.id ? `<button type="button" class="primary" data-today-done="${esc(top.id)}">Mark done</button> ` : ''}<button type="button" id="now-skip" data-id="${esc(nowId(top))}">Not now</button>
     ${rest.length ? `<p class="meta later">Then: ${rest.slice(0, 3).map(i => esc(i.title)).join(' · ')}</p>` : ''}</section>`;
 }
 function wireNow() {
@@ -157,11 +159,17 @@ function renderToday(data) {
   $main.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h1>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}</h1></div></div>
   ${nowCard(data)}${uatCountdown(data.today)}
   <div class="cols">
-    <section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2>${attention.length ? `<ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale', showClient: i.type !== 'stale' })).join('')}</ul>` : '<p class="empty">All clear.</p>'}</section>
-    <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming)}</section>
+    <section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2>${attention.length ? `<ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale', showClient: i.type !== 'stale', controls: doneControl })).join('')}</ul>` : '<p class="empty">All clear.</p>'}</section>
+    <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { controls: doneControl })}</section>
     <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${byDay(data.recent)}</section>
   </div>`;
   wireNow();
+  $main.onclick = async e => {
+    const t = e.target.closest('[data-today-done]');
+    if (!t) return;
+    t.disabled = true;
+    try { await send('/steps/' + t.dataset.todayDone, 'PATCH', { status: 'done' }); overview = null; route(); } catch (error) { t.disabled = false; alert(error.message); }
+  };
 }
 
 function renderClients(data) {
