@@ -149,7 +149,7 @@ function actionName(i) {
   if (i.action === 'done') return i.kind === 'question' ? 'Marked answered' : i.kind === 'problem' ? 'Marked fixed' : 'Marked done';
   return { answered: 'Answered', reopened: 'Reopened', tier: 'Priority changed', phase: 'Phase changed', edited: 'Edited', deleted: 'Deleted' }[i.action] || i.action;
 }
-const BACKLOG_STATUS = { off: 'Not connected on this deployment.', not_ready: 'Waiting for this backlog to be redeployed with its change log.', error: 'Could not be read just now. Try Refresh.' };
+const BACKLOG_STATUS = { off: 'Not connected on this deployment.', not_ready: 'No change log yet. Redeploy this backlog, then open it once.', error: 'Could not be read just now. Try Refresh.' };
 let inbox = null;
 
 function inboxRow(i, n) {

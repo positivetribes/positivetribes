@@ -87,7 +87,7 @@ The routine signs in with the `command-center-sync` service token, sending the `
 
 - Each item that changed appears once, showing its latest change, for 60 days. Changes made under your own name are left out. The Worker variable `BACKLOG_OWN_NAMES` (comma-separated first names) sets which names count as yours and defaults to `eric`.
 - **Clear** hides the row, and the clear is saved in `ADMIN_DB`. A later change to the same item brings it back. **Add next step** adds a next step to that client and clears the row.
-- A backlog that has not been redeployed with its change log shows as waiting, and other backlogs still load. Deploy the backlog Workers before the site.
+- A backlog with no change log yet says "No change log yet". Its table is created the first time someone opens the backlog after it is redeployed. The other backlogs still load. Deploy the backlog Workers before the site.
 
 ### Local development and tests
 
