@@ -37,6 +37,7 @@ details summary{cursor:pointer;font-weight:600}details[open] summary{margin-bott
 .err{color:var(--rust);font-size:13px;min-height:1em}
 .head{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:22px}.head .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .badge{display:inline-block;min-width:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--rust);color:var(--bg);font-size:11px;font-weight:700;line-height:18px;text-align:center}.badge:empty{display:none}
+.countdown{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px}.countdown .days{font-family:'Fraunces',Georgia,serif;font-size:40px;line-height:1;color:var(--ink)}.countdown.soon .days{color:var(--warn)}.countdown.over .days{color:var(--rust)}
 .said{margin:6px 0 0;font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere;border-left:3px solid var(--line);padding-left:10px}
 @media(max-width:1000px){.cols,.detail{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.status{margin-left:0;width:100%}}
@@ -117,9 +118,21 @@ async function loadOverview(refresh) {
   return overview;
 }
 
+// Phase 1 UAT sign-off: 30 days from the start day, counted in whole days on the Denver calendar.
+const UAT = { start: '2026-10-30', days: 30 };
+function uatCountdown(today) {
+  const day = d => Date.parse(d + 'T00:00:00Z') / 864e5;
+  const end = new Date((day(UAT.start) + UAT.days) * 864e5).toISOString().slice(0, 10);
+  const left = day(end) - day(today);
+  const cls = left < 0 ? 'over' : left <= 7 ? 'soon' : '';
+  const label = left < 0 ? `${-left} day${left === -1 ? '' : 's'} overdue` : left === 0 ? 'Due today' : `${left} day${left === 1 ? '' : 's'} left`;
+  const due = new Date(end + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return `<section class="panel countdown ${cls}" aria-label="Phase 1 UAT sign-off countdown"><span class="days">${esc(label)}</span><span><strong>Phase 1 UAT sign-off</strong><br><span class="muted small">Due ${esc(due)} (30 days from ${esc(UAT.start)})</span></span></section>`;
+}
+
 function renderToday(data) {
   const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
-  $main.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h1>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}</h1></div></div>
+  $main.innerHTML = `${banners(data)}${uatCountdown(data.today)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h1>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}</h1></div></div>
   <div class="cols">
     <section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2>${attention.length ? `<ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale', showClient: i.type !== 'stale' })).join('')}</ul>` : '<p class="empty">All clear.</p>'}</section>
     <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming)}</section>
@@ -149,7 +162,7 @@ function actionName(i) {
   if (i.action === 'done') return i.kind === 'question' ? 'Marked answered' : i.kind === 'problem' ? 'Marked fixed' : 'Marked done';
   return { answered: 'Answered', reopened: 'Reopened', tier: 'Priority changed', phase: 'Phase changed', edited: 'Edited', deleted: 'Deleted' }[i.action] || i.action;
 }
-const BACKLOG_STATUS = { off: 'Not connected on this deployment.', not_ready: 'Waiting for this backlog to be redeployed with its change log.', error: 'Could not be read just now. Try Refresh.' };
+const BACKLOG_STATUS = { off: 'Not connected on this deployment.', not_ready: 'No change log yet. Redeploy this backlog, then open it once.', error: 'Could not be read just now. Try Refresh.' };
 let inbox = null;
 
 function inboxRow(i, n) {

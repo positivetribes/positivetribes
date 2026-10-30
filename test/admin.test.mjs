@@ -211,7 +211,7 @@ test('Today shows what needs attention, what is coming and what just happened', 
   const reasons = view.attention.map(a => `${a.reason}: ${a.title}`).sort();
   assert.deepEqual(reasons, [
     'New lead: Pat Doe',
-    'No contact in 21+ days · No next step: SAFE',
+    'No activity in 21+ days · No next step: SAFE',
     'Overdue Salesforce task: Call Duke',
     'Overdue step: Send revised scope',
     'Past target close date: Opp 006B'
@@ -239,6 +239,17 @@ test('match rules come from Contacts, the website and saved extras', () => {
   assert.deepEqual(rules[0].emails, ['upendingparkinsons@gmail.com', 'tammie@upendingparkinsons.org']);
   assert.deepEqual(rules[0].domains.sort(), ['uep.org', 'upendingparkinsons.org']);
   assert.deepEqual(rules[0].keywords, ['climb scheduler']);
+});
+
+test('a contact linked from another account adds their email but not their domain', () => {
+  const rules = buildMatch(
+    [{ Id: UEP, Name: 'UEP' }],
+    [{ AccountId: UEP, IsDirect: false, Name: 'Glenn Hadley', Email: 'glenn@soberafe.com' }],
+    []
+  );
+  assert.deepEqual(rules[0].people, ['Glenn Hadley']);
+  assert.deepEqual(rules[0].emails, ['glenn@soberafe.com']);
+  assert.deepEqual(rules[0].domains, []);
 });
 
 // ---- Backlog inbox ----
