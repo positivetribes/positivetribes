@@ -240,6 +240,35 @@ const stepView = s => ({ id: s.id, accountId: s.account_id, title: s.title, dueD
 // Things that count as being in touch: anything that already happened except a target close date.
 const isTouch = item => !['close', 'stage'].includes(item.type) && !(item.type === 'step' && item.open) && !(item.type === 'task' && item.open);
 
+// "Now": Eric's ranking rules, highest first. A rule returns a score and a one-line why, or null when it does not apply.
+// 1 hard deadlines (overdue or due today), 2 a client waiting on him, 3 revenue and signatures, 4 unblocking next steps, 5 new leads.
+const daysBetween = (from, to) => Math.round((Date.parse(to + 'T12:00:00Z') - Date.parse(from + 'T12:00:00Z')) / 86400e3);
+function nowRule(i, today, now) {
+  // A meeting that ended (started over an hour ago) no longer needs anything right now.
+  if (i.type === 'meeting' && i.at?.length > 10 && Date.parse(i.at) < now - 3600e3) return null;
+  const late = daysBetween(i.day, today);
+  if (i.reason === 'Overdue step' || i.reason === 'Overdue Salesforce task') return { score: 100 + Math.min(late, 30), why: `Hard deadline missed ${late} day${late === 1 ? '' : 's'} ago` };
+  if (i.type === 'meeting' && i.day === today) return { score: 95, why: 'Fixed time today' };
+  if ((i.type === 'step' || i.type === 'task') && i.open && i.day === today) return { score: 90, why: 'Due today' };
+  if (i.reason === 'Open support case') return { score: 80, why: 'A client is waiting on you' };
+  if (i.reason === 'Past target close date') return { score: 70, why: 'Revenue: past its target close date' };
+  if (i.type === 'close' && i.day >= today && daysBetween(today, i.day) <= 7) return { score: 60, why: `Revenue: closes ${daysBetween(today, i.day) === 0 ? 'today' : 'in ' + daysBetween(today, i.day) + ' days'}` };
+  if (i.type === 'stale' && i.reason.includes('No next step')) return { score: 45, why: 'An active client with nothing queued, so it blocks progress' };
+  if (i.type === 'lead') return { score: 35, why: 'New lead waiting for a first reply' };
+  if (i.type === 'stale') return { score: 30, why: 'An active client you have not touched lately' };
+  return null;
+}
+export function rankNow(attention, upcoming, today, now = Date.now(), limit = 5) {
+  const seen = new Set();
+  return [...attention, ...upcoming]
+    .map(i => ({ item: i, rule: nowRule(i, today, now) }))
+    .filter(r => r.rule)
+    .sort((a, b) => b.rule.score - a.rule.score || (a.item.day || '').localeCompare(b.item.day || '') || (a.item.title || '').localeCompare(b.item.title || ''))
+    .filter(({ item }) => { const key = item.id ? item.type + item.id : item.type + item.title + item.accountId; return seen.has(key) ? false : (seen.add(key), true); })
+    .slice(0, limit)
+    .map(({ item, rule }) => ({ ...item, why: rule.why, score: rule.score }));
+}
+
 export function buildOverview(env, sf, local, today) {
   const meta = new Map(local.meta.map(m => [m.account_id, metaRow(m)]));
   const accounts = sf.accounts.filter(a => !meta.get(a.Id)?.hidden);
@@ -284,7 +313,7 @@ export function buildOverview(env, sf, local, today) {
   // Today's items sit under "Coming up" with the rest of the next two weeks; "Recent" ends yesterday.
   const upcoming = items.filter(i => i.day >= today && i.day <= soon && i.open !== false && !['note', 'stage', 'email'].includes(i.type)).sort((x, y) => x.at.localeCompare(y.at));
   const recent = items.filter(i => isTouch(i) && i.day >= since && (i.day < today || ['note', 'email'].includes(i.type))).sort((x, y) => y.at.localeCompare(x.at));
-  return { today, clients, attention, upcoming, recent };
+  return { today, clients, attention, upcoming, recent, now: rankNow(attention, upcoming, today) };
 }
 
 export function buildClient(env, sf, local, today) {

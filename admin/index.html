@@ -38,6 +38,7 @@ details summary{cursor:pointer;font-weight:600}details[open] summary{margin-bott
 .head{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:22px}.head .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .badge{display:inline-block;min-width:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--rust);color:var(--bg);font-size:11px;font-weight:700;line-height:18px;text-align:center}.badge:empty{display:none}
 .countdown{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px}.countdown .days{font-family:'Fraunces',Georgia,serif;font-size:40px;line-height:1;color:var(--ink)}.countdown.soon .days{color:var(--warn)}.countdown.over .days{color:var(--rust)}
+.nowcard{border-left:6px solid var(--rust);margin-bottom:22px}.nowcard .label{font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--rust);margin:0 0 6px}.nowcard h2{font-size:26px;margin-bottom:6px;overflow-wrap:anywhere}.nowcard h2 a{text-decoration:none}.nowcard h2 a:hover{text-decoration:underline}.nowcard .why{margin:0 0 12px}.nowcard .later{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
 .said{margin:6px 0 0;font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere;border-left:3px solid var(--line);padding-left:10px}
 @media(max-width:1000px){.cols,.detail{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.status{margin-left:0;width:100%}}
@@ -130,14 +131,37 @@ function uatCountdown(today) {
   return `<section class="panel countdown ${cls}" aria-label="Phase 1 UAT sign-off countdown"><span class="days">${esc(label)}</span><span><strong>Phase 1 UAT sign-off</strong><br><span class="muted small">Due ${esc(due)} (30 days from ${esc(UAT.start)})</span></span></section>`;
 }
 
+// "Not now" only hides an item for the rest of today, in this browser.
+const skipKey = () => 'now-skipped-' + (overview?.today || '');
+const skipped = () => { try { return JSON.parse(localStorage.getItem(skipKey()) || '[]'); } catch { return []; } };
+const nowId = i => [i.type, i.id || i.title, i.accountId || ''].join('|');
+function nowCard(data) {
+  const skip = skipped(), list = (data.now || []).filter(i => !skip.includes(nowId(i)));
+  if (!list.length) return `<section class="panel nowcard"><p class="label">Now</p><h2>Nothing needs you right now</h2><p class="muted why">${skip.length ? 'You have skipped everything for today. <button type="button" class="link" id="now-reset">Bring them back</button>' : 'No deadlines, waiting clients or revenue items. Pick something from Coming up.'}</p></section>`;
+  const [top, ...rest] = list, url = top.type === 'stale' ? '#/client/' + esc(top.accountId) : safeUrl(top.url);
+  const title = url ? `<a href="${url}"${top.type === 'stale' ? '' : ' target="_blank" rel="noopener"'}>${esc(top.title)}</a>` : esc(top.title);
+  const client = top.client && top.type !== 'stale' ? `<a class="client-link" href="#/client/${esc(top.accountId)}">${esc(top.client)}</a> · ` : '';
+  return `<section class="panel nowcard" aria-label="Now"><p class="label">Now</p><h2>${title}</h2>
+    <p class="why">${client}<strong>${esc(top.why)}</strong>${top.detail ? ' · <span class="muted">' + esc(top.detail) + '</span>' : ''}</p>
+    <button type="button" id="now-skip" data-id="${esc(nowId(top))}">Not now</button>
+    ${rest.length ? `<p class="meta later">Then: ${rest.slice(0, 3).map(i => esc(i.title)).join(' · ')}</p>` : ''}</section>`;
+}
+function wireNow() {
+  const save = ids => { try { localStorage.setItem(skipKey(), JSON.stringify(ids)); } catch {} renderToday(overview); };
+  document.getElementById('now-skip')?.addEventListener('click', e => save([...skipped(), e.currentTarget.dataset.id]));
+  document.getElementById('now-reset')?.addEventListener('click', () => save([]));
+}
+
 function renderToday(data) {
   const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
-  $main.innerHTML = `${banners(data)}${uatCountdown(data.today)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h1>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}</h1></div></div>
+  $main.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h1>Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}</h1></div></div>
+  ${nowCard(data)}${uatCountdown(data.today)}
   <div class="cols">
     <section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2>${attention.length ? `<ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale', showClient: i.type !== 'stale' })).join('')}</ul>` : '<p class="empty">All clear.</p>'}</section>
     <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming)}</section>
     <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${byDay(data.recent)}</section>
   </div>`;
+  wireNow();
 }
 
 function renderClients(data) {

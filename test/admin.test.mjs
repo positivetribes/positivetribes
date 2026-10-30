@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { database } from './helpers.mjs';
-import { requireAccess, handleAdmin, isAdminPath, buildOverview, buildMatch, buildClient, buildInbox, BACKLOGS } from '../admin.mjs';
+import { requireAccess, handleAdmin, isAdminPath, buildOverview, rankNow, buildMatch, buildClient, buildInbox, BACKLOGS } from '../admin.mjs';
 import uepBacklog from '../uep-backlog/src/index.js';
 
 const TEAM = 'positivetribes.cloudflareaccess.com';
@@ -219,6 +219,20 @@ test('Today shows what needs attention, what is coming and what just happened', 
   assert.deepEqual(view.upcoming.map(i => i.title), ['Prep demo', 'UEP review', 'Opp 006A']);
   assert.deepEqual(view.recent.map(i => i.title), ['Molly likes it', 'Proposal for signing']);
   assert.ok(view.attention.every(a => a.accountId !== '001Pr0000111WhXIAU'));
+});
+
+test('Now ranks deadlines, then waiting clients, then revenue, then blockers and leads', () => {
+  const view = buildOverview(SF_ENV, sf, local, today);
+  assert.deepEqual(view.now.map(i => `${i.title}: ${i.why}`), [
+    'Call Duke: Hard deadline missed 9 days ago',
+    'Send revised scope: Hard deadline missed 2 days ago',
+    'Opp 006B: Revenue: past its target close date',
+    'Opp 006A: Revenue: closes in 7 days',
+    'SAFE: An active client with nothing queued, so it blocks progress'
+  ]);
+  const meeting = { type: 'meeting', title: 'Standup', at: '2026-10-29T15:00:00Z', day: today };
+  assert.equal(rankNow([], [meeting], today, Date.parse('2026-10-29T15:30:00Z'))[0].why, 'Fixed time today');
+  assert.deepEqual(rankNow([], [meeting], today, Date.parse('2026-10-29T17:00:00Z')), [], 'a meeting that is over drops out');
 });
 
 test('a client page splits the timeline at now', () => {
