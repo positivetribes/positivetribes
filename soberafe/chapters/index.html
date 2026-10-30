@@ -331,19 +331,19 @@ var MODULES = [
     ]},
   {id:'m4', title:'Planning an event', short:'Planning',
     intro:'Every host event follows the same path: plan it, submit it, get the venue\'s signature, get approved, then promote it.',
-    points:['Pick a venue that will sign SAFE\'s host site waiver and agree to a substance-free section.','Set capacity and the number of peers on site using SAFE\'s staffing guidance [SAFE to confirm ratio].','Tickets, donations and other money go through SAFE\'s approved process, never a personal account.','Submit the event at least [3 weeks, SAFE to confirm] ahead. It is published once it is approved and the venue has signed.'],
+    points:['Pick a venue that will sign SAFE\'s host site waiver and agree to a substance-free section.','Set capacity and the number of peers on site using SAFE\'s staffing guidance [SAFE to confirm ratio].','Tickets are a link to your team\'s own website. Donations go to SAFE\'s Venmo, Colorado Gives account or credit card account, never a personal account.','Submit the event at least [3 weeks, SAFE to confirm] ahead. It is published once it is approved and the venue has signed.'],
     quiz:[
       {q:'When does a host\'s event go public?', o:['As soon as it is submitted','After it is approved and the host site has signed the waiver','When the venue posts it'], a:1},
-      {q:'Where should ticket money go?', o:['Through SAFE\'s approved process','The host\'s Venmo','Cash at the door, kept by the host'], a:0},
+      {q:'Where should donations for SAFE go?', o:['SAFE\'s Venmo, Colorado Gives account or credit card account','The host\'s personal Venmo','Cash at the door, kept by the host'], a:0},
       {q:'How many peers should be on site?', o:['One, always','As many as show up','Follow SAFE\'s staffing guidance for expected attendance'], a:2}
     ]},
   {id:'m5', title:'Brand, communications and consent', short:'Brand and consent',
     intro:'Recovery is personal. How we talk about events, and who appears in photos, matters.',
-    points:['Use the Sober AF name and logo only for approved events, following SAFE\'s brand guide [SAFE to supply].','Ask before photographing anyone, and never post faces or names without consent.','Refer press and partnership requests to SAFE.','Promote approved events where your community will see them, and link to the official event page.'],
+    points:['Use the Sober AF name and logo only for approved events, on fliers and banners. SAFE can mail you swag with the logo.','Ask before photographing anyone, and never post faces or names without consent.','Refer press and partnership requests to SAFE.','Promote approved events where your community will see them, and link to the official event page.'],
     quiz:[
       {q:'Can you post a photo of attendees?', o:['Yes, it is a public venue','Only with each person\'s consent','Only if faces are blurry'], a:1},
       {q:'A reporter asks you for a quote about SAFE. What do you do?', o:['Refer them to SAFE','Give a quote as a SAFE spokesperson','Ignore them'], a:0},
-      {q:'When can you use the Sober AF name and logo?', o:['For any sober event you run','Never','For approved events, following SAFE\'s brand guide'], a:2}
+      {q:'When can you use the Sober AF name and logo?', o:['For any sober event you run','Never','For approved events, such as on fliers and banners'], a:2}
     ]}
 ];
 
@@ -469,6 +469,7 @@ function eventRow(e, opts){
     '<div class="ev"><h3>' + h(e.title) + '</h3>' +
     '<p>' + h(e.venue) + ', ' + h(e.city) + ' · ' + h(e.peers) + ' peers · ' + h(e.capacity) + ' seats</p>' +
     '<p>Hosted by ' + h(hostName(e)) + ' · ' + h(chapterName(e.chapterId)) + ' chapter</p>' +
+    (e.ticketUrl ? '<p><a class="tlink" href="' + h(e.ticketUrl) + '" target="_blank" rel="noopener">Get tickets</a></p>' : '') +
     (opts.status ? '<div class="badges">' + statusBadge(e) + waiverBadge(e) + '</div>' : '') +
     (e.status === 'changes' && e.note ? '<p class="note"><b>Reviewer note:</b> ' + h(e.note) + '</p>' : '') +
     '</div><div class="ev-actions">' + (opts.actions ? opts.actions(e) : '') + '</div></li>';
@@ -497,8 +498,8 @@ function agreementTerms(){
     '<h3>1. Code of conduct</h3><p>I will treat every guest, peer, venue partner and staff member with respect, and I will not attend or host a SAFE event under the influence of alcohol or drugs.</p>' +
     '<h3>2. Substance-free events</h3><p>Events I host under the Sober AF name will include a substance-free section, and I will work with each venue to keep it that way.</p>' +
     '<h3>3. Safety and emergencies</h3><p>I will follow SAFE\'s safety and crisis-response training, call emergency services when needed, and report incidents to my chapter lead within 24 hours.</p>' +
-    '<h3>4. Approval and the Sober AF name</h3><p>I will only promote events SAFE or my chapter lead has approved, and I will use the Sober AF name and logo as the brand guide describes.</p>' +
-    '<h3>5. Money</h3><p>Tickets, donations and sponsorships go through SAFE\'s approved process. I will not collect money for SAFE events personally.</p>' +
+    '<h3>4. Approval and the Sober AF name</h3><p>I will only promote events SAFE or my chapter lead has approved, and I will use the Sober AF name and logo only for those events, such as on fliers and banners.</p>' +
+    '<h3>5. Money</h3><p>Tickets are a link to the team\'s own website. Donations go to SAFE\'s Venmo, Colorado Gives account or credit card account. I will not collect money for SAFE events personally.</p>' +
     '<h3>6. Privacy and photos</h3><p>I will keep guests\' recovery status confidential and will not photograph or post anyone without their consent.</p>' +
     '<h3>7. Volunteer status and release</h3><p>I host as a volunteer, not an employee. I understand the risks of organizing public events and release SAFE from claims arising from my own conduct [release wording, SAFE counsel to supply].</p>' +
     '<h3>8. Background check and renewal</h3><p>[Background check requirement, SAFE to confirm.] Certification renews every [12 months, SAFE to confirm] with a short refresher.</p>' +
@@ -745,6 +746,7 @@ views.host = function(){
       '<div class="row2"><div class="field"><label for="e-date">Date</label><input id="e-date" name="date" type="date" required min="' + minDate + '"></div>' +
       '<div class="field"><label for="e-time">Start time</label><input id="e-time" name="time" type="time" required value="19:00"></div></div>' +
       '<div class="field"><label for="e-venue">Venue</label><input id="e-venue" name="venue" type="text" required></div>' +
+      '<div class="field"><label for="e-tix">Ticket link (optional)</label><input id="e-tix" name="ticketUrl" type="url" placeholder="https://"><p class="muted small">Ticket sales happen on your team\'s website, not through SAFE or a personal account.</p></div>' +
       '<div class="row2"><div class="field"><label for="e-cap">Seats in the sober section</label><input id="e-cap" name="capacity" type="number" min="1" max="5000" required value="40"></div>' +
       '<div class="field"><label for="e-peers">Peers on site</label><input id="e-peers" name="peers" type="number" min="1" max="100" required value="3"></div></div>' +
       '<h3 style="font-size:26px;margin:12px 0 6px;text-transform:uppercase">Host site contact</h3><p class="muted small" style="margin-bottom:16px">The person who can sign for the venue. We send them the host site waiver.</p>' +
@@ -754,6 +756,8 @@ views.host = function(){
     '</form></div></div><aside class="panel stack"><h2>Before you submit</h2>' +
       '<p>Walk the space with the venue and confirm exits, first aid and an on-site staff contact.</p>' +
       '<p>Plan peers using SAFE\'s staffing guidance [SAFE to confirm ratio].</p>' +
+      '<p><b>Money:</b> tickets link to your team\'s website. Donations go to SAFE\'s Venmo, Colorado Gives account or credit card account.</p>' +
+      '<p><b>Brand:</b> use the SAFE logo on fliers and banners for approved events. <button type="button" class="tlink small" data-act="swag">Request the logo and swag</button></p>' +
       '<p>Your chapter lead' + (c && c.leadId && c.leadId !== p.id ? ' (' + h(person(c.leadId).name) + ')' : ' or SAFE') + ' reviews it. It can\'t be approved until the venue signs.</p></aside></div></section>';
 };
 
@@ -959,6 +963,7 @@ var acts = {
   reset: function(){ if (!confirm('Reset the demo to its sample data? Anything you added is cleared.')) return; S = seed(); save(); toast('Demo reset.'); go('#/'); },
   viewer: function(d){ setViewer(d.role, d.to); },
   back: function(){ history.back(); },
+  swag: function(){ toast('Request sent to SAFE. In the demo nothing is mailed.'); },
   jump: function(d){ var el = document.getElementById(d.id); if (el) { el.scrollIntoView({behavior:'smooth'}); var hd = el.querySelector('h2'); if (hd) { hd.setAttribute('tabindex', '-1'); hd.focus({preventScroll:true}); } } },
   retry: function(){ quizResult = null; render(); var f = document.querySelector('form[data-form="quiz"] input'); if (f) f.focus(); },
   shadow: function(d){ var p = me(); p.shadowEventId = d.id; commit('Shadow event chosen. Your lead signs off after it.'); },
@@ -1024,8 +1029,10 @@ var forms = {
     if (!f.checkValidity()) return fail(f, 'Please complete every field. Contact email must be valid.');
     var start = val(fd, 'date') + 'T' + val(fd, 'time');
     if (new Date(start).getTime() <= Date.now()) { f.querySelector('#e-date').focus(); return fail(f, 'Pick a date in the future.'); }
+    var tix = val(fd, 'ticketUrl');
+    if (tix && !/^https?:\/\//i.test(tix)) { f.querySelector('#e-tix').focus(); return fail(f, 'The ticket link must start with http:// or https://.'); }
     var p = me();
-    var e = {id:nextId('e-'), title:val(fd, 'title'), type:val(fd, 'type'), start:start, venue:val(fd, 'venue'), city:val(fd, 'city'), chapterId:p.chapterId, capacity:Number(fd.get('capacity')), peers:Number(fd.get('peers')), hostId:p.id, status:'pending', createdAt:new Date().toISOString(),
+    var e = {id:nextId('e-'), title:val(fd, 'title'), ticketUrl:tix, type:val(fd, 'type'), start:start, venue:val(fd, 'venue'), city:val(fd, 'city'), chapterId:p.chapterId, capacity:Number(fd.get('capacity')), peers:Number(fd.get('peers')), hostId:p.id, status:'pending', createdAt:new Date().toISOString(),
       site:{contactName:val(fd, 'contactName'), email:val(fd, 'email'), waiver:'sent'}};
     S.events.push(e);
     commit('Submitted for review. A waiver link is on its way to ' + e.site.contactName + '.');
