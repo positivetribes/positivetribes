@@ -173,7 +173,7 @@ async function salesforceOverview(env, refresh) {
     records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
     records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId != null AND (ActivityDate = LAST_N_DAYS:60 OR ActivityDate = NEXT_N_DAYS:30) ORDER BY ActivityDate LIMIT 300'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, AccountId FROM Case WHERE IsClosed = false ORDER BY CreatedDate DESC LIMIT 100'),
-    records(auth, 'SELECT Id, Name, Company, Status, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND CreatedDate = LAST_N_DAYS:30 ORDER BY CreatedDate DESC LIMIT 50')
+    records(auth, "SELECT Id, Name, Company, Status, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND Status = 'New' AND CreatedDate = LAST_N_DAYS:30 ORDER BY CreatedDate DESC LIMIT 50")
   ]);
   overviewCache = { at: Date.now(), data: { accounts, tasks, events, cases, leads } };
   return overviewCache.data;
