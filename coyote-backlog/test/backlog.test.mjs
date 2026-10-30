@@ -260,3 +260,40 @@ test('the committed backlog page has no analytics tag baked in; deploy adds it f
   assert.match(html, /<\/head>/);
   assert.match(html, /typeof gtag === 'function'/);
 });
+
+test('every add, edit and delete is logged with who made it; seeds and moves are not', async () => {
+  const { sqlite, db } = database();
+  try {
+    const as = (name, method, path, payload) => worker.fetch(new Request('https://example.test/api' + path, {
+      method,
+      headers: { 'x-backlog-passcode': PASSCODE, 'content-type': 'application/json', 'x-backlog-name': encodeURIComponent(name) },
+      ...(payload ? { body: JSON.stringify(payload) } : {})
+    }), { DB: db, BACKLOG_PASSCODE: PASSCODE, ASSETS: {} });
+    const events = () => sqlite.prepare('SELECT item_id, action, item_title, item_kind, detail, actor FROM backlog_events ORDER BY id').all().map(e => ({ ...e }));
+    await items(db);
+    assert.equal(events().length, 0);
+    assert.equal((await as('', 'POST', '/items', { title: 'Who signs?', details: 'Needed for waivers', tier: 'must', added_by: 'Molly' })).status, 201);
+    const id = (await items(db)).find(i => i.title === 'Who signs?').id;
+    await as('Molly', 'POST', `/items/${id}/move`, { direction: 'up' });
+    await as('José', 'PATCH', `/items/${id}`, { done: true });
+    await as('Molly', 'PATCH', `/items/${id}`, { done: false });
+    await as('Molly', 'PATCH', `/items/${id}`, { tier: 'nice' });
+    await as('Molly', 'PATCH', `/items/${id}`, { phase: 'later' });
+    await as('Molly', 'PATCH', `/items/${id}`, { title: 'Who signs the waiver?' });
+    await as('Molly', 'PATCH', `/items/${id}`, { title: 'Who signs the waiver?' });
+    await as('Eric', 'DELETE', `/items/${id}`);
+    const event = (action, detail, actor, title = 'Who signs?') => ({ item_id: id, action, item_title: title, item_kind: '', detail, actor });
+    assert.deepEqual(events(), [
+      event('added', 'Needed for waivers', 'Molly'),
+      event('done', '', 'José'),
+      event('reopened', '', 'Molly'),
+      event('tier', 'Must have → Nice to have', 'Molly'),
+      event('phase', 'To review → Later', 'Molly'),
+      event('edited', 'Changed title', 'Molly', 'Who signs the waiver?'),
+      event('deleted', '', 'Eric', 'Who signs the waiver?')
+    ]);
+    // A name too long for the form is refused before anything is saved.
+    assert.equal((await as('x'.repeat(41), 'PATCH', '/items/' + (await items(db))[0].id, { done: true })).status, 400);
+    assert.equal(events().length, 7);
+  } finally { sqlite.close(); }
+});

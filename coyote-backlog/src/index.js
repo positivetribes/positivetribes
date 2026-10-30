@@ -87,6 +87,16 @@ async function ensureSchema(db) {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
     db.prepare('CREATE INDEX IF NOT EXISTS backlog_items_tier ON backlog_items(tier, position)'),
+    db.prepare(`CREATE TABLE IF NOT EXISTS backlog_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      item_title TEXT NOT NULL,
+      item_kind TEXT NOT NULL DEFAULT '',
+      detail TEXT NOT NULL DEFAULT '',
+      actor TEXT NOT NULL DEFAULT '',
+      at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`),
     db.prepare('CREATE TABLE IF NOT EXISTS app_seeds (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)')
   ]);
   // Databases created before phases existed get the column added once. Rows keep their data.
@@ -136,6 +146,35 @@ const nextPosition = (db, tier) => db.prepare(
   'SELECT COALESCE(MAX(position), 0) + 1 AS next FROM backlog_items WHERE tier = ?'
 ).bind(tier).first().then(row => row.next);
 
+// Every add, edit and delete is logged with the name the person typed, so the Positive Tribes command center
+// can show what changed and who changed it. Reordering is housekeeping, so it is not logged.
+const TIER_NAMES = { must: 'Must have', nice: 'Nice to have', idea: 'Idea for now' };
+const PHASE_NAMES = { review: 'To review', prototype: 'Prototype', full: 'Full build', later: 'Later' };
+const FIELD_NAMES = { title: 'title', details: 'details', owner: 'who answers', area: 'area' };
+const clip = (value, max = 300) => value.length > max ? value.slice(0, max - 1) + '…' : value;
+
+// The page sends the saved name URI-encoded, since headers cannot carry every character a name can.
+function actorOf(request) {
+  let name = request.headers.get('x-backlog-name') || '';
+  try { name = decodeURIComponent(name); } catch { name = ''; }
+  return text(name, 40, { label: 'Name' });
+}
+
+// One event per edit, naming the change that matters most.
+function changeOf(item, next) {
+  if (next.answer && next.answer !== item.answer) return ['answered', clip(next.answer)];
+  if (next.done !== item.done) return [next.done ? 'done' : 'reopened', ''];
+  if (next.tier !== item.tier) return ['tier', `${TIER_NAMES[item.tier]} → ${TIER_NAMES[next.tier]}`];
+  if (next.phase !== item.phase) return ['phase', `${PHASE_NAMES[item.phase] || item.phase} → ${PHASE_NAMES[next.phase]}`];
+  const edited = Object.keys(FIELD_NAMES).filter(key => next[key] !== undefined && next[key] !== item[key]);
+  return edited.length ? ['edited', 'Changed ' + edited.map(key => FIELD_NAMES[key]).join(', ')] : null;
+}
+
+// A null id means the item was just inserted in the same batch.
+const logEvent = (db, itemId, action, item, detail, actor) => db.prepare(
+  'INSERT INTO backlog_events (item_id, action, item_title, item_kind, detail, actor) VALUES (COALESCE(?, last_insert_rowid()), ?, ?, ?, ?, ?)'
+).bind(itemId, action, item.title, item.kind || '', detail, actor);
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -161,10 +200,13 @@ export default {
         const tier = b.tier === undefined ? 'idea' : tierOf(b.tier);
         const by = text(b.added_by, 40, { label: 'Name' });
         const phase = b.phase === undefined ? 'review' : phaseOf(b.phase);
-        await db.prepare(
-          `INSERT INTO backlog_items (title, details, tier, phase, position, added_by)
-           VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM backlog_items WHERE tier = ?), ?)`
-        ).bind(title, details, tier, phase, tier, by).run();
+        await db.batch([
+          db.prepare(
+            `INSERT INTO backlog_items (title, details, tier, phase, position, added_by)
+             VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM backlog_items WHERE tier = ?), ?)`
+          ).bind(title, details, tier, phase, tier, by),
+          logEvent(db, null, 'added', { title }, clip(details), by || actorOf(request))
+        ]);
         return json({ ok: true, items: await listItems(db) }, 201);
       }
 
@@ -200,15 +242,22 @@ export default {
         const phase = b.phase === undefined ? item.phase : phaseOf(b.phase);
         // A change of tier lands at the bottom of the new tier so it never jumps ahead of settled priorities.
         const position = tier === item.tier ? item.position : await nextPosition(db, tier);
-        await db.prepare(
-          `UPDATE backlog_items SET title = ?, details = ?, done = ?, tier = ?, phase = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-        ).bind(title, details, done, tier, phase, position, item.id).run();
+        const change = changeOf(item, { title, details, done, tier, phase });
+        await db.batch([
+          db.prepare(
+            `UPDATE backlog_items SET title = ?, details = ?, done = ?, tier = ?, phase = ?, position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+          ).bind(title, details, done, tier, phase, position, item.id),
+          ...change ? [logEvent(db, item.id, change[0], { title }, change[1], actorOf(request))] : []
+        ]);
         return json({ ok: true, items: await listItems(db) });
       }
 
       if (rawId && method === 'DELETE' && !action) {
         const item = await requireItem(db, rawId);
-        await db.prepare('DELETE FROM backlog_items WHERE id = ?').bind(item.id).run();
+        await db.batch([
+          db.prepare('DELETE FROM backlog_items WHERE id = ?').bind(item.id),
+          logEvent(db, item.id, 'deleted', item, '', actorOf(request))
+        ]);
         return json({ ok: true, items: await listItems(db) });
       }
 

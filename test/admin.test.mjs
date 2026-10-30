@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { database } from './helpers.mjs';
-import { requireAccess, handleAdmin, isAdminPath, buildOverview, buildMatch, buildClient } from '../admin.mjs';
+import { requireAccess, handleAdmin, isAdminPath, buildOverview, buildMatch, buildClient, buildInbox, BACKLOGS } from '../admin.mjs';
+import uepBacklog from '../uep-backlog/src/index.js';
 
 const TEAM = 'positivetribes.cloudflareaccess.com';
 const AUD = 'a'.repeat(64);
@@ -75,12 +76,12 @@ test('the local development bypass only works on localhost', async () => {
 // ---- API against a real SQLite database (Salesforce not connected) ----
 
 const ME = { email: 'eric@positivetribes.org' }, ROUTINE = { service: 'sync' };
-function call(db, method, path, data, { who = ME, origin = ORIGIN } = {}) {
+function call(db, method, path, data, { who = ME, origin = ORIGIN, env = {} } = {}) {
   const headers = {};
   if (origin) headers.Origin = origin;
   if (data !== undefined) headers['Content-Type'] = 'application/json';
   const request = new Request(ORIGIN + path, { method, headers, body: data === undefined ? undefined : JSON.stringify(data) });
-  return handleAdmin(request, { ADMIN_DB: db }, new URL(request.url), who).then(async r => ({ status: r.status, body: await r.json() }));
+  return handleAdmin(request, { ADMIN_DB: db, ...env }, new URL(request.url), who).then(async r => ({ status: r.status, body: await r.json() }));
 }
 
 test('steps and notes are saved, validated and protected', async () => {
@@ -238,4 +239,68 @@ test('match rules come from Contacts, the website and saved extras', () => {
   assert.deepEqual(rules[0].emails, ['upendingparkinsons@gmail.com', 'tammie@upendingparkinsons.org']);
   assert.deepEqual(rules[0].domains.sort(), ['uep.org', 'upendingparkinsons.org']);
   assert.deepEqual(rules[0].keywords, ['climb scheduler']);
+});
+
+// ---- Backlog inbox ----
+
+test('the inbox shows client changes, one row per item, and leaves out Eric and cleared events', () => {
+  const event = (id, item_id, action, actor, at, extra = {}) => ({ id, item_id, action, item_title: 'Item ' + item_id, item_kind: 'question', detail: '', actor, at, ...extra });
+  const results = [
+    { status: 'ok', events: [
+      event(1, 10, 'added', 'Molly', '2026-10-28 15:00:00'),
+      event(2, 10, 'answered', 'Molly', '2026-10-29 16:00:00', { detail: 'Yes, 84 accounts' }),
+      event(3, 11, 'added', 'Eric R', '2026-10-29 17:00:00'),
+      event(4, 12, 'deleted', 'molly', '2026-10-27 09:00:00'),
+      event(5, 13, 'done', 'Molly', '2026-10-29 18:00:00')
+    ] },
+    { status: 'off', events: [] },
+    { status: 'not_ready', events: [] }
+  ];
+  const inbox = buildInbox(BACKLOGS, results, [{ backlog: 'uep', event_id: 5 }, { backlog: 'coyote', event_id: 4 }], ['eric']);
+  assert.deepEqual(inbox.backlogs.map(b => [b.key, b.status, b.unread]), [['uep', 'ok', 2], ['coyote', 'off', 0], ['soberafe', 'not_ready', 0]]);
+  assert.deepEqual(inbox.items.map(i => [i.itemId, i.action, i.added, i.eventIds]), [[10, 'answered', true, [1, 2]], [12, 'deleted', false, [4]]]);
+  const [answered, deleted] = inbox.items;
+  assert.equal(answered.at, '2026-10-29T16:00:00Z');
+  assert.equal(answered.detail, 'Yes, 84 accounts');
+  assert.equal(answered.url, 'https://uep.positivetribes.org/#item-10');
+  assert.equal(answered.accountId, UEP);
+  // A deleted item has nothing to scroll to, so it links to the backlog itself.
+  assert.equal(deleted.url, 'https://uep.positivetribes.org/');
+});
+
+test('the inbox reads a real backlog, reports backlogs it cannot read, and clearing sticks', async () => {
+  const { db } = database();
+  const uep = database(), safe = database();
+  const env = { UEP_BACKLOG_DB: uep.db, SOBERAFE_BACKLOG_DB: safe.db };
+  const backlog = (name, method, path, payload) => uepBacklog.fetch(new Request('https://uep.test/api' + path, {
+    method,
+    headers: { 'x-backlog-passcode': 'p', 'content-type': 'application/json', 'x-backlog-name': name },
+    ...(payload ? { body: JSON.stringify(payload) } : {})
+  }), { DB: uep.db, BACKLOG_PASSCODE: 'p', ASSETS: {} });
+  await backlog('Molly', 'POST', '/items', { kind: 'change', title: 'Bigger buttons', tier: 'must', added_by: 'Molly' });
+  await backlog('Eric', 'POST', '/items', { kind: 'change', title: 'Eric note', tier: 'idea', added_by: 'Eric' });
+
+  let r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.backlogs.map(b => [b.key, b.status, b.unread]), [['uep', 'ok', 1], ['coyote', 'off', 0], ['soberafe', 'not_ready', 0]]);
+  assert.equal(r.body.items[0].title, 'Bigger buttons');
+  assert.equal(r.body.items[0].actor, 'Molly');
+  assert.equal((await call(db, 'GET', '/api/admin/overview', undefined, { env })).body.inboxCount, 1);
+
+  // Only Eric, from this site, can clear; bad input is refused.
+  const clear = { items: [{ backlog: 'uep', eventIds: r.body.items[0].eventIds }] };
+  assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env, who: ROUTINE })).status, 403);
+  assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env, origin: 'https://evil.example' })).status, 403);
+  assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', { items: [{ backlog: 'nope', eventIds: [1] }] }, { env })).status, 400);
+  assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', { items: [{ backlog: 'uep', eventIds: ['1'] }] }, { env })).status, 400);
+  assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env })).status, 200);
+  assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env })).status, 200);
+  r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
+  assert.deepEqual(r.body.items, []);
+
+  // A later change to the same item comes back as a new row.
+  const id = (await (await backlog('Molly', 'GET', '/items')).json()).items.find(i => i.title === 'Bigger buttons').id;
+  await backlog('Molly', 'PATCH', '/items/' + id, { done: true });
+  r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
+  assert.deepEqual(r.body.items.map(i => [i.action, i.added]), [['done', false]]);
 });

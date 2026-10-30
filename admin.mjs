@@ -138,6 +138,7 @@ function ensureSchema(db) {
       db.prepare("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, body TEXT NOT NULL, created_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"),
       db.prepare("CREATE TABLE IF NOT EXISTS next_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, title TEXT NOT NULL, due_date TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','dismissed')), source TEXT NOT NULL DEFAULT 'you' CHECK(source IN ('you','claude')), external_id TEXT UNIQUE, done_at TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"),
       db.prepare("CREATE TABLE IF NOT EXISTS activity (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('email','meeting','calendar')), occurred_at TEXT NOT NULL, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"),
+      db.prepare("CREATE TABLE IF NOT EXISTS backlog_cleared (backlog TEXT NOT NULL, event_id INTEGER NOT NULL, cleared_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), PRIMARY KEY (backlog, event_id))"),
       db.prepare("CREATE TABLE IF NOT EXISTS sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ran_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), added INTEGER NOT NULL, updated INTEGER NOT NULL, removed INTEGER NOT NULL, steps INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '')"),
       db.prepare('CREATE INDEX IF NOT EXISTS notes_account ON notes(account_id)'),
       db.prepare('CREATE INDEX IF NOT EXISTS steps_account ON next_steps(account_id)'),
@@ -328,6 +329,83 @@ export function buildMatch(accounts, contacts, meta) {
   });
 }
 
+// ---- Backlog inbox ----
+
+// Each client backlog is its own Worker with its own D1 database, bound here read-only by convention.
+// Every add, edit and delete there is logged in backlog_events with the name the person typed.
+export const BACKLOGS = [
+  { key: 'uep', name: "Up ENDing Parkinson's", url: 'https://uep.positivetribes.org/', binding: 'UEP_BACKLOG_DB', accountId: '001Pr00000yy8o9IAA' },
+  { key: 'coyote', name: 'Project Coyote', url: 'https://coyote.positivetribes.org/', binding: 'COYOTE_BACKLOG_DB', accountId: '001Pr00000yyAOXIA2' },
+  { key: 'soberafe', name: 'Sober AF', url: 'https://soberafe.positivetribes.org/', binding: 'SOBERAFE_BACKLOG_DB', accountId: '001Pr00000yyXUuIAM' }
+];
+const INBOX_DAYS = 60;
+// Eric's own edits are not news. Names are typed on the backlog page, so this matches the first word only.
+const ownNamesOf = env => (env.BACKLOG_OWN_NAMES || 'eric').toLowerCase().split(/[\s,]+/).filter(Boolean);
+const isOwn = (actor, own) => own.includes(String(actor || '').trim().split(/\s+/)[0].toLowerCase());
+
+// A backlog that is not bound, not yet redeployed with its change log, or failing never hides the others.
+async function backlogEvents(env, backlog, since) {
+  const db = env[backlog.binding];
+  if (!db) return { status: 'off', events: [] };
+  try {
+    const { results } = await db.prepare('SELECT id, item_id, action, item_title, item_kind, detail, actor, at FROM backlog_events WHERE at >= ? ORDER BY id').bind(since).all();
+    return { status: 'ok', events: results };
+  } catch (error) {
+    if (/no such table/i.test(error.message)) return { status: 'not_ready', events: [] };
+    console.error('admin_backlog_failed', backlog.key, error.message);
+    return { status: 'error', events: [] };
+  }
+}
+
+// One row per backlog item: its latest unread event, carrying every unread event id so clearing the row clears them all.
+export function buildInbox(backlogs, results, cleared, ownNames) {
+  const done = new Set(cleared.map(c => c.backlog + ':' + c.event_id));
+  const items = [];
+  const summary = backlogs.map((b, n) => {
+    const { status, events } = results[n];
+    const rows = new Map();
+    for (const e of events) {
+      if (done.has(b.key + ':' + e.id) || isOwn(e.actor, ownNames)) continue;
+      const earlier = rows.get(e.item_id);
+      rows.set(e.item_id, {
+        backlog: b.key, client: b.name, accountId: b.accountId, itemId: e.item_id,
+        action: e.action, kind: e.item_kind, title: e.item_title, detail: e.detail, actor: e.actor,
+        at: e.at.replace(' ', 'T') + (e.at.endsWith('Z') ? '' : 'Z'),
+        url: e.action === 'deleted' ? b.url : b.url + '#item-' + e.item_id,
+        eventIds: [...earlier?.eventIds || [], e.id],
+        // An item added and then changed before Eric looked still reads as new.
+        added: earlier?.added || e.action === 'added'
+      });
+    }
+    items.push(...rows.values());
+    return { key: b.key, name: b.name, url: b.url, accountId: b.accountId, status, unread: rows.size };
+  });
+  return { backlogs: summary, items: items.sort((x, y) => y.at.localeCompare(x.at)) };
+}
+
+async function loadInbox(env, db, today) {
+  const since = addDays(today, -INBOX_DAYS);
+  const [cleared, ...results] = await Promise.all([
+    db.prepare('SELECT backlog, event_id FROM backlog_cleared WHERE cleared_at >= ?').bind(since).all(),
+    ...BACKLOGS.map(b => backlogEvents(env, b, since))
+  ]);
+  return buildInbox(BACKLOGS, results, cleared.results, ownNamesOf(env));
+}
+
+function clearInput(input) {
+  const keys = BACKLOGS.map(b => b.key);
+  const rows = list(input.items, 200, row => {
+    if (!row || !keys.includes(row.backlog)) throw new InputError('Choose a backlog.');
+    return { backlog: row.backlog, eventIds: list(row.eventIds, 500, id => {
+      if (!Number.isSafeInteger(id) || id < 1) throw new InputError('Event ids must be whole numbers.');
+      return id;
+    }) };
+  });
+  const pairs = rows.flatMap(r => r.eventIds.map(id => [r.backlog, id]));
+  if (pairs.length > 1000) throw new InputError('Clear at most 1000 events at a time.');
+  return pairs;
+}
+
 // ---- Writes ----
 
 async function saveActivity(db, input) {
@@ -406,12 +484,13 @@ export async function handleAdmin(request, env, url, who) {
     const today = localDay(Date.now());
 
     if (route === 'GET /api/admin/overview') {
-      const [meta, steps, notes, activity, lastSync] = await Promise.all([
+      const [meta, steps, notes, activity, lastSync, inbox] = await Promise.all([
         db.prepare('SELECT * FROM client_meta').all(),
         db.prepare("SELECT * FROM next_steps WHERE status = 'open' OR done_at >= ?").bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM notes WHERE created_at >= ?').bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM activity WHERE occurred_at >= ? ORDER BY occurred_at').bind(addDays(today, -60)).all(),
-        db.prepare('SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1').first()
+        db.prepare('SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1').first(),
+        loadInbox(env, db, today)
       ]);
       let sf = { accounts: [], tasks: [], events: [], cases: [], leads: [] }, salesforceStatus = 'off';
       if (salesforceReady(env)) {
@@ -419,7 +498,14 @@ export async function handleAdmin(request, env, url, who) {
         catch (error) { console.error('admin_salesforce_failed', error.message); salesforceStatus = 'error'; }
       }
       const view = buildOverview(env, sf,{ meta: meta.results, steps: steps.results, notes: notes.results, activity: activity.results }, today);
-      return json({ ...view, salesforce: salesforceStatus, lastSync: lastSync || null, user: who.email });
+      return json({ ...view, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, user: who.email });
+    }
+
+    if (route === 'GET /api/admin/inbox') return json(await loadInbox(env, db, today));
+    if (route === 'POST /api/admin/inbox/clear') {
+      const pairs = clearInput(await body(request));
+      if (pairs.length) await db.batch(pairs.map(([backlog, id]) => db.prepare('INSERT OR IGNORE INTO backlog_cleared (backlog, event_id) VALUES (?, ?)').bind(backlog, id)));
+      return json({ ok: true, cleared: pairs.length });
     }
 
     const client = path.match(/^\/api\/admin\/clients\/([^/]+)(\/meta)?$/);

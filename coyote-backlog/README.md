@@ -21,6 +21,7 @@ Tables are created on the first authenticated request. The first request also ad
 - Changing an item's tier puts it at the bottom of the new tier. Up and down swap an item with its neighbor in the same tier.
 - Done items move to a collapsed list under their tier and leave the ordering.
 - Names are typed in by each person and are not verified. The passcode is the only access control, so share it only with people who should be able to edit.
+- Every add, edit and delete is logged in `backlog_events` with the person's saved name, which the page sends as the `x-backlog-name` header. Reordering is not logged. The Positive Tribes command center reads this log for its Inbox, and a link ending in `#item-<id>` opens the page at that item.
 
 ## Local development
 

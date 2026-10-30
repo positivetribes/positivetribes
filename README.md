@@ -81,6 +81,14 @@ A weekday Claude routine reads Gmail, Google Calendar and Fathom, then posts wha
 
 The routine signs in with the `command-center-sync` service token, sending the `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers. A service token can call only those two endpoints. The page warns when the last sync is more than 36 hours old.
 
+### Backlog inbox
+
+**Inbox** lists what clients changed in their shared backlogs: Up ENDing Parkinson's (`uep-backlog/`), Project Coyote (`coyote-backlog/`) and Sober AF (`soberafe-backlog/`). Each backlog logs every add, answer, done mark, priority or phase change, edit and delete with the name the person typed. The site reads those logs through the D1 bindings `UEP_BACKLOG_DB`, `COYOTE_BACKLOG_DB` and `SOBERAFE_BACKLOG_DB`, which `build.mjs` adds (previews read the backlogs' preview databases). It never writes to them. The backlogs and their client accounts are listed in `BACKLOGS` in `admin.mjs`.
+
+- Each item that changed appears once, showing its latest change, for 60 days. Changes made under your own name are left out. The Worker variable `BACKLOG_OWN_NAMES` (comma-separated first names) sets which names count as yours and defaults to `eric`.
+- **Clear** hides the row, and the clear is saved in `ADMIN_DB`. A later change to the same item brings it back. **Add next step** adds a next step to that client and clears the row.
+- A backlog that has not been redeployed with its change log shows as waiting, and other backlogs still load. Deploy the backlog Workers before the site.
+
 ### Local development and tests
 
 Run `node --test test/*.test.mjs`. The tests check the Access token, run the real SQL against SQLite, and cover the Today rules. To try the page locally without Access, run `node build.mjs`, then `npx wrangler dev --local --var ADMIN_DEV:1` and open `http://localhost:8787/admin/`. The bypass works only on localhost. Never set `ADMIN_DEV` in Cloudflare. Without Salesforce secrets the page lists no clients.

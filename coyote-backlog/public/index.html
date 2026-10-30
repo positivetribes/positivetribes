@@ -67,6 +67,7 @@ section.tier{display:flex;flex-direction:column;gap:10px}
 section.tier h2{font-size:21px;display:flex;align-items:center;gap:10px}
 .count{font-size:15px;color:var(--muted);font-weight:400}
 .item{display:flex;flex-direction:column;gap:8px}
+.item.flash{outline:3px solid var(--accent);outline-offset:3px}
 .item h3{font-size:19px;font-weight:700}
 .item p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .meta{font-size:14px;color:var(--muted)}
@@ -170,7 +171,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     try {
       response = await fetch('/api' + path, {
         ...options,
-        headers: { 'content-type': 'application/json', 'x-backlog-passcode': passcode }
+        headers: { 'content-type': 'application/json', 'x-backlog-passcode': passcode, 'x-backlog-name': encodeURIComponent(store.get('coyote-backlog-name')) }
       });
     } catch { throw new Error('Could not reach the server. Check your connection and try again.'); }
     const data = await response.json().catch(() => ({}));
@@ -199,6 +200,22 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     const data = await api('/items');
     items = data.items;
     render();
+    reveal();
+  }
+
+  // Links from the Positive Tribes command center end in #item-<id>: show that item's list and scroll to it.
+  function reveal() {
+    const id = Number((location.hash.match(/^#item-(\d+)$/) || [])[1]);
+    const item = id && items.find(i => i.id === id);
+    if (!item) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    filter = 'all'; editing = null; render();
+    const card = document.getElementById('item-' + id);
+    if (!card) return;
+    const fold = card.closest('details');
+    if (fold) fold.open = true;
+    card.classList.add('flash');
+    card.scrollIntoView({ block: 'center' });
   }
 
   async function act(path, options) {
@@ -218,7 +235,7 @@ details.done-list>summary{cursor:pointer;font-weight:700;padding:6px 0}
     const open = group.filter(i => !i.done);
     const position = open.indexOf(item);
     const by = item.added_by ? 'Suggested by ' + item.added_by : 'Suggested';
-    return h('article', { class: 'card item' + (item.done ? ' is-done' : '') },
+    return h('article', { id: 'item-' + item.id, class: 'card item' + (item.done ? ' is-done' : '') },
       h('div', { class: 'tools' },
         h('span', { class: 'pill ' + (item.done ? 'done' : item.tier) }, item.done ? 'Done' : tierName),
         h('span', { class: 'pill phase ' + item.phase }, PHASES.find(p => p[0] === item.phase)[1])),
