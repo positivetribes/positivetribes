@@ -166,13 +166,14 @@ const sfLink = (env, object, id) => env.SF_DOMAIN.replace(/\/$/, '') + '/lightni
 const records = async (auth, q) => (await soql(auth, q)).records;
 
 let overviewCache = { at: 0, data: null };
+// Inviting another Salesforce user to an event adds a child copy owned by them (IsChild), so only originals are read.
 async function salesforceOverview(env, refresh) {
   if (!refresh && overviewCache.data && Date.now() - overviewCache.at < 60e3) return overviewCache.data;
   const auth = await salesforce(env);
   const [accounts, tasks, events, cases, leads] = await Promise.all([
     records(auth, 'SELECT Id, Name, Type, Website, (SELECT Id, Name, StageName, CloseDate, NextStep, IsClosed, IsWon FROM Opportunities ORDER BY CloseDate) FROM Account WHERE IsPersonAccount = false AND Name != ' + quote(OWN_ACCOUNT) + ' ORDER BY Name LIMIT 200'),
     records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
-    records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId != null AND (ActivityDate = LAST_N_DAYS:60 OR ActivityDate = NEXT_N_DAYS:30) ORDER BY ActivityDate LIMIT 300'),
+    records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId != null AND IsChild = false AND (ActivityDate = LAST_N_DAYS:60 OR ActivityDate = NEXT_N_DAYS:30) ORDER BY ActivityDate LIMIT 300'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, AccountId FROM Case WHERE IsClosed = false ORDER BY CreatedDate DESC LIMIT 100'),
     records(auth, 'SELECT Id, Name, Company, Status, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND CreatedDate = LAST_N_DAYS:30 ORDER BY CreatedDate DESC LIMIT 50')
   ]);
@@ -186,7 +187,7 @@ async function salesforceClient(env, accountId) {
   const [accounts, tasks, events, cases, contacts, history] = await Promise.all([
     records(auth, 'SELECT Id, Name, Type, Website, Description, (SELECT Id, Name, StageName, CloseDate, NextStep, IsClosed, IsWon FROM Opportunities ORDER BY CloseDate) FROM Account WHERE Id = ' + id),
     records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId FROM Task WHERE AccountId = ' + id + ' ORDER BY CreatedDate DESC LIMIT 300'),
-    records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId = ' + id + ' ORDER BY ActivityDate DESC LIMIT 200'),
+    records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId = ' + id + ' AND IsChild = false ORDER BY ActivityDate DESC LIMIT 200'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, ClosedDate, IsClosed, AccountId FROM Case WHERE AccountId = ' + id + ' ORDER BY CreatedDate DESC LIMIT 100'),
     records(auth, 'SELECT Id, Name, Title, Email, Phone FROM Contact WHERE AccountId = ' + id + ' ORDER BY Name LIMIT 100'),
     records(auth, "SELECT OpportunityId, Opportunity.Name, OldValue, NewValue, CreatedDate FROM OpportunityFieldHistory WHERE Field = 'StageName' AND Opportunity.AccountId = " + id + ' ORDER BY CreatedDate DESC LIMIT 100')
