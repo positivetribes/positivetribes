@@ -79,6 +79,8 @@ if (measurementId) {
   await writeFile('public/unitedrocks/index.html', ur.replace('</head>', analytics + '</head>'));
 }
 await cp('soberafe', 'public/soberafe', { recursive: true });
+// Outdoor Lab "Lab Card, connected" sketch: one self-contained page with sample data, hidden from search.
+await cp('outdoorlab', 'public/outdoorlab', { recursive: true });
 await cp('card', 'public/card', { recursive: true });
 // Optional folder: git drops it when empty, so skip it rather than fail the deploy.
 // Admin command center page: never indexed and never tagged for analytics.
