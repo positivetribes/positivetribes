@@ -5,7 +5,7 @@ import { salesforceToken, sf, soql, quote } from './donations.mjs';
 
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 
-export const TOOLS = { pulselift: 'PulseLift', 'volunteer-connect': 'Volunteer Connect', 'partner-tool': 'A tool built for my organization', other: 'Something else' };
+export const TOOLS = { pulselift: 'PulseLift', 'climb-partners': 'Climb Partners', 'volunteer-connect': 'Volunteer Connect', 'partner-tool': 'A tool built for my organization', other: 'Something else' };
 const KINDS = { broken: ['Something’s broken', 'Problem'], howto: ['How do I…?', 'Question'], idea: ['Feature idea', 'Feature Request'], access: ['Account or access', 'Question'] };
 const IMPACTS = { minor: ['Minor annoyance', 'Low'], slowing: ['Slowing us down', 'Medium'], blocked: ['We can’t work', 'High'] };
 const MAX_FILE = 5 * 1024 * 1024;
