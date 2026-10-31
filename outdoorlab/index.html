@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="A sketch of Outdoor Lab's Lab Card program connected to Salesforce, by Positive Tribes, with sample data.">
+<title>Lab Card, Connected | Sketch</title>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Trailhead look: warm paper, forest ink, ponderosa green, sunrise orange for money moments,
+   lake blue for Salesforce. One page, three views, sample data only. */
+:root{
+  --paper:#F6F2EA; --card:#FFFFFF; --ink:#1B2A22; --muted:#56625A; --rule:#DDD5C6;
+  --forest:#1F4D36; --pine:#2E6B4B; --moss:#E3ECDF; --sun:#E8742C; --sunsoft:#FCE6D6;
+  --lake:#1B6FA8; --lakesoft:#E1EEF7; --granite:#8A8F86;
+  --display:'Bricolage Grotesque',Georgia,serif;
+  --body:'Instrument Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--body);color:var(--ink);background:var(--paper);line-height:1.5;font-size:16px}
+h1,h2,h3{font-family:var(--display);font-weight:800;margin:0;line-height:1.05;letter-spacing:-.01em}
+p{margin:0}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:3px solid var(--lake);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+.sketch{background:var(--ink);color:#EDE8DC;font-size:14px}
+.sketch .wrap{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+.sketch b{color:#fff}
+.sketch a{color:#F5B98F}
+
+header.hero{position:relative;overflow:hidden;background:linear-gradient(180deg,#CFE0E6 0%,#EEE7D8 100%)}
+header.hero svg.ridge{position:absolute;left:0;right:0;bottom:0;width:100%;height:120px}
+.hero .wrap{position:relative;padding-top:40px;padding-bottom:110px}
+.eyebrow{font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--pine)}
+.hero h1{font-size:clamp(36px,6vw,64px);margin:8px 0 12px;color:var(--forest)}
+.hero p.lede{font-size:18px;max-width:58ch;color:#33433A}
+
+nav.tabs{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--rule)}
+nav.tabs .wrap{display:flex;gap:6px;overflow-x:auto;padding-top:10px;padding-bottom:10px}
+nav.tabs button{flex:0 0 auto;border:1px solid var(--rule);background:var(--card);color:var(--ink);border-radius:999px;padding:10px 16px;font-weight:600;font-size:15px}
+nav.tabs button span{color:var(--muted);font-weight:500;margin-right:6px}
+nav.tabs button[aria-selected="true"]{background:var(--forest);border-color:var(--forest);color:#fff}
+nav.tabs button[aria-selected="true"] span{color:#BFD6C6}
+
+main{padding:28px 0 56px}
+.view[hidden]{display:none}
+.intro{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px}
+.intro h2{font-size:clamp(26px,3.6vw,36px)}
+.intro p{color:var(--muted);max-width:60ch;margin-top:6px}
+.grid{display:grid;gap:16px}
+.grid>*{min-width:0}
+.g2{grid-template-columns:1.1fr .9fr}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media (max-width:860px){.g2,.g4{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}}
+@media (max-width:520px){.g4{grid-template-columns:1fr 1fr}}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:16px;padding:20px}
+.card h3{font-size:19px;margin-bottom:12px}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.pill{display:inline-block;border-radius:999px;padding:3px 10px;font-size:13px;font-weight:600}
+.pill.green{background:var(--moss);color:var(--forest)}
+.pill.sun{background:var(--sunsoft);color:#9A4513}
+.pill.lake{background:var(--lakesoft);color:var(--lake)}
+.btn{border:0;border-radius:10px;padding:11px 16px;font-weight:700;background:var(--forest);color:#fff}
+.btn.ghost{background:transparent;border:1.5px solid var(--forest);color:var(--forest)}
+.btn.sun{background:var(--sun)}
+.btn:disabled{opacity:.5;cursor:default}
+
+/* Family view */
+.goal{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+.ring{position:relative;width:170px;height:170px;flex:0 0 auto}
+.ring svg{transform:rotate(-90deg)}
+.ring .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ring .big{font-family:var(--display);font-size:38px;font-weight:800;color:var(--forest)}
+.goal .facts{flex:1;min-width:220px}
+.goal .facts h3{font-size:24px;margin-bottom:6px}
+.countdown{display:flex;gap:10px;align-items:center;margin-top:14px;padding:12px 14px;background:var(--sunsoft);border-radius:12px;color:#7A3A12;font-weight:600}
+.countdown .n{font-family:var(--display);font-size:28px;font-weight:800;color:var(--sun)}
+.linked{display:grid;gap:10px}
+.linked .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px;border:1px solid var(--rule);border-radius:12px}
+.linked .row b{display:block}
+.kids{display:grid;gap:10px}
+.kid{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:#FBF9F4;border:1px solid var(--rule)}
+.kid .av{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;background:var(--pine);flex:0 0 auto}
+.kid .av.b{background:var(--lake)}
+.kid .bar{height:8px;border-radius:99px;background:#ECE6DA;overflow:hidden;margin-top:6px}
+.kid .bar i{display:block;height:100%;background:var(--pine);border-radius:99px;transition:width .5s ease}
+.kid .grow{flex:1;min-width:0}
+.feed{list-style:none;margin:0;padding:0}
+.feed li{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed var(--rule);font-size:15px}
+.feed li:last-child{border:0}
+.feed .amt{font-weight:700;color:var(--pine);white-space:nowrap}
+
+/* Staff view */
+.kpi .v{font-family:var(--display);font-size:32px;font-weight:800;color:var(--forest);line-height:1.1}
+.kpi .l{font-size:14px;color:var(--muted)}
+.kpi.alert .v{color:var(--sun)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:8px 6px;border-bottom:1px solid var(--rule)}
+td{padding:10px 6px;border-bottom:1px solid #EFE9DD;vertical-align:middle}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mini{height:10px;border-radius:99px;background:#ECE6DA;overflow:hidden;min-width:80px}
+.mini i{display:block;height:100%;background:var(--pine)}
+.tablewrap{overflow-x:auto}
+.list{display:grid;gap:8px}
+.list .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#FBF9F4;border:1px solid var(--rule);font-size:15px}
+.list .row .btn{padding:7px 12px;font-size:14px}
+
+/* Supporter view */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;counter-reset:s}
+@media (max-width:860px){.flow{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.flow{grid-template-columns:1fr}}
+.step{position:relative;background:var(--card);border:1px solid var(--rule);border-radius:16px;padding:18px 16px 16px}
+.step:before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--forest);color:#fff;font-weight:700;margin-bottom:10px}
+.step.sf:before{background:var(--lake)}
+.step.give:before{background:var(--sun)}
+.step b{display:block;font-size:17px;margin-bottom:4px}
+.step p{font-size:14px;color:var(--muted)}
+.sfrec{border:1px solid #C9D7E3;border-radius:14px;overflow:hidden;background:#fff}
+.sfrec .top{background:var(--lakesoft);padding:14px 16px;display:flex;gap:12px;align-items:center}
+.sfrec .ic{width:38px;height:38px;border-radius:8px;background:var(--lake);display:grid;place-items:center;color:#fff;font-weight:800}
+.sfrec .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;padding:16px}
+.sfrec .fields div span{display:block;font-size:12px;color:var(--muted)}
+.sfrec .fields div b{font-weight:600}
+.sfrec .tl{border-top:1px solid #E3EAF0;padding:14px 16px}
+.sfrec .tl li{font-size:14px;padding:4px 0}
+.sfrec ul{margin:0;padding-left:18px}
+.callout{background:var(--forest);color:#E6EFE8;border-radius:18px;padding:26px}
+.callout h3{color:#fff;font-size:26px;margin-bottom:8px}
+.callout .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+@media (max-width:520px){.callout .nums{grid-template-columns:1fr}}
+.callout .nums b{display:block;font-family:var(--display);font-size:30px;color:#FFC79E}
+.callout .nums span{font-size:14px}
+.email{border:1px dashed var(--rule);border-radius:14px;padding:16px;background:#FFFDF8;font-size:15px}
+.email .meta{font-size:13px;color:var(--muted);margin-bottom:8px}
+
+footer{border-top:1px solid var(--rule);padding:28px 0 40px;font-size:14px;color:var(--muted)}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+footer img{height:40px}
+
+dialog{border:0;border-radius:18px;padding:0;max-width:420px;width:calc(100% - 32px);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(27,42,34,.45)}
+dialog form{padding:22px}
+dialog h3{font-size:22px;margin-bottom:8px}
+dialog .amts{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+dialog .amts button{border:1.5px solid var(--rule);background:#fff;border-radius:10px;padding:10px 14px;font-weight:700}
+dialog .amts button[aria-pressed="true"]{border-color:var(--forest);background:var(--moss);color:var(--forest)}
+dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120px);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;font-weight:600;transition:transform .3s ease;z-index:20;max-width:calc(100% - 32px)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="sketch"><div class="wrap">
+  <p><b>A sketch, not a product.</b> Positive Tribes built this from Outdoor Lab's public website. Every name and number is sample data.</p>
+  <p>What does it get wrong? <a href="mailto:eric@positivetribes.org?subject=Lab%20Card%20sketch">Tell Eric</a></p>
+</div></div>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Outdoor Lab Foundation · concept</p>
+    <h1>Lab Card, connected</h1>
+    <p class="lede">Families already fund sixth-grade Outdoor Lab with their groceries. What if every one of them could see their progress, staff could see every school at a glance, and each Lab Card family became a supporter the Foundation knows by name?</p>
+  </div>
+  <svg class="ridge" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 120 L0 70 L120 40 L210 66 L330 18 L430 60 L520 36 L640 74 L760 26 L860 58 L980 30 L1090 62 L1200 44 L1200 120 Z" fill="#9DB4A3"/>
+    <path d="M0 120 L0 92 L150 72 L260 94 L400 64 L540 92 L700 70 L820 96 L960 74 L1080 94 L1200 80 L1200 120 Z" fill="#2E6B4B"/>
+    <path d="M0 120 L0 108 L300 100 L600 112 L900 102 L1200 110 L1200 120 Z" fill="#1F4D36"/>
+  </svg>
+</header>
+
+<nav class="tabs" aria-label="Views">
+  <div class="wrap" role="tablist">
+    <button role="tab" id="t-family" aria-controls="family" aria-selected="true"><span>1</span>For families</button>
+    <button role="tab" id="t-staff" aria-controls="staff" aria-selected="false"><span>2</span>For staff</button>
+    <button role="tab" id="t-supporters" aria-controls="supporters" aria-selected="false"><span>3</span>The payoff: supporters</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- 1. Family view -->
+  <section class="view" id="family" role="tabpanel" aria-labelledby="t-family">
+    <div class="intro">
+      <div><h2>The Rivera family's Lab Card</h2>
+      <p>What a parent sees on their phone: how close their sixth grader is, when Redemption Week is, and a one-tap way to move extra earnings to a younger sibling.</p></div>
+      <span class="pill green">Sample family</span>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="goal">
+          <div class="ring">
+            <svg width="170" height="170" viewBox="0 0 170 170" aria-hidden="true">
+              <circle cx="85" cy="85" r="72" fill="none" stroke="#ECE6DA" stroke-width="16"/>
+              <circle id="ringArc" cx="85" cy="85" r="72" fill="none" stroke="#2E6B4B" stroke-width="16" stroke-linecap="round" stroke-dasharray="452.4" stroke-dashoffset="452.4" style="transition:stroke-dashoffset .8s ease"/>
+            </svg>
+            <div class="center"><span class="big" id="mayaAmt">$212</span><span class="small muted">of $300</span></div>
+          </div>
+          <div class="facts">
+            <h3>Maya, 6th grade</h3>
+            <p class="muted">Aspen Ridge Elementary · Windy Peak, week of Mar 9</p>
+            <p style="margin-top:10px"><span id="mayaLeft">$88 to go.</span> At your usual pace you'll reach it by <b>Feb 14</b>.</p>
+            <div class="countdown"><span class="n">23</span><span>days until Redemption Week. Earnings move to Maya's tuition in the Campus Parent Portal.</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Your linked cards</h3>
+        <div class="linked">
+          <div class="row"><div><b>King Soopers Community Rewards</b><span class="small muted">Linked to Outdoor Lab Foundation · 4 shoppers</span></div><span class="pill green">Active</span></div>
+          <div class="row"><div><b>Safeway reloadable card</b><span class="small muted">Last reload Jan 18 · $100</span></div><span class="pill green">Active</span></div>
+          <div class="row"><div><b>Invite grandparents</b><span class="small muted">Their groceries can count for Maya too</span></div><button class="btn ghost" data-toast="Invite link copied. Grandma's King Soopers card can now count toward Maya.">Share link</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Kids on this account</h3>
+        <div class="kids">
+          <div class="kid"><div class="av">M</div><div class="grow"><b>Maya</b> <span class="small muted">· 6th grade, attending this year</span><div class="bar"><i id="mayaBar" style="width:0"></i></div></div><b id="mayaKidAmt">$212</b></div>
+          <div class="kid"><div class="av b">L</div><div class="grow"><b>Leo</b> <span class="small muted">· 3rd grade, saving ahead</span><div class="bar"><i id="leoBar" style="width:0;background:var(--lake)"></i></div></div><b id="leoAmt">$40</b></div>
+        </div>
+        <p class="small muted" style="margin:14px 0 10px">Earned more than Maya needs? Move it to Leo before Redemption Week, under the transfer policy.</p>
+        <button class="btn" id="openTransfer">Move earnings to Leo</button>
+      </div>
+      <div class="card">
+        <h3>Recent earnings</h3>
+        <ul class="feed">
+          <li><span>King Soopers · Grandma Rivera's card</span><span class="amt">+$6.40</span></li>
+          <li><span>Safeway reload</span><span class="amt">+$5.00</span></li>
+          <li><span>King Soopers · household</span><span class="amt">+$9.85</span></li>
+          <li><span>King Soopers fuel points month</span><span class="amt">+$4.10</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Staff view -->
+  <section class="view" id="staff" role="tabpanel" aria-labelledby="t-staff" hidden>
+    <div class="intro">
+      <div><h2>Lab Card at a glance</h2>
+      <p>What Foundation staff see: every school, who is close, and the families who signed up but haven't earned anything yet, so a nudge goes out before Redemption Week instead of after.</p></div>
+      <span class="pill sun">Sample numbers</span>
+    </div>
+    <div class="grid g4" style="margin-bottom:16px">
+      <div class="card kpi"><div class="v">1,284</div><div class="l">Families enrolled</div></div>
+      <div class="card kpi"><div class="v">$186,420</div><div class="l">Earned toward tuition this year</div></div>
+      <div class="card kpi"><div class="v">61%</div><div class="l">On track to cover the full fee</div></div>
+      <div class="card kpi alert"><div class="v" id="zeroCount">143</div><div class="l">Enrolled, $0 earned so far</div></div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <h3>By school</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>School</th><th class="num">Families</th><th>Avg toward $300</th><th class="num">Earned</th></tr></thead>
+          <tbody id="schools"></tbody>
+        </table></div>
+      </div>
+      <div class="grid" style="gap:16px">
+        <div class="card">
+          <h3>Close to the goal</h3>
+          <div class="list">
+            <div class="row"><span>Nguyen family · Clear Creek</span><b>$288</b></div>
+            <div class="row"><span>Okafor family · Bear Creek</span><b>$281</b></div>
+            <div class="row"><span>Hall family · Lookout Mountain</span><b>$274</b></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Signed up, nothing earned yet</h3>
+          <div class="list" id="nudges">
+            <div class="row"><span>Patel family · Golden View</span><button class="btn sun">Send nudge</button></div>
+            <div class="row"><span>Brooks family · Red Rocks</span><button class="btn sun">Send nudge</button></div>
+            <div class="row"><span>Moreno family · Aspen Ridge</span><button class="btn sun">Send nudge</button></div>
+          </div>
+          <p class="small muted" style="margin-top:10px">A nudge is a friendly text: "Your King Soopers card isn't linked yet. It takes two minutes."</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Supporters view -->
+  <section class="view" id="supporters" role="tabpanel" aria-labelledby="t-supporters" hidden>
+    <div class="intro">
+      <div><h2>Every Lab Card family becomes a supporter you know</h2>
+      <p>Today these families give through their groceries, but the Foundation doesn't know most of them by name. Connected to Salesforce, each one becomes a supporter record that can be thanked, invited and counted.</p></div>
+      <span class="pill lake">Salesforce</span>
+    </div>
+    <div class="flow" style="margin-bottom:16px">
+      <div class="step"><b>Family enrolls in Lab Card</b><p>Links their King Soopers or Safeway card, same as today.</p></div>
+      <div class="step sf"><b>A household record appears</b><p>In Salesforce, with each child, school and Lab Card total. No retyping.</p></div>
+      <div class="step"><b>Thank-you at Redemption Week</b><p>"Your groceries sent Maya to Windy Peak." Sent automatically, signed by Bryan.</p></div>
+      <div class="step give"><b>An invitation to do more</b><p>Become a monthly giver, sponsor a classmate's tuition, or come to After Dark.</p></div>
+    </div>
+    <div class="grid g2">
+      <div class="sfrec">
+        <div class="top"><div class="ic">H</div><div><b>Rivera Household</b><div class="small muted">Salesforce · Household account</div></div></div>
+        <div class="fields">
+          <div><span>Lab Card total, all years</span><b>$552</b></div>
+          <div><span>Kids at Outdoor Lab</span><b>Ana (2024), Maya (this year)</b></div>
+          <div><span>Schools</span><b>Aspen Ridge Elementary</b></div>
+          <div><span>Grocery shoppers linked</span><b>4</b></div>
+          <div><span>Direct gifts</span><b>None yet</b></div>
+          <div><span>Next best ask</span><b>Monthly gift, $15</b></div>
+        </div>
+        <div class="tl">
+          <b class="small">Timeline</b>
+          <ul>
+            <li>Mar 2024 · Thank-you sent after Ana's week at Mt. Blue Sky</li>
+            <li>Apr 2024 · Invited to After Dark</li>
+            <li>Sep 2026 · Leo enrolled, saving ahead</li>
+            <li>Mar 2027 · Thank-you for Maya's week queued</li>
+          </ul>
+        </div>
+      </div>
+      <div class="email">
+        <div class="meta">Thank-you email, queued in Salesforce for after Redemption Week</div>
+        <p><b>Subject: Your groceries sent Maya to Windy Peak</b></p>
+        <p style="margin-top:8px">Hi Rivera family,</p>
+        <p style="margin-top:8px">Your Lab Card earned $300, the full cost of Maya's week at Windy Peak. Four of you shopped for it, including Grandma.</p>
+        <p style="margin-top:8px">Since 2021, families and donors have covered tuition for 5,833 students who came for free. If you'd like to help the next one, a gift of $15 a month sends a classmate to Outdoor Lab every two years.</p>
+        <p style="margin-top:8px">Thank you,<br>Bryan Martin, Outdoor Lab Foundation</p>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:16px">
+      <h3>Why it matters</h3>
+      <p>About 5,000 sixth graders go to Outdoor Lab every year. Many of their families already give through Lab Card. Connecting Lab Card to Salesforce turns them into the individual-giving program the Foundation wants to grow.</p>
+      <div class="nums">
+        <div><b>1,284</b><span>families who become named supporters (sample)</span></div>
+        <div><b>3 per year</b><span>touches per family: thank-you, story, invitation</span></div>
+        <div><b>One place</b><span>for donors, grants and Lab Card, instead of Bloomerang plus spreadsheets</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap">
+  <a href="https://positivetribes.org"><img src="/brand/positive-tribes-logo-horizontal.svg" alt="Positive Tribes"></a>
+  <p>Sketched by Positive Tribes, technology for healthier communities. Outdoor Lab facts come from outdoorlabfoundation.org; everything else is sample data.</p>
+</div></footer>
+
+<dialog id="transfer">
+  <form method="dialog">
+    <h3>Move earnings to Leo</h3>
+    <p class="muted small">Maya has <b id="dlgMaya">$212</b>. Pick an amount to move to Leo's Lab Card balance.</p>
+    <div class="amts" id="amts">
+      <button type="button" data-amt="10" aria-pressed="false">$10</button>
+      <button type="button" data-amt="25" aria-pressed="true">$25</button>
+      <button type="button" data-amt="50" aria-pressed="false">$50</button>
+    </div>
+    <div class="act"><button class="btn ghost" value="cancel">Cancel</button><button class="btn" value="ok" id="confirmMove">Move $25</button></div>
+  </form>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3200); };
+
+// Tabs
+const tabs = [...document.querySelectorAll('[role=tab]')];
+function show(id) {
+  tabs.forEach(t => { const on = t.getAttribute('aria-controls') === id; t.setAttribute('aria-selected', on); $('#' + t.getAttribute('aria-controls')).hidden = !on; });
+  history.replaceState(null, '', '#' + id);
+}
+tabs.forEach(t => t.addEventListener('click', () => show(t.getAttribute('aria-controls'))));
+const start = location.hash.slice(1);
+if (['family', 'staff', 'supporters'].includes(start)) show(start);
+
+// Family balances
+let maya = 212, leo = 40, pick = 25;
+function render() {
+  const pct = Math.min(maya / 300, 1);
+  $('#ringArc').style.strokeDashoffset = 452.4 * (1 - pct);
+  $('#mayaAmt').textContent = $('#mayaKidAmt').textContent = $('#dlgMaya').textContent = '$' + maya;
+  $('#mayaLeft').textContent = maya >= 300 ? 'Fully covered!' : '$' + (300 - maya) + ' to go.';
+  $('#mayaBar').style.width = pct * 100 + '%';
+  $('#leoBar').style.width = Math.min(leo / 300, 1) * 100 + '%';
+  $('#leoAmt').textContent = '$' + leo;
+}
+requestAnimationFrame(() => requestAnimationFrame(render));
+document.querySelectorAll('[data-toast]').forEach(b => b.addEventListener('click', () => toast(b.dataset.toast)));
+$('#openTransfer').addEventListener('click', () => $('#transfer').showModal());
+$('#amts').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  pick = +b.dataset.amt;
+  $('#amts').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  $('#confirmMove').textContent = 'Move $' + pick;
+});
+$('#transfer').addEventListener('close', () => {
+  if ($('#transfer').returnValue !== 'ok') return;
+  const amt = Math.min(pick, maya); maya -= amt; leo += amt; render();
+  toast('Moved $' + amt + ' to Leo. Staff see it in the dashboard right away.');
+});
+
+// Staff table
+const schools = [
+  ['Aspen Ridge Elementary', 142, 238, 33796], ['Bear Creek Elementary', 118, 251, 29618],
+  ['Clear Creek Elementary', 131, 196, 25676], ['Golden View Elementary', 104, 122, 12688],
+  ['Lookout Mountain Elementary', 97, 264, 25608], ['Red Rocks Elementary', 126, 141, 17766]
+];
+$('#schools').innerHTML = schools.map(([n, f, avg, e]) => `<tr><td>${n}</td><td class="num">${f}</td><td><div class="mini" title="$${avg} average"><i style="width:${avg / 3}%"></i></div></td><td class="num">$${e.toLocaleString()}</td></tr>`).join('');
+let zero = 143;
+$('#nudges').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  b.disabled = true; b.textContent = 'Nudged'; zero--; $('#zeroCount').textContent = zero;
+  toast('Text sent. Salesforce logs it on the family’s record.');
+});
+</script>
+</body>
+</html>
