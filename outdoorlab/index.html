@@ -49,6 +49,7 @@ nav.tabs button[aria-selected="true"] span{color:#BFD6C6}
 
 main{padding:28px 0 56px}
 .view[hidden]{display:none}
+.view{scroll-margin-top:72px}
 .intro{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;flex-wrap:wrap;margin-bottom:20px}
 .intro h2{font-size:clamp(26px,3.6vw,36px)}
 .intro p{color:var(--muted);max-width:60ch;margin-top:6px}
@@ -109,7 +110,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tablewrap{overflow-x:auto}
 .list{display:grid;gap:8px}
 .list .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#FBF9F4;border:1px solid var(--rule);font-size:15px}
-.list .row .btn{padding:7px 12px;font-size:14px}
+.list .row .btn{padding:7px 12px;font-size:14px;white-space:nowrap}
+@media (max-width:520px){th.fam,td.fam{display:none}th,td{padding:8px 4px;font-size:14px}.mini{min-width:56px}.lg{display:none}}
 
 /* Supporter view */
 .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;counter-reset:s}
@@ -180,7 +182,7 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
   <div class="wrap" role="tablist">
     <button role="tab" id="t-family" aria-controls="family" aria-selected="true"><span>1</span>For families</button>
     <button role="tab" id="t-staff" aria-controls="staff" aria-selected="false"><span>2</span>For staff</button>
-    <button role="tab" id="t-supporters" aria-controls="supporters" aria-selected="false"><span>3</span>The payoff: supporters</button>
+    <button role="tab" id="t-supporters" aria-controls="supporters" aria-selected="false"><span>3</span><b class="lg" style="font-weight:inherit">The payoff: </b>Supporters</button>
   </div>
 </nav>
 
@@ -257,7 +259,7 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
       <div class="card">
         <h3>By school</h3>
         <div class="tablewrap"><table>
-          <thead><tr><th>School</th><th class="num">Families</th><th>Avg toward $300</th><th class="num">Earned</th></tr></thead>
+          <thead><tr><th>School</th><th class="num fam">Families</th><th>Avg toward $300</th><th class="num">Earned</th></tr></thead>
           <tbody id="schools"></tbody>
         </table></div>
       </div>
@@ -403,7 +405,7 @@ const schools = [
   ['Clear Creek Elementary', 131, 196, 25676], ['Golden View Elementary', 104, 122, 12688],
   ['Lookout Mountain Elementary', 97, 264, 25608], ['Red Rocks Elementary', 126, 141, 17766]
 ];
-$('#schools').innerHTML = schools.map(([n, f, avg, e]) => `<tr><td>${n}</td><td class="num">${f}</td><td><div class="mini" title="$${avg} average"><i style="width:${avg / 3}%"></i></div></td><td class="num">$${e.toLocaleString()}</td></tr>`).join('');
+$('#schools').innerHTML = schools.map(([n, f, avg, e]) => `<tr><td>${n}</td><td class="num fam">${f}</td><td><div class="mini" title="$${avg} average"><i style="width:${avg / 3}%"></i></div></td><td class="num">$${e.toLocaleString()}</td></tr>`).join('');
 let zero = 143;
 $('#nudges').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
