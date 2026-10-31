@@ -20,7 +20,7 @@ The existing `contact-worker.mjs` serves static assets and handles `/api/contact
 
 Run `python3 -m http.server 8765 --bind 127.0.0.1` and open http://127.0.0.1:8765. This previews the static homepage; email delivery requires Cloudflare bindings. The contact dialog and browser validation can be checked locally. Do not use the static server to test real email delivery.
 
-The homepage "What we're building" section describes current work in progress with nonprofit partners (names left out until a partner agrees to share); the "Ideas we'd like to explore" list on the Our projects page is potential partnerships, not completed client work. PulseLift and Volunteer Connect live under "From our lab" on that page. List no prices on the site. Organization and developer contact details remain available at `#developer`.
+The homepage "What we're building" section describes current work in progress with nonprofit partners (names left out until a partner agrees to share); the "Ideas we'd like to explore" list on the Our projects page is potential partnerships, not completed client work. PulseLift and Volunteer Connect live under "From our lab" on that page. The "Free apps" section lists Climb Partners (https://climbpartners.positivetribes.org, its own Worker in `../ClimbPartners`), offered free worldwide; joining still takes an invite, so its "Request an invite" button opens the contact form at `/?reason=climbpartners` ("Joining Climb Partners"), and Eric replies with a personal invite link. List no prices on the site. Organization and developer contact details remain available at `#developer`.
 
 ## Contact form and Salesforce
 
@@ -32,7 +32,7 @@ The "Join the testing" button on the homepage and the `/?reason=pulselift` link 
 
 `support.html` is the "Get help" page for tools Positive Tribes built or supports. `support.mjs` handles `/api/support`: each request becomes a Salesforce Case with Origin `Web`, Status `New`, Type from the request kind (Problem, Question or Feature Request), Priority from the impact (Low, Medium or High), the tool in the Subject (for example `[PulseLift] …`), and the name, email and organization in the Web fields. If the email matches an existing Contact, the Case is linked to that Contact and their Account. An optional PNG or JPG screenshot (up to 5 MB, checked by its file signature) is attached to the Case as a file. It uses the same Salesforce secrets as the contact form and the `SUPPORT_LIMIT` rate limit (3 a minute per visitor).
 
-A notification email goes to `CONTACT_TO` every time with a link to the Case, marked "(urgent)" when the person chose "We can't work". If Salesforce can't be reached, the email says so and the request should be entered by hand. Cloudflare can only email the verified `CONTACT_TO` address, so the person gets their case number on screen, not by email. Link straight to a tool with `/support.html?tool=pulselift` (or `volunteer-connect`, `partner-tool`, `other`).
+A notification email goes to `CONTACT_TO` every time with a link to the Case, marked "(urgent)" when the person chose "We can't work". If Salesforce can't be reached, the email says so and the request should be entered by hand. Cloudflare can only email the verified `CONTACT_TO` address, so the person gets their case number on screen, not by email. Link straight to a tool with `/support.html?tool=pulselift` (or `climb-partners`, `volunteer-connect`, `partner-tool`, `other`).
 
 ## Donations
 

@@ -4,7 +4,7 @@ import { handleCardShare } from './card-share.mjs';
 import { requireAccess, handleAdmin, isAdminPath } from './admin.mjs';
 
 // Why someone filled out the contact form. Only these values are accepted; anything else counts as general.
-const REASONS = { general: 'General question or idea', project: 'A nonprofit project idea', pulselift: 'PulseLift tester request', volunteer: 'Volunteering' };
+const REASONS = { general: 'General question or idea', project: 'A nonprofit project idea', pulselift: 'PulseLift tester request', volunteer: 'Volunteering', climbpartners: 'Climb Partners invite request' };
 // Reasons whose Leads also join a campaign (found by name, so keep these names in Salesforce).
 const CAMPAIGNS = { pulselift: 'PulseLift Testers', volunteer: 'Volunteers' };
 // Volunteer page help choices; must match the Volunteer_Role__c picklist on Campaign Member.
@@ -118,7 +118,7 @@ export default {
         from: 'hello@positivetribes.org',
         to: env.CONTACT_TO,
         replyTo: cleanEmail,
-        subject: reason === 'pulselift' ? 'PulseLift tester request from the website' : reason === 'volunteer' ? 'New volunteer from the website' : 'Positive Tribes website message',
+        subject: reason === 'pulselift' ? 'PulseLift tester request from the website' : reason === 'volunteer' ? 'New volunteer from the website' : reason === 'climbpartners' ? 'Climb Partners invite request from the website' : 'Positive Tribes website message',
         text: 'New message from the Positive Tribes contact form.\n\nReason: ' + REASONS[reason] + '\nName: ' + cleanName + '\nEmail: ' + cleanEmail + '\n\n' + cleanMessage + salesforceNote
       });
       return json({ ok: true });
