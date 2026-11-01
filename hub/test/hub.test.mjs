@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -79,8 +79,11 @@ test('phases: 30-day testing window, sign-off starts the next phase', async () =
     INSERT INTO releases (client_id, project_id, number, stage, uat_started) VALUES (1, 1, 1, 'uat', '2026-10-30');
     INSERT INTO releases (client_id, project_id, number, stage) VALUES (1, 1, 2, 'waiting');
   `);
+  sqlite.exec("UPDATE projects SET live_url = 'https://app.example/' WHERE id = 1");
   const p = await (await call('molly@uep.org', '/api/c/uep/projects')).json();
   assert.equal(p.releases[0].uat_due, '2026-11-29');
+  // The production address travels with the project; the page shows it only once the project is live.
+  assert.equal(p.projects.find(x => x.id === 1).live_url, 'https://app.example/');
   assert.equal((await call('dana@safe.org', '/api/c/uep/releases/1/signoff', 'POST', {})).status, 404);
   assert.equal((await call('sam@uep.org', '/api/c/uep/releases/1/signoff', 'POST', {})).status, 403);
   // A problem that stops sign-off blocks it until fixed.

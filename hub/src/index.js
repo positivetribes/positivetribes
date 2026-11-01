@@ -140,7 +140,7 @@ export default {
 
       if (resource === 'projects' && !rawId && method === 'GET') {
         const { results } = await db.prepare(
-          'SELECT id, slug, name, poc_url, phase FROM projects WHERE client_id = ? ORDER BY position, id'
+          'SELECT id, slug, name, poc_url, live_url, phase FROM projects WHERE client_id = ? ORDER BY position, id'
         ).bind(client.id).all();
         return json({
           client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date },

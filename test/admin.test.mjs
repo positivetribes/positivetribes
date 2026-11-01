@@ -304,7 +304,7 @@ test('the inbox shows client changes, one row per item, and leaves out Eric and 
 // A hub database with three clients, and a way to act in it as a signed-in person (local development sign-in).
 function hubDb() {
   const h = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql']) {
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql']) {
     h.sqlite.exec(readFileSync(new URL('../hub/migrations/' + file, import.meta.url), 'utf8'));
   }
   h.sqlite.exec(`

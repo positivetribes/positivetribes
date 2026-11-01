@@ -22,9 +22,9 @@ export const CLIENTS = {
   },
   safe: {
     name: 'Sober AF', accent: '#2440e0', database: 'soberafe-backlog-db', events: true,
-    // The old backlog has no areas, so every old item belongs to the app; the website starts with an empty list.
+    // The old backlog has no areas, so every old item belongs to Chapters; the website starts with an empty list.
     projects: {
-      '*': { slug: 'chapters', name: 'Sober AF app', poc_url: 'https://positivetribes.org/soberafe/chapters/', phase: 'prototype', position: 1 },
+      '*': { slug: 'chapters', name: 'Sober AF Chapters', poc_url: 'https://positivetribes.org/soberafe/chapters/', phase: 'prototype', position: 1 },
       website: { slug: 'website', name: 'Website', poc_url: 'https://positivetribes.org/soberafe/', phase: 'prototype', position: 2 }
     }
   },
