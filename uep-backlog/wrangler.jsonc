@@ -3,6 +3,8 @@
   "name": "uep-backlog",
   "main": "src/index.js",
   "compatibility_date": "2026-09-27",
+  // UEP moved to Tribe Hub: the page forwards there and the API refuses changes.
+  "vars": { "MOVED_TO": "hub.positivetribes.org" },
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

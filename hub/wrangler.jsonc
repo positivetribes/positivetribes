@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tribe-hub",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-27",
+  // Only reachable through hub.positivetribes.org, where Access signs people in. No workers.dev address.
+  "workers_dev": false,
+  "routes": [{ "pattern": "hub.positivetribes.org", "custom_domain": true }],
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  // Sign-in: Cloudflare Access (One-time PIN) on this Worker's hostname. Both values are public identifiers, not secrets.
+  "vars": {
+    "ACCESS_TEAM_DOMAIN": "positivetribes.cloudflareaccess.com",
+    "ACCESS_AUD": "9dc04910d410b1e8c6739841b429ce28e81e7a9796758c75bbac93bf10bd634a"
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "hub-db", "database_id": "bfa66ad3-605c-4b6c-923e-2329f17e89bf", "migrations_dir": "migrations" }
+  ],
+  // Pull request builds run `wrangler preview`; previews use their own database so test edits never touch real data.
+  "previews": {
+    "d1_databases": [
+      { "binding": "DB", "database_name": "hub-preview-db", "database_id": "5ccf4e7c-c052-4064-b0bd-f94fdc8b6c86", "migrations_dir": "migrations" }
+    ]
+  }
+}

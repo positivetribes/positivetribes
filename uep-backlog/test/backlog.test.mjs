@@ -234,14 +234,27 @@ test('moving with a phase filter swaps with the next item in that phase', async 
   } finally { sqlite.close(); }
 });
 
-test('the committed backlog page has no analytics tag baked in; deploy adds it from GA_MEASUREMENT_ID', async () => {
+test('the old page forwards to Tribe Hub and keeps old links working', async () => {
   const { readFile } = await import('node:fs/promises');
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  assert.equal(html.includes('googletagmanager.com'), false);
   assert.match(html, /<\/head>/);
-  assert.match(html, /typeof gtag === 'function'/);
-  // The viewer cannot rely on browser confirm dialogs, so deleting asks on the page itself.
-  assert.equal(html.includes('confirm('), false);
+  assert.match(html, /https:\/\/hub\.positivetribes\.org\/#\/uep\//);
+  assert.match(html, /#problems/);
+  assert.match(html, /'old\/' \+ item/);
+});
+
+test('once moved, the list is read-only', async () => {
+  const { sqlite, db } = database();
+  try {
+    const env = { DB: db, BACKLOG_PASSCODE: 'p', MOVED_TO: 'hub.positivetribes.org', ASSETS: {} };
+    const send = (method, path, body) => worker.fetch(new Request('https://uep.test/api' + path, {
+      method, headers: { 'x-backlog-passcode': 'p', 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {})
+    }), env);
+    const added = await send('POST', '/items', { title: 'Late addition', tier: 'must' });
+    assert.equal(added.status, 410);
+    assert.match((await added.json()).error, /hub\.positivetribes\.org/);
+    assert.equal((await send('GET', '/items')).status, 200);
+  } finally { sqlite.close(); }
 });
 
 test('scheduler and fundraising are separate lists with their own order', async () => {

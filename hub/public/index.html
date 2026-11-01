@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Your Positive Tribes workspace</title>
+<link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+:root{
+  --bg:#f7f6ef; --card:#fffdf8; --soft:#e9eddf; --ink:#243f36; --muted:#59665e; --line:#d9dfd4; --rust:#a94c32;
+  --client:#a94c32;
+  --must:#a3283a; --must-bg:#f7dde1; --nice:#8a5a00; --nice-bg:#f8ebc9; --idea:#3d5a80; --idea-bg:#dde6f1; --ok:#22693f; --ok-bg:#dbefe2;
+  --display:'Fraunces',Georgia,serif; --font:'DM Sans',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+  --shadow:0 1px 2px rgba(36,63,54,.06),0 8px 24px -12px rgba(36,63,54,.18); color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141b18; --card:#1b2420; --soft:#22302a; --ink:#e6ebe3; --muted:#a3b0a8; --line:#33423b; --rust:#e08a6d;
+  --must:#f39aa7; --must-bg:#3e1f27; --nice:#efc36a; --nice-bg:#3a2f15; --idea:#9dbbe0; --idea-bg:#1f2b3a; --ok:#8fd1a6; --ok-bg:#183223;
+  --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141b18; --card:#1b2420; --soft:#22302a; --ink:#e6ebe3; --muted:#a3b0a8; --line:#33423b; --rust:#e08a6d;
+  --must:#f39aa7; --must-bg:#3e1f27; --nice:#efc36a; --nice-bg:#3a2f15; --idea:#9dbbe0; --idea-bg:#1f2b3a; --ok:#8fd1a6; --ok-bg:#183223;
+  --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 var(--font);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--rust);outline-offset:2px}
+h1,h2,h3{margin:0;font-family:var(--display);font-weight:500;line-height:1.15;text-wrap:balance}
+p{margin:0}
+.shell{max-width:860px;margin-inline:auto;padding:0 16px 64px}
+.shell,.card,.stack>*{min-width:0}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:20px;text-decoration:none}
+.brand svg{width:30px;height:30px}.brand circle{fill:currentColor}.brand .core{fill:var(--client)}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.who{color:var(--muted);font-size:15px}
+.hero{padding:18px 0 22px;border-bottom:1px solid var(--line);margin-bottom:6px;position:relative}
+.hero:before{content:"";display:block;width:56px;height:5px;border-radius:3px;background:var(--client);margin-bottom:14px}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:clamp(30px,6vw,44px);margin-top:4px}
+nav.tabs{display:flex;gap:4px;margin:6px 0 22px;overflow-x:auto}
+nav.tabs a{padding:12px 16px;text-decoration:none;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
+.badge{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12px;line-height:20px;text-align:center}
+.stack{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.btn{display:inline-block;border:1px solid var(--ink);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;font-weight:600;text-decoration:none;min-height:44px}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--ink)}
+.btn.small{padding:6px 12px;min-height:36px;font-size:15px}
+.btn.danger{color:var(--must);border-color:var(--must)}
+.btn:disabled{opacity:.45;cursor:default}
+.muted{color:var(--muted)}
+.meta{font-size:14px;color:var(--muted)}
+.error{background:var(--must-bg);color:var(--must);border-radius:10px;padding:10px 14px;font-weight:600}
+/* Home */
+.next{border-left:6px solid var(--client);display:flex;flex-direction:column;gap:10px}
+.next h2{font-size:clamp(24px,4.5vw,32px)}
+.label{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--rust)}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}
+.steps{display:flex;gap:0;margin:12px 0 4px;list-style:none;padding:0}
+.steps li{flex:1;min-width:0;text-align:center;font-size:12px;color:var(--muted);position:relative;padding-top:22px;line-height:1.2;white-space:nowrap}
+.steps li span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.steps li.now span{position:static;width:auto;height:auto;clip:auto;overflow:visible;display:block;margin-top:2px}
+/* Hover or tap any other dot to see which part of the process it is. */
+.steps li:not(.now){cursor:default}
+.steps li:not(.now):hover span,.steps li:not(.now):focus-visible span{width:auto;height:auto;clip:auto;overflow:visible;bottom:calc(100% - 2px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:4px 10px;border-radius:6px;font-size:13px;font-weight:600;z-index:2;box-shadow:var(--shadow)}
+.steps li:first-child:not(.now):hover span,.steps li:first-child:not(.now):focus-visible span{left:0;transform:none}
+.steps li:last-child:not(.now):hover span,.steps li:last-child:not(.now):focus-visible span{left:auto;right:0;transform:none}
+.steps li:not(.now):focus-visible{outline:none}
+.steps li:not(.now):focus-visible:before{outline:3px solid var(--rust);outline-offset:2px}
+.steps li:before{content:"";position:absolute;top:5px;left:50%;width:12px;height:12px;border-radius:50%;background:var(--line);transform:translateX(-50%);z-index:1}
+.steps li:after{content:"";position:absolute;top:10px;left:-50%;width:100%;height:2px;background:var(--line)}
+.steps li:first-child:after{display:none}
+.steps li.done:before,.steps li.done:after,.steps li.now:after{background:var(--client)}
+.steps li.done:before{background:var(--client)}
+.steps li.now:before{background:var(--card);border:3px solid var(--client);width:16px;height:16px;top:3px}
+.steps li.now{color:var(--ink);font-weight:700;overflow:visible}
+/* Testing countdown: a client phase in UAT, at most 30 days, then signed off. */
+.uat{border-left:6px solid var(--client);display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px}
+.uat .left{font-family:var(--display);font-size:clamp(44px,9vw,64px);line-height:1;white-space:nowrap}
+.uat.soon .left,.uat.late .left{color:var(--rust)}
+.uat .what{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.uat .what h2{font-size:22px;font-family:var(--font);font-weight:700}
+.uat .actions{flex-basis:100%}
+.track{height:6px;border-radius:3px;background:var(--line);overflow:hidden;flex-basis:100%}
+.track span{display:block;height:100%;background:var(--client)}
+.uat.soon .track span,.uat.late .track span{background:var(--rust)}
+/* Build and Testing repeat once per client phase: a bracket under those two steps with one pip per phase. */
+.steps-wrap{position:relative;display:flow-root}
+.steps-wrap .zone{position:absolute;top:11px;height:24px;left:calc(var(--from) * 100% / var(--steps) + 4px);width:calc(var(--span) * 100% / var(--steps) - 8px);border-radius:12px;background:color-mix(in srgb,var(--client) 18%,transparent)}
+.steps-wrap .steps{position:relative}
+.loop{margin:2px 0 0 calc(var(--from) * 100% / var(--steps));width:calc(var(--span) * 100% / var(--steps));display:flex;flex-direction:column;align-items:center;gap:5px}
+.loop .bracket{width:calc(100% - 24px);height:8px;border:2px solid var(--client);border-top:0;border-radius:0 0 8px 8px;opacity:.7}
+.loop .pips{display:flex;gap:5px;list-style:none;margin:0;padding:0}
+.loop .pips li{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.loop .pips li.done{background:var(--client)}
+.loop .pips li.now{background:var(--card);box-shadow:inset 0 0 0 3px var(--client)}
+.loop .pips li.ready{background:color-mix(in srgb,var(--client) 40%,var(--line))}
+.loop .note{font-size:12px;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:4px}
+.loop .note svg{width:12px;height:12px;flex:none}
+.releases{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.releases li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pill.stage{background:var(--soft);color:var(--ink);text-transform:none;letter-spacing:0;font-weight:600}
+.pill.stage.uat{background:var(--client);color:#fff}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.list li a{color:inherit;display:flex;gap:10px;align-items:baseline;padding:10px 4px;text-decoration:none;border-bottom:1px solid var(--line)}
+.list li:last-child a{border-bottom:0}.list li a:hover{color:var(--rust)}
+/* Backlog */
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;flex-wrap:wrap;max-width:100%}
+.seg button{border:0;background:none;padding:8px 14px;border-radius:9px;font-weight:600;min-height:40px}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.seg.small button{padding:4px 10px;min-height:32px;font-size:14px;font-weight:500}
+.pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 10px;border-radius:99px;white-space:nowrap}
+.pill.must{background:var(--must-bg);color:var(--must)}.pill.nice{background:var(--nice-bg);color:var(--nice)}.pill.idea{background:var(--idea-bg);color:var(--idea)}.pill.done{background:var(--ok-bg);color:var(--ok)}
+.pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
+.legend{display:grid;gap:8px;margin:0;padding:0;list-style:none;font-size:15px}
+.legend li{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.filters button{border:1px solid var(--line);background:var(--card);padding:5px 12px;border-radius:99px;font-size:15px}
+.filters button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+label{display:block;font-weight:600;font-size:15px;margin-bottom:4px}
+input[type=text],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+textarea{min-height:80px;resize:vertical}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1 1 180px}
+section.tier{display:flex;flex-direction:column;gap:10px}
+section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.count{font-family:var(--font);font-size:15px;color:var(--muted);font-weight:400}
+.item{display:flex;flex-direction:column;gap:10px}.item h3{font-size:20px;font-family:var(--font);font-weight:600}
+.item p{white-space:pre-wrap;overflow-wrap:anywhere}.item.flash{outline:3px solid var(--client);outline-offset:3px}
+.item.is-done h3{color:var(--muted)}
+.answer{background:var(--ok-bg);border-radius:10px;padding:10px 14px}
+.answer b{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ok)}
+.actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.spacer{flex:1}
+.confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--must-bg);border-radius:10px;padding:8px 12px}
+.empty{color:var(--muted);font-style:italic}
+details.done-list>summary{cursor:pointer;font-weight:600;padding:6px 0}
+select.client-switch{width:auto;padding:6px 10px}
+@media (max-width:520px){.shell{padding-inline:14px}.who{display:none}.card{padding:16px}}
+@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <a class="brand" href="#/"><svg viewBox="0 0 152 152" aria-hidden="true"><circle cx="76" cy="22" r="22"/><circle cx="130" cy="76" r="22"/><circle cx="76" cy="130" r="22"/><circle cx="22" cy="76" r="22"/><circle class="core" cx="76" cy="76" r="22"/></svg><span>Positive Tribes</span></a>
+    <div class="tools"><select id="switch" class="client-switch" aria-label="Choose a client" hidden></select><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
+  </header>
+  <div id="error" class="error" role="alert" hidden></div>
+  <main id="main" aria-live="polite"><p class="muted">Loading your workspace…</p></main>
+</div>
+<script>
+(() => {
+  const TIER_NAMES = {
+    question: [['must', 'Answer first', 'The plan changes depending on the answer.'], ['nice', 'Answer before the full build', 'Needed before the real build, not for the prototype.'], ['idea', 'Can wait', 'Worth asking eventually. Nothing depends on it yet.']],
+    change: [['must', 'Must have', 'It does not work for its purpose without it.'], ['nice', 'Nice to have', 'Makes it better. In the first release if there is room.'], ['idea', 'Idea for now', 'Worth remembering. Not decided, not promised.']],
+    problem: [['must', 'Stops sign-off', 'The phase cannot be accepted until it is fixed.'], ['nice', 'Fix before launch', 'Works, but is confusing or looks wrong.'], ['idea', 'Minor', 'Small polish. Fine to fix later.']],
+    request: [['must', 'Urgent', 'Something is stopping your team from working.'], ['nice', 'Soon', 'Important, but you can work around it.'], ['idea', 'When there is time', 'Nice to have.']]
+  };
+  const KIND_TABS = [['question', 'Open questions'], ['change', 'Suggested changes'], ['problem', 'Test problems'], ['request', 'Support requests']];
+  const DONE_WORD = { question: 'answered', change: 'done', problem: 'fixed', request: 'resolved' };
+  const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
+  const STEPS = [['kickoff', 'Kickoff'], ['discovery', 'Discovery'], ['prototype', 'Prototype'], ['build', 'Build'], ['uat', 'Testing'], ['launch', 'Launch'], ['hypercare', 'Settling in'], ['support', 'Support']];
+  const $ = id => document.getElementById(id);
+  const LOOP = ['build', 'uat'];
+  const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
+  const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
+  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null };
+
+  const store = {
+    get(k) { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } },
+    set(k, v) { try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch {} }
+  };
+  const themeStore = {
+    get() { try { return localStorage.getItem('hub-theme') || ''; } catch { return ''; } },
+    set(v) { try { localStorage.setItem('hub-theme', v); } catch {} }
+  };
+  if (themeStore.get()) document.documentElement.dataset.theme = themeStore.get();
+  $('theme').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme:dark)').matches);
+    document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+    themeStore.set(document.documentElement.dataset.theme);
+  });
+  // Local development only: ?as=person@example.org sends a stand-in identity that the server honors on localhost.
+  const asParam = new URLSearchParams(location.search).get('as');
+  if (asParam) store.set('hub-dev-email', asParam);
+
+  function h(tag, attrs = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === false || v == null) continue;
+      if (k === 'class') node.className = v;
+      else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of children.flat()) if (c != null && c !== false) node.append(c);
+    return node;
+  }
+  const showError = message => { $('error').textContent = message || ''; $('error').hidden = !message; };
+
+  async function api(path, options = {}) {
+    const headers = { 'content-type': 'application/json' };
+    if (store.get('hub-dev-email')) headers['x-dev-email'] = store.get('hub-dev-email');
+    let response;
+    try { response = await fetch('/api' + path, { ...options, headers }); }
+    catch { throw new Error('Could not reach the server. Check your connection and try again.'); }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Something went wrong. Please try again.');
+    return data;
+  }
+  async function act(path, options) {
+    showError('');
+    try { const data = await api(path, options); if (data.items) state.items = data.items; render(); }
+    catch (e) { showError(e.message); }
+  }
+  const base = () => '/c/' + state.slug;
+  const post = b => ({ method: 'POST', body: JSON.stringify(b) });
+  const patch = b => ({ method: 'PATCH', body: JSON.stringify(b) });
+  const firstName = () => (state.me.user.name || '').split(/\s+/)[0].toLowerCase();
+  const open = items => items.filter(i => !i.done);
+  const link = (view, id) => '#/' + state.slug + '/' + view + (id ? '/' + id : '');
+
+  async function loadClient(slug) {
+    const [p, i] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items')]);
+    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], items: i.items });
+    document.documentElement.style.setProperty('--client', p.client.accent);
+    document.title = p.client.name + ' | Positive Tribes';
+    if (!state.projects.some(x => x.id === state.project)) state.project = state.projects[0] && state.projects[0].id;
+  }
+
+  async function route() {
+    showError('');
+    const [, slug, view, id] = location.hash.match(/^#\/([a-z0-9-]*)\/?([a-z]*)\/?(\d*)/) || [];
+    const wanted = slug || (state.me.clients[0] && state.me.clients[0].slug);
+    if (!wanted) { $('main').replaceChildren(h('div', { class: 'card' }, h('h2', {}, 'Welcome'), h('p', { class: 'muted' }, 'There are no workspaces for you yet. Positive Tribes will set one up.'))); return; }
+    try { if (wanted !== state.slug) await loadClient(wanted); } catch (e) { showError(e.message); return; }
+    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : 'home';
+    // #/uep/problems opens the test problems of the project being tested (the link in UAT scripts).
+    if (view === 'problems') {
+      const testing = state.releases.find(r => r.stage === 'uat');
+      state.kind = 'problem'; state.filter = 'all';
+      if (testing) state.project = testing.project_id;
+    }
+    if (id) {
+      // #/uep/old/42 is item 42 on the client's old backlog site, so old links keep working.
+      const item = view === 'old' ? state.items.find(i => i.legacy_id === Number(id)) : state.items.find(i => i.id === Number(id));
+      if (item) { state.view = 'backlog'; state.project = item.project_id; state.kind = item.kind; state.filter = 'all'; state.flash = item.id; }
+    }
+    render();
+    if (state.flash) {
+      const node = document.getElementById('item-' + state.flash);
+      state.flash = null;
+      if (node) { const fold = node.closest('details'); if (fold) fold.open = true; node.classList.add('flash'); node.scrollIntoView({ block: 'center' }); }
+    }
+  }
+
+  function render() {
+    if (!state.client) return;
+    const isPt = state.me.user.role === 'pt';
+    const sw = $('switch');
+    sw.hidden = state.me.clients.length < 2;
+    sw.replaceChildren(...state.me.clients.map(c => h('option', { value: c.slug, ...(c.slug === state.slug ? { selected: true } : {}) }, c.name)));
+    $('who').textContent = state.me.user.name || state.me.user.email;
+    const waiting = open(state.items).filter(i => i.kind === 'question').length;
+    $('main').replaceChildren(
+      h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Your workspace'), h('h1', {}, state.client.name)),
+      h('nav', { class: 'tabs', 'aria-label': 'Sections' },
+        h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
+        h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : ''))),
+      state.view === 'home' ? home() : backlog(isPt));
+    const badge = document.querySelector('.badge'); if (badge && !badge.textContent) badge.remove();
+  }
+
+  // ---- Home: what happens next ----
+  function home() {
+    const mine = open(state.items).filter(i => i.kind === 'question' && i.owner && i.owner.toLowerCase().includes(firstName()) && firstName());
+    const focus = mine.find(i => i.tier === 'must') || mine[0]
+      || open(state.items).find(i => i.kind === 'problem' && i.tier === 'must');
+    const hero = focus
+      ? h('div', { class: 'card next' },
+          h('div', { class: 'label' }, 'Your next step'),
+          h('h2', {}, focus.title),
+          focus.details && h('p', { class: 'muted' }, focus.details),
+          h('div', {}, h('a', { class: 'btn', href: link('backlog', focus.id) }, focus.kind === 'question' ? 'Answer this' : 'See the problem')))
+      : h('div', { class: 'card next' },
+          h('div', { class: 'label' }, 'You’re all caught up'),
+          h('h2', {}, 'Nothing is waiting on you right now.'),
+          h('p', { class: 'muted' }, 'We’ll tell you here, and by email, as soon as we need something from you.'),
+          h('div', {}, h('a', { class: 'btn ghost', href: link('backlog') }, 'Suggest a change or ask a question')));
+    return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero,
+      h('div', { class: 'grid' }, state.projects.map(p => {
+        const at = STEPS.findIndex(s => s[0] === p.phase);
+        const counts = open(state.items.filter(i => i.project_id === p.id));
+        const phases = state.releases.filter(r => r.project_id === p.id);
+        // With more than one client phase, Build and Testing repeat for each phase before Launch.
+        const loops = phases.length > 1;
+        const current = phases.find(r => r.stage === 'uat') || phases.find(r => r.stage === 'building') || phases.find(r => !['signed_off', 'live'].includes(r.stage));
+        const inLoop = loops && LOOP.includes(STEPS[Math.max(at, 0)][0]);
+        const loopVars = '--from:' + STEPS.findIndex(s => s[0] === LOOP[0]) + ';--span:' + LOOP.length + ';--steps:' + STEPS.length;
+        const tip = (key, label, n) => (n < at ? label + ' \u00b7 done' : n > at ? label + ' \u00b7 coming up' : label) + (loops && LOOP.includes(key) && n !== at ? ', repeats for each phase' : '');
+        return h('div', { class: 'card' },
+          h('h2', {}, p.name),
+          h('p', { class: 'muted' }, 'Now: ' + STEPS[Math.max(at, 0)][1] + (inLoop && current ? ' ' + phaseName(current) + ' of ' + phases.length : '')),
+          h('div', { class: 'steps-wrap', style: loopVars },
+            loops && h('div', { class: 'zone', 'aria-hidden': 'true' }),
+            h('ol', { class: 'steps', 'aria-label': 'Progress for ' + p.name },
+              STEPS.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : { tabindex: '0' }) }, h('span', {}, tip(key, label, n)))))),
+          loops && h('div', { class: 'loop', style: loopVars },
+            h('div', { class: 'bracket', 'aria-hidden': 'true' }),
+            h('ul', { class: 'pips', 'aria-label': 'Build and testing, once per phase' }, phases.map(r =>
+              h('li', { class: ['signed_off', 'live'].includes(r.stage) ? 'done' : r.stage === 'uat' ? 'now' : r.stage === 'waiting' ? 'ready' : '', title: phaseName(r) + ': ' + STAGES[r.stage], 'aria-label': phaseName(r) + ': ' + STAGES[r.stage] }))),
+            h('div', { class: 'note' }, loopIcon(), 'Each of ' + phases.length + ' phases')),
+          phases.length > 0 && h('ul', { class: 'releases', 'aria-label': 'Phases of ' + p.name }, phases.map(r =>
+            h('li', {}, h('b', {}, phaseName(r)), r.summary && h('span', { class: 'muted' }, r.summary), h('span', { class: 'pill stage ' + r.stage }, STAGES[r.stage]),
+              r.stage === 'signed_off' && r.signed_off_at && h('span', { class: 'meta' }, 'by ' + r.signed_off_by + ', ' + longDate(r.signed_off_at.slice(0, 10)))))),
+          h('p', { class: 'meta' }, counts.length + ' open item' + (counts.length === 1 ? '' : 's')),
+          p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')));
+      })),
+      mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
+        h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
+  }
+
+  // ---- Client phases and their testing window ----
+  const phaseName = r => r.name || 'Phase ' + r.number;
+  const longDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  const shortDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // Days from today to iso: calendar days, or for business-day windows the weekdays still to come (weekends skipped).
+  function daysUntil(iso, business) {
+    const now = new Date();
+    const [y, m, d] = iso.split('-').map(Number);
+    const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()), end = Date.UTC(y, m - 1, d);
+    const calendar = Math.round((end - today) / 86400000);
+    if (!business || calendar <= 0) return calendar;
+    let left = 0;
+    for (let t = today + 86400000; t <= end; t += 86400000) if (new Date(t).getUTCDay() % 6 !== 0) left++;
+    return left;
+  }
+
+  const ofTotal = r => { const n = state.releases.filter(x => x.project_id === r.project_id).length; return n > 1 ? phaseName(r) + ' of ' + n : ''; };
+  function testing(r) {
+    const project = state.projects.find(p => p.id === r.project_id);
+    const business = r.uat_day_type === 'business';
+    const left = r.uat_due ? daysUntil(r.uat_due, business) : null;
+    const used = left == null ? 0 : Math.min(100, Math.max(0, (r.uat_days - left) / r.uat_days * 100));
+    const waiting = state.releases.find(x => x.project_id === r.project_id && x.number > r.number && x.stage === 'waiting');
+    const problems = open(state.items.filter(i => i.project_id === r.project_id && i.kind === 'problem'));
+    const blocking = problems.filter(i => i.tier === 'must');
+    const big = left == null ? 'Testing' : left > 1 ? left + ' days left' : left === 1 ? '1 day left' : left === 0 ? 'Due today' : -left + (left === -1 ? ' day' : ' days') + ' over';
+    // Under the agreement, a phase with auto_accept is accepted on its due date unless problems are listed by then.
+    const acceptance = r.auto_accept && r.uat_due && (problems.length
+      ? (problems.length === 1 ? 'A problem is' : problems.length + ' problems are') + ' listed, so ' + phaseName(r) + ' is accepted once ' + (problems.length === 1 ? 'it is' : 'they are') + ' fixed and signed off.'
+      : 'No problems listed yet. ' + phaseName(r) + ' is accepted automatically on ' + shortDate(r.uat_due) + ' unless one is added by then.');
+    const canSign = state.me.user.role !== 'staff';
+    const confirming = state.signing === r.id;
+    return h('div', { class: 'card uat' + (left != null && left < 0 ? ' late' : left != null && left <= 7 ? ' soon' : '') },
+      h('div', { class: 'left' }, big),
+      h('div', { class: 'what' },
+        h('div', { class: 'label' }, [project && project.name, ofTotal(r), r.summary || 'Testing'].filter(Boolean).join(' · ')),
+        h('h2', {}, phaseName(r) + ' testing and sign-off'),
+        r.uat_due && h('p', { class: 'muted' }, 'Due ' + longDate(r.uat_due) + ' (' + r.uat_days + (business ? ' business days' : ' days') + ' from ' + shortDate(r.uat_started) + ')'),
+        acceptance && h('p', { class: 'meta' }, acceptance),
+        blocking.length ? h('p', { class: 'meta' }, blocking.length + ' problem' + (blocking.length === 1 ? '' : 's') + ' must be fixed before sign-off.')
+          : problems.length ? h('p', { class: 'meta' }, problems.length + ' open problem' + (problems.length === 1 ? '' : 's') + ', none blocking sign-off.')
+          : !acceptance && h('p', { class: 'meta' }, 'No open problems.'),
+        waiting && h('p', { class: 'meta' }, phaseName(waiting) + ' is built and starts testing as soon as ' + phaseName(r) + ' is signed off.')),
+      r.uat_due && h('div', { class: 'track', role: 'img', 'aria-label': Math.round(used) + '% of the testing window used' }, h('span', { style: 'width:' + used + '%' })),
+      confirming
+        ? h('div', { class: 'confirm actions' },
+            h('span', {}, 'Sign off ' + phaseName(r) + ' as tested and accepted? This is recorded with your name and today’s date.'),
+            h('button', { class: 'btn small', type: 'button', onclick: () => signOff(r) }, 'Yes, sign off'),
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.signing = null; render(); } }, 'Not yet'))
+        : h('div', { class: 'actions' },
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.project = r.project_id; state.kind = 'problem'; state.filter = 'all'; location.hash = link('backlog'); } }, 'Report a problem'),
+            r.script_url && h('a', { class: 'btn ghost small', href: r.script_url, target: '_blank', rel: 'noopener' }, 'Test script'),
+            r.url && h('a', { class: 'btn ghost small', href: r.url, target: '_blank', rel: 'noopener' }, 'Open ' + phaseName(r)),
+            canSign && h('button', { class: 'btn small', type: 'button', disabled: blocking.length > 0, title: blocking.length ? 'Fix the problems that stop sign-off first' : null, onclick: () => { state.signing = r.id; render(); } }, 'Sign off ' + phaseName(r))));
+  }
+
+  async function signOff(r) {
+    showError('');
+    try { const data = await api(base() + '/releases/' + r.id + '/signoff', post({})); state.releases = data.releases; state.signing = null; render(); }
+    catch (e) { showError(e.message); }
+  }
+
+  // ---- Backlog ----
+  function backlog(isPt) {
+    const { kind, project, filter } = state;
+    const here = state.items.filter(i => i.project_id === project);
+    const mine = here.filter(i => i.kind === kind);
+    const tiers = TIER_NAMES[kind];
+    const nodes = [];
+    if (state.projects.length > 1) {
+      nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a project' }, state.projects.map(p => {
+        const n = open(state.items.filter(i => i.project_id === p.id)).length;
+        return h('button', { type: 'button', 'aria-pressed': String(p.id === project), onclick: () => { state.project = p.id; state.filter = 'all'; state.editing = null; render(); } }, p.name + ' (' + n + ')');
+      })));
+    }
+    nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a kind of item' }, KIND_TABS.map(([key, label]) => {
+      const n = open(here.filter(i => i.kind === key)).length;
+      return h('button', { type: 'button', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; render(); } }, label + ' (' + n + ')');
+    })));
+    nodes.push(h('ul', { class: 'legend card' }, tiers.map(([key, label, meaning]) => h('li', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'muted' }, meaning)))));
+    nodes.push(addForm());
+    if (kind !== 'problem' && kind !== 'request') {
+      nodes.push(h('div', { class: 'filters', role: 'group', 'aria-label': 'Show by phase' }, h('span', { class: 'meta' }, 'Show:'),
+        [['all', 'All'], ...PHASES].map(([key, label]) => {
+          const n = open(mine).filter(i => key === 'all' || i.phase === key).length;
+          return h('button', { type: 'button', 'aria-pressed': String(filter === key), onclick: () => { state.filter = key; render(); } }, label + ' (' + n + ')');
+        })));
+    }
+    for (const [key, label] of tiers) {
+      const group = mine.filter(i => i.tier === key && (filter === 'all' || i.phase === filter));
+      const active = open(group), finished = group.filter(i => i.done);
+      nodes.push(h('section', { class: 'tier' },
+        h('h2', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'count' }, active.length + (active.length === 1 ? ' item' : ' items'))),
+        active.length ? active.map(i => card(i, group, isPt)) : h('p', { class: 'empty' }, 'Nothing here yet.'),
+        finished.length > 0 && h('details', { class: 'done-list' }, h('summary', {}, finished.length + ' ' + DONE_WORD[kind]), h('div', { class: 'stack' }, finished.map(i => card(i, group, isPt))))));
+    }
+    return h('div', { class: 'stack' }, nodes);
+  }
+
+  function addForm() {
+    const { kind } = state;
+    const verb = { question: ['Ask a question', 'What do we need to know?', 'Add question'], change: ['Suggest a change', 'What should change?', 'Add suggestion'], problem: ['Report a problem', 'What went wrong?', 'Add problem'], request: ['Ask for help', 'What do you need?', 'Send request'] }[kind];
+    const title = h('input', { type: 'text', maxlength: 160, required: true, id: 'f-title' });
+    const details = h('textarea', { maxlength: 2000, id: 'f-details' });
+    const tier = h('select', { id: 'f-tier' }, TIER_NAMES[kind].map(([k, l]) => h('option', { value: k }, l)));
+    const owner = h('input', { type: 'text', maxlength: 60, id: 'f-owner', placeholder: kind === 'problem' ? 'Test 3, step 5' : 'Who can answer?' });
+    return h('form', { class: 'card stack', onsubmit: async e => {
+      e.preventDefault(); showError('');
+      try {
+        const payload = { kind, project_id: state.project, title: title.value, details: details.value, tier: tier.value };
+        if (kind === 'question' || kind === 'problem') payload.owner = owner.value;
+        state.items = (await api(base() + '/items', post(payload))).items; render();
+      } catch (err) { showError(err.message); }
+    } },
+      h('h2', {}, verb[0]),
+      h('div', {}, h('label', { for: 'f-title' }, verb[1]), title),
+      h('div', {}, h('label', { for: 'f-details' }, 'More detail (optional)'), details),
+      h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, 'How much does it matter?'), tier),
+        (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner)),
+      h('div', {}, h('button', { class: 'btn', type: 'submit' }, verb[2])));
+  }
+
+  function card(item, group, isPt) {
+    if (state.editing === item.id) return editor(item);
+    const tiers = TIER_NAMES[item.kind];
+    const position = open(group).indexOf(item);
+    const phaseless = item.kind === 'problem' || item.kind === 'request';
+    const moveBody = d => post({ direction: d, ...(state.filter === 'all' ? {} : { phase: state.filter }) });
+    const date = item.created_at.slice(0, 10);
+    return h('article', { id: 'item-' + item.id, class: 'card item' + (item.done ? ' is-done' : '') },
+      h('div', { class: 'actions' },
+        h('span', { class: 'pill ' + (item.done ? 'done' : item.tier) }, item.done ? DONE_WORD[item.kind] : tiers.find(t => t[0] === item.tier)[1]),
+        !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])),
+      h('h3', {}, item.title),
+      item.details && h('p', { class: 'muted' }, item.details),
+      item.answer && h('div', { class: 'answer' }, h('b', {}, item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), h('p', {}, item.answer)),
+      h('div', { class: 'meta' }, (item.owner ? (item.kind === 'problem' ? item.owner : 'For ' + item.owner) + ' · ' : '') + (item.added_by || 'Someone') + ' · ' + date),
+      !item.done && !phaseless && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'When:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Phase for ' + item.title },
+        PHASES.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.phase === k), onclick: () => item.phase !== k && act(base() + '/items/' + item.id, patch({ phase: k })) }, l)))),
+      h('div', { class: 'actions' },
+        !item.done && h('span', { class: 'seg small', role: 'group', 'aria-label': 'Priority for ' + item.title },
+          tiers.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.tier === k), onclick: () => item.tier !== k && act(base() + '/items/' + item.id, patch({ tier: k })) }, l))),
+        !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position <= 0, 'aria-label': 'Move up: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('up')) }, 'Up'),
+        !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open(group).length - 1, 'aria-label': 'Move down: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('down')) }, 'Down'),
+        h('span', { class: 'spacer' }),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer or edit' : 'Edit'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind]),
+        isPt && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.confirming = item.id; render(); } }, 'Delete')),
+      state.confirming === item.id && h('div', { class: 'confirm', role: 'alert' }, h('span', {}, 'Delete this for everyone? This cannot be undone.'),
+        h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { state.confirming = null; act(base() + '/items/' + item.id, { method: 'DELETE' }); } }, 'Delete'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.confirming = null; render(); } }, 'Keep it')));
+  }
+
+  function editor(item) {
+    const asks = item.kind === 'question' || item.kind === 'problem' || item.kind === 'request';
+    const title = h('input', { type: 'text', maxlength: 160, value: item.title, id: 'e-title' });
+    const details = h('textarea', { maxlength: 2000, id: 'e-details' }, item.details);
+    const owner = h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'e-owner' });
+    const answer = h('textarea', { maxlength: 2000, id: 'e-answer' }, item.answer);
+    const done = h('input', { type: 'checkbox', id: 'e-done', ...(item.done ? { checked: true } : {}) });
+    const list = h('select', { id: 'e-project' }, state.projects.map(p => h('option', { value: p.id, ...(p.id === item.project_id ? { selected: true } : {}) }, p.name)));
+    return h('form', { class: 'card stack', onsubmit: async e => {
+      e.preventDefault(); state.editing = null;
+      const c = { title: title.value, details: details.value, project_id: Number(list.value) };
+      if (asks) Object.assign(c, { owner: owner.value, answer: answer.value, done: done.checked });
+      await act(base() + '/items/' + item.id, patch(c));
+    } },
+      h('div', {}, h('label', { for: 'e-title' }, 'Title'), title),
+      h('div', {}, h('label', { for: 'e-details' }, 'Details'), details),
+      asks && h('div', {}, h('label', { for: 'e-owner' }, item.kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner),
+      asks && h('div', {}, h('label', { for: 'e-answer' }, item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
+      state.projects.length > 1 && h('div', {}, h('label', { for: 'e-project' }, 'Project'), list),
+      asks && h('label', { for: 'e-done', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, done, 'This is ' + DONE_WORD[item.kind]),
+      h('div', { class: 'row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.editing = null; render(); } }, 'Cancel')));
+  }
+
+  $('switch').addEventListener('change', e => { location.hash = '#/' + e.target.value + '/home'; });
+  window.addEventListener('hashchange', () => state.me && route());
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden || !state.client || state.editing) return;
+    try { state.items = (await api(base() + '/items')).items; render(); } catch {}
+  });
+  (async () => {
+    try { state.me = await api('/me'); await route(); }
+    catch (e) { $('main').replaceChildren(h('div', { class: 'card stack' }, h('h2', {}, 'We couldn’t open your workspace'), h('p', { class: 'muted' }, e.message))); }
+  })();
+})();
+</script>
+</body>
+</html>
