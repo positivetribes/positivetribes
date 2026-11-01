@@ -57,6 +57,9 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .muted{color:var(--muted)}
 .meta{font-size:14px;color:var(--muted)}
 .error{background:var(--must-bg);color:var(--must);border-radius:10px;padding:10px 14px;font-weight:600}
+.preview-bar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 14px;margin:0 0 8px;font-size:15px}
+.preview-bar b{font-weight:700}
+.preview-bar button{background:var(--bg);color:var(--ink);border:0;border-radius:8px;padding:6px 12px;font-weight:700;min-height:36px;cursor:pointer}
 /* Home */
 .next{border-left:6px solid var(--client);display:flex;flex-direction:column;gap:10px}
 .next h2{font-size:clamp(24px,4.5vw,32px)}
@@ -151,8 +154,9 @@ select.client-switch{width:auto;padding:6px 10px}
 <div class="shell">
   <header class="top">
     <a class="brand" href="#/"><svg viewBox="0 0 152 152" aria-hidden="true"><circle cx="76" cy="22" r="22"/><circle cx="130" cy="76" r="22"/><circle cx="76" cy="130" r="22"/><circle cx="22" cy="76" r="22"/><circle class="core" cx="76" cy="76" r="22"/></svg><span>Positive Tribes</span></a>
-    <div class="tools"><select id="switch" class="client-switch" aria-label="Choose a client" hidden></select><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
+    <div class="tools"><select id="switch" class="client-switch" aria-label="Choose a client" hidden></select><select id="preview" class="client-switch" aria-label="Preview the workspace as someone else" hidden></select><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
   </header>
+  <div id="preview-bar" class="preview-bar" role="status" hidden></div>
   <div id="error" class="error" role="alert" hidden></div>
   <main id="main" aria-live="polite"><p class="muted">Loading your workspace…</p></main>
 </div>
@@ -172,7 +176,7 @@ select.client-switch{width:auto;padding:6px 10px}
   const LOOP = ['build', 'uat'];
   const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
-  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null };
+  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null };
 
   const store = {
     get(k) { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } },
@@ -205,7 +209,12 @@ select.client-switch{width:auto;padding:6px 10px}
   }
   const showError = message => { $('error').textContent = message || ''; $('error').hidden = !message; };
 
+  // Positive Tribes can preview a client's workspace as one of its people. The page only changes what it shows:
+  // the server still knows it is Positive Tribes, so a preview must never send changes.
+  const viewer = () => state.preview || state.me.user;
+  const ROLE_NAMES = { ed: 'Director', staff: 'Staff', pt: 'Positive Tribes' };
   async function api(path, options = {}) {
+    if (state.preview && options.method && options.method !== 'GET') throw new Error('This is a read-only preview. Exit the preview to make changes.');
     const headers = { 'content-type': 'application/json' };
     if (store.get('hub-dev-email')) headers['x-dev-email'] = store.get('hub-dev-email');
     let response;
@@ -223,13 +232,14 @@ select.client-switch{width:auto;padding:6px 10px}
   const base = () => '/c/' + state.slug;
   const post = b => ({ method: 'POST', body: JSON.stringify(b) });
   const patch = b => ({ method: 'PATCH', body: JSON.stringify(b) });
-  const firstName = () => (state.me.user.name || '').split(/\s+/)[0].toLowerCase();
+  const firstName = () => (viewer().name || '').split(/\s+/)[0].toLowerCase();
   const open = items => items.filter(i => !i.done);
   const link = (view, id) => '#/' + state.slug + '/' + view + (id ? '/' + id : '');
 
   async function loadClient(slug) {
     const [p, i] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items')]);
-    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], items: i.items });
+    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], items: i.items, preview: null, people: [] });
+    if (state.me.user.role === 'pt') { try { state.people = (await api('/c/' + slug + '/people')).people; } catch {} }
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
     if (!state.projects.some(x => x.id === state.project)) state.project = state.projects[0] && state.projects[0].id;
@@ -263,11 +273,21 @@ select.client-switch{width:auto;padding:6px 10px}
 
   function render() {
     if (!state.client) return;
-    const isPt = state.me.user.role === 'pt';
+    const isPt = viewer().role === 'pt';
     const sw = $('switch');
-    sw.hidden = state.me.clients.length < 2;
+    // A client's person only ever sees their own workspace, so the client switch hides during a preview.
+    sw.hidden = state.me.clients.length < 2 || Boolean(state.preview);
     sw.replaceChildren(...state.me.clients.map(c => h('option', { value: c.slug, ...(c.slug === state.slug ? { selected: true } : {}) }, c.name)));
-    $('who').textContent = state.me.user.name || state.me.user.email;
+    const pv = $('preview');
+    pv.hidden = state.me.user.role !== 'pt' || !state.people.length;
+    pv.replaceChildren(h('option', { value: '' }, 'Preview as…'), ...state.people.map(u =>
+      h('option', { value: u.email, ...(state.preview && state.preview.email === u.email ? { selected: true } : {}) }, u.name + ' (' + ROLE_NAMES[u.role] + ')')));
+    const bar = $('preview-bar');
+    bar.hidden = !state.preview;
+    bar.replaceChildren(...(state.preview ? [
+      h('span', {}, 'Previewing as ', h('b', {}, state.preview.name), ' (' + ROLE_NAMES[state.preview.role] + ') \u00b7 read-only. They also need to be on the Access list to sign in.'),
+      h('button', { type: 'button', onclick: () => setPreview('') }, 'Exit preview')] : []));
+    $('who').textContent = viewer().name || viewer().email;
     const waiting = open(state.items).filter(i => i.kind === 'question').length;
     $('main').replaceChildren(
       h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Your workspace'), h('h1', {}, state.client.name)),
@@ -299,7 +319,7 @@ select.client-switch{width:auto;padding:6px 10px}
         const at = STEPS.findIndex(s => s[0] === p.phase);
         const counts = open(state.items.filter(i => i.project_id === p.id));
         const phases = state.releases.filter(r => r.project_id === p.id);
-        const isPt = state.me.user.role === 'pt';
+        const isPt = viewer().role === 'pt';
         // With more than one client phase, Build and Testing repeat for each phase before Launch.
         const loops = phases.length > 1;
         const current = phases.find(r => r.stage === 'uat') || phases.find(r => r.stage === 'building') || phases.find(r => !['signed_off', 'live'].includes(r.stage));
@@ -366,7 +386,7 @@ select.client-switch{width:auto;padding:6px 10px}
     const acceptance = r.auto_accept && r.uat_due && (problems.length
       ? (problems.length === 1 ? 'A problem is' : problems.length + ' problems are') + ' listed, so ' + phaseName(r) + ' is accepted once ' + (problems.length === 1 ? 'it is' : 'they are') + ' fixed and signed off.'
       : 'No problems listed yet. ' + phaseName(r) + ' is accepted automatically on ' + shortDate(r.uat_due) + ' unless one is added by then.');
-    const canSign = state.me.user.role !== 'staff';
+    const canSign = viewer().role !== 'staff';
     const confirming = state.signing === r.id;
     return h('div', { class: 'card uat' + (left != null && left < 0 ? ' late' : left != null && left <= 7 ? ' soon' : '') },
       h('div', { class: 'left' }, big),
@@ -513,6 +533,13 @@ select.client-switch{width:auto;padding:6px 10px}
   }
 
   $('switch').addEventListener('change', e => { location.hash = '#/' + e.target.value + '/home'; });
+  function setPreview(email) {
+    state.preview = state.people.find(u => u.email === email) || null;
+    Object.assign(state, { editing: null, confirming: null, signing: null });
+    showError('');
+    render();
+  }
+  $('preview').addEventListener('change', e => setPreview(e.target.value));
   window.addEventListener('hashchange', () => state.me && route());
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden || !state.client || state.editing) return;
