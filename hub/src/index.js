@@ -133,10 +133,19 @@ export default {
         return json({ user: { email: user.email, name: user.name, role: user.role }, clients });
       }
 
-      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases)(?:\/(\d+))?(?:\/(move|signoff))?$/);
+      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people)(?:\/(\d+))?(?:\/(move|signoff))?$/);
       if (!match) return json({ error: 'Not found.' }, 404);
       const [, slug, resource, rawId, action] = match;
       const client = await scope(db, user, slug);
+
+      // The client's people, for Positive Tribes' "Preview as" menu. Clients never see this list.
+      if (resource === 'people' && !rawId && method === 'GET') {
+        if (user.role !== 'pt') return json({ error: 'Not found.' }, 404);
+        const { results } = await db.prepare(
+          "SELECT email, name, role FROM users WHERE client_id = ? ORDER BY CASE role WHEN 'ed' THEN 0 ELSE 1 END, name"
+        ).bind(client.id).all();
+        return json({ people: results });
+      }
 
       if (resource === 'projects' && !rawId && method === 'GET') {
         const { results } = await db.prepare(

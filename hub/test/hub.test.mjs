@@ -32,6 +32,20 @@ test('requires sign in and an invitation', async () => {
   assert.deepEqual(pt.clients.map(c => c.slug), ['safe', 'uep']);
 });
 
+test('only Positive Tribes can list a client\'s people, for previewing as them', async () => {
+  const { call, sqlite } = setup();
+  sqlite.exec("INSERT INTO users (email, name, role, client_id) VALUES ('sam@uep.org', 'Sam', 'staff', 1)");
+  const r = await call('eric@positivetribes.org', '/api/c/uep/people');
+  assert.equal(r.status, 200);
+  // Directors first; only this client's people; Positive Tribes itself is not listed.
+  assert.deepEqual((await r.json()).people, [{ email: 'molly@uep.org', name: 'Molly', role: 'ed' }, { email: 'sam@uep.org', name: 'Sam', role: 'staff' }]);
+  assert.deepEqual((await (await call('eric@positivetribes.org', '/api/c/safe/people')).json()).people.map(p => p.email), ['dana@safe.org']);
+  assert.equal((await call('molly@uep.org', '/api/c/uep/people')).status, 404);
+  assert.equal((await call('sam@uep.org', '/api/c/uep/people')).status, 404);
+  assert.equal((await call('dana@safe.org', '/api/c/uep/people')).status, 404);
+  assert.equal((await call('eric@positivetribes.org', '/api/c/uep/people', 'POST', {})).status, 404);
+});
+
 test('clients cannot see or touch another client', async () => {
   const { call } = setup();
   const add = await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Waitlist rules', kind: 'question', tier: 'must', project_id: 1 });
