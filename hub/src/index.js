@@ -58,15 +58,24 @@ async function listItems(db, clientId) {
   return results.map(item => ({ ...item, done: Boolean(item.done) }));
 }
 
-// Each phase's testing window ends uat_days after it started (at most 30 days).
+// The last day of a testing window: uat_days calendar days, or uat_days weekdays (weekends skipped), after it starts.
+export function windowEnd(start, days, type) {
+  const date = new Date(start + 'T00:00:00Z');
+  if (type !== 'business') { date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); }
+  for (let left = days; left > 0;) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    if (date.getUTCDay() % 6 !== 0) left--;
+  }
+  return date.toISOString().slice(0, 10);
+}
+
 async function listReleases(db, clientId) {
   const { results } = await db.prepare(
-    `SELECT id, project_id, number, name, summary, url, script_url, stage, uat_started, uat_days,
-            CASE WHEN uat_started IS NULL THEN NULL ELSE date(uat_started, '+' || uat_days || ' days') END AS uat_due,
+    `SELECT id, project_id, number, name, summary, url, script_url, stage, uat_started, uat_days, uat_day_type, auto_accept,
             signed_off_by, signed_off_at
      FROM releases WHERE client_id = ? ORDER BY project_id, number`
   ).bind(clientId).all();
-  return results;
+  return results.map(r => ({ ...r, auto_accept: Boolean(r.auto_accept), uat_due: r.uat_started ? windowEnd(r.uat_started, r.uat_days, r.uat_day_type) : null }));
 }
 
 async function requireItem(db, clientId, value) {

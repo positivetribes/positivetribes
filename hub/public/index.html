@@ -294,20 +294,31 @@ select.client-switch{width:auto;padding:6px 10px}
   const phaseName = r => r.name || 'Phase ' + r.number;
   const longDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   const shortDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  function daysUntil(iso) {
+  // Days from today to iso: calendar days, or for business-day windows the weekdays still to come (weekends skipped).
+  function daysUntil(iso, business) {
     const now = new Date();
     const [y, m, d] = iso.split('-').map(Number);
-    return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+    const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()), end = Date.UTC(y, m - 1, d);
+    const calendar = Math.round((end - today) / 86400000);
+    if (!business || calendar <= 0) return calendar;
+    let left = 0;
+    for (let t = today + 86400000; t <= end; t += 86400000) if (new Date(t).getUTCDay() % 6 !== 0) left++;
+    return left;
   }
 
   function testing(r) {
     const project = state.projects.find(p => p.id === r.project_id);
-    const left = r.uat_due ? daysUntil(r.uat_due) : null;
+    const business = r.uat_day_type === 'business';
+    const left = r.uat_due ? daysUntil(r.uat_due, business) : null;
     const used = left == null ? 0 : Math.min(100, Math.max(0, (r.uat_days - left) / r.uat_days * 100));
     const waiting = state.releases.find(x => x.project_id === r.project_id && x.number > r.number && x.stage === 'waiting');
     const problems = open(state.items.filter(i => i.project_id === r.project_id && i.kind === 'problem'));
     const blocking = problems.filter(i => i.tier === 'must');
     const big = left == null ? 'Testing' : left > 1 ? left + ' days left' : left === 1 ? '1 day left' : left === 0 ? 'Due today' : -left + (left === -1 ? ' day' : ' days') + ' over';
+    // Under the agreement, a phase with auto_accept is accepted on its due date unless problems are listed by then.
+    const acceptance = r.auto_accept && r.uat_due && (problems.length
+      ? (problems.length === 1 ? 'A problem is' : problems.length + ' problems are') + ' listed, so ' + phaseName(r) + ' is accepted once ' + (problems.length === 1 ? 'it is' : 'they are') + ' fixed and signed off.'
+      : 'No problems listed yet. ' + phaseName(r) + ' is accepted automatically on ' + shortDate(r.uat_due) + ' unless one is added by then.');
     const canSign = state.me.user.role !== 'staff';
     const confirming = state.signing === r.id;
     return h('div', { class: 'card uat' + (left != null && left < 0 ? ' late' : left != null && left <= 7 ? ' soon' : '') },
@@ -315,10 +326,11 @@ select.client-switch{width:auto;padding:6px 10px}
       h('div', { class: 'what' },
         h('div', { class: 'label' }, (project ? project.name + ' · ' : '') + 'Testing'),
         h('h2', {}, phaseName(r) + ' testing and sign-off'),
-        r.uat_due && h('p', { class: 'muted' }, 'Due ' + longDate(r.uat_due) + ' (' + r.uat_days + ' days from ' + shortDate(r.uat_started) + ')'),
-        h('p', { class: 'meta' }, blocking.length
-          ? blocking.length + ' problem' + (blocking.length === 1 ? '' : 's') + ' must be fixed before sign-off.'
-          : problems.length ? problems.length + ' open problem' + (problems.length === 1 ? '' : 's') + ', none blocking sign-off.' : 'No open problems.'),
+        r.uat_due && h('p', { class: 'muted' }, 'Due ' + longDate(r.uat_due) + ' (' + r.uat_days + (business ? ' business days' : ' days') + ' from ' + shortDate(r.uat_started) + ')'),
+        acceptance && h('p', { class: 'meta' }, acceptance),
+        blocking.length ? h('p', { class: 'meta' }, blocking.length + ' problem' + (blocking.length === 1 ? '' : 's') + ' must be fixed before sign-off.')
+          : problems.length ? h('p', { class: 'meta' }, problems.length + ' open problem' + (problems.length === 1 ? '' : 's') + ', none blocking sign-off.')
+          : !acceptance && h('p', { class: 'meta' }, 'No open problems.'),
         waiting && h('p', { class: 'meta' }, phaseName(waiting) + ' is built and starts testing as soon as ' + phaseName(r) + ' is signed off.')),
       r.uat_due && h('div', { class: 'track', role: 'img', 'aria-label': Math.round(used) + '% of the testing window used' }, h('span', { style: 'width:' + used + '%' })),
       confirming
