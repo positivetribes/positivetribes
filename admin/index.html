@@ -7,7 +7,7 @@ a{color:inherit}a:focus-visible,button:focus-visible,input:focus-visible,textare
 .wrap{width:min(1240px,calc(100% - 32px));margin:auto}
 header{display:flex;align-items:center;gap:18px;padding:18px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;font-family:'Fraunces',Georgia,serif;font-size:20px;text-decoration:none}.brand svg{width:30px;height:30px}.brand circle{fill:currentColor}.brand .core{fill:var(--rust)}
-nav{display:flex;gap:4px}nav a{text-decoration:none;padding:7px 12px;border-radius:6px;font-size:14px}nav a[aria-current]{background:var(--soft);font-weight:600}
+nav{display:flex;gap:4px}nav a{text-decoration:none;padding:7px 12px;border-radius:6px;font-size:14px}nav a[aria-current]{background:var(--soft);font-weight:600}nav a.out{color:var(--muted)}nav a.out:hover{color:inherit;background:var(--soft)}
 .status{margin-left:auto;display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted);flex-wrap:wrap}
 button,.button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:6px 11px;cursor:pointer;text-decoration:none;display:inline-block}button:hover,.button:hover{border-color:var(--ink)}button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}button.link{border:0;background:none;padding:2px 4px;color:var(--muted);text-decoration:underline}
 h1,h2,h3{font-family:'Fraunces',Georgia,serif;font-weight:400;line-height:1.15;margin:0}h1{font-size:clamp(28px,4vw,40px)}h2{font-size:20px;margin-bottom:12px}h3{font-size:16px;font-family:'DM Sans',Arial,sans-serif;font-weight:700}
@@ -44,7 +44,7 @@ details summary{cursor:pointer;font-weight:600}details[open] summary{margin-bott
 @media(max-width:600px){.status{margin-left:0;width:100%}}
 </style></head><body><div class="wrap">
 <header><a class="brand" href="#/"><svg viewBox="0 0 152 152" aria-hidden="true"><circle cx="76" cy="22" r="22"/><circle cx="130" cy="76" r="22"/><circle cx="76" cy="130" r="22"/><circle cx="22" cy="76" r="22"/><circle class="core" cx="76" cy="76" r="22"/></svg><span>Command Center</span></a>
-<nav aria-label="Views"><a href="#/" data-nav="today">Today</a><a href="#/inbox" data-nav="inbox">Inbox<span class="badge" id="inbox-count"></span></a><a href="#/clients" data-nav="clients">Clients</a></nav>
+<nav aria-label="Views"><a href="#/" data-nav="today">Today</a><a href="#/inbox" data-nav="inbox">Inbox<span class="badge" id="inbox-count"></span></a><a href="#/clients" data-nav="clients">Clients</a><a class="out" href="https://hub.positivetribes.org/" title="Open Tribe Hub, the client workspaces">Hub<span aria-hidden="true"> ↗</span></a></nav>
 <div class="status"><span id="sync"></span><button id="refresh" type="button">Refresh</button></div></header>
 <main id="main" aria-live="polite"><p class="muted">Loading…</p></main></div>
 <script>
