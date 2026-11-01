@@ -66,6 +66,13 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .steps li{flex:1;min-width:0;text-align:center;font-size:12px;color:var(--muted);position:relative;padding-top:22px;line-height:1.2;white-space:nowrap}
 .steps li span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .steps li.now span{position:static;width:auto;height:auto;clip:auto;overflow:visible;display:block;margin-top:2px}
+/* Hover or tap any other dot to see which part of the process it is. */
+.steps li:not(.now){cursor:default}
+.steps li:not(.now):hover span,.steps li:not(.now):focus-visible span{width:auto;height:auto;clip:auto;overflow:visible;bottom:calc(100% - 2px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:4px 10px;border-radius:6px;font-size:13px;font-weight:600;z-index:2;box-shadow:var(--shadow)}
+.steps li:first-child:not(.now):hover span,.steps li:first-child:not(.now):focus-visible span{left:0;transform:none}
+.steps li:last-child:not(.now):hover span,.steps li:last-child:not(.now):focus-visible span{left:auto;right:0;transform:none}
+.steps li:not(.now):focus-visible{outline:none}
+.steps li:not(.now):focus-visible:before{outline:3px solid var(--rust);outline-offset:2px}
 .steps li:before{content:"";position:absolute;top:5px;left:50%;width:12px;height:12px;border-radius:50%;background:var(--line);transform:translateX(-50%);z-index:1}
 .steps li:after{content:"";position:absolute;top:10px;left:-50%;width:100%;height:2px;background:var(--line)}
 .steps li:first-child:after{display:none}
@@ -256,7 +263,7 @@ select.client-switch{width:auto;padding:6px 10px}
           h('h2', {}, p.name),
           h('p', { class: 'muted' }, 'Now: ' + STEPS[Math.max(at, 0)][1]),
           h('ol', { class: 'steps', 'aria-label': 'Progress for ' + p.name },
-            STEPS.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : {}) }, h('span', {}, label)))),
+            STEPS.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : { tabindex: '0' }) }, h('span', {}, n < at ? label + ' \u00b7 done' : n > at ? label + ' \u00b7 coming up' : label)))),
           h('p', { class: 'meta' }, counts.length + ' open item' + (counts.length === 1 ? '' : 's')),
           p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')));
       })),
