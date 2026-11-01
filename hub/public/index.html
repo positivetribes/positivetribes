@@ -119,6 +119,19 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .docs .doc-title b{font-weight:650}
 .pill.doc{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}
 .pill.doc.signed{background:var(--ok-bg);color:var(--ok)}
+.shots{display:flex;gap:8px;flex-wrap:wrap}
+.shot{position:relative;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.shot button.thumb{padding:0;border:1px solid var(--line);border-radius:8px;background:var(--soft);overflow:hidden;width:132px;height:88px;display:block}
+.shot button.thumb:hover{border-color:var(--ink)}
+.shot img{width:100%;height:100%;object-fit:cover;object-position:top left;display:block}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:15px;color:var(--muted)}
+.drop.over{border-color:var(--client);background:color-mix(in srgb,var(--client) 8%,transparent)}
+.drop input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+.drop label{margin:0}
+dialog.shot-view{border:0;padding:0;background:transparent;max-width:min(1200px,96vw);max-height:94vh}
+dialog.shot-view::backdrop{background:rgba(10,15,13,.82)}
+dialog.shot-view img{display:block;max-width:100%;max-height:86vh;border-radius:10px;margin-inline:auto}
+dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .pill.idea-status{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}
 .pill.idea-status.next{background:var(--client);color:#fff}.pill.idea-status.shipped{background:var(--ok-bg);color:var(--ok)}.pill.idea-status.declined{background:transparent;border:1px solid var(--line);color:var(--muted)}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
@@ -179,6 +192,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   <div id="error" class="error" role="alert" hidden></div>
   <main id="main" aria-live="polite"><p class="muted">Loading your workspace…</p></main>
 </div>
+<dialog id="shot-view" class="shot-view" aria-label="Screenshot"><div class="bar"><a class="btn small" id="shot-open" target="_blank" rel="noopener">Open full size</a><button class="btn small" type="button" id="shot-close">Close</button></div><img id="shot-img" alt=""></dialog>
 <script>
 (() => {
   const TIER_NAMES = {
@@ -195,7 +209,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   const LOOP = ['build', 'uat'];
   const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
-  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null, documents: [], ideas: [], ideaFilter: 'new', ideaEditing: null };
+  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null, documents: [], ideas: [], ideaFilter: 'new', ideaEditing: null, ideaFiles: [] };
 
   const store = {
     get(k) { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } },
@@ -582,6 +596,76 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     try { state.ideas = (await api('/ideas' + path, options)).ideas; state.ideaEditing = null; render(); }
     catch (e) { showError(e.message); }
   };
+  // ---- Screenshots on ideas ----
+  // Images are fetched with the same sign-in as the rest of the page and shown from memory (object URLs).
+  const MAX_SHOTS = 4, SHOT_BYTES = 1400000;
+  const shotCache = new Map();
+  function devHeaders(extra = {}) { const x = { ...extra }; if (store.get('hub-dev-email')) x['x-dev-email'] = store.get('hub-dev-email'); return x; }
+  function shotImg(ideaId, imgId, alt) {
+    const img = h('img', { alt });
+    const key = ideaId + '/' + imgId;
+    if (!shotCache.has(key)) {
+      shotCache.set(key, fetch('/api/ideas/' + ideaId + '/images/' + imgId, { headers: devHeaders() })
+        .then(r => { if (!r.ok) throw new Error('missing'); return r.blob(); }).then(b => URL.createObjectURL(b))
+        .catch(e => { shotCache.delete(key); throw e; }));
+    }
+    shotCache.get(key).then(url => { img.src = url; }, () => {});
+    return img;
+  }
+  function showShot(img) {
+    if (!img.src) return;
+    $('shot-img').src = img.src; $('shot-img').alt = img.alt; $('shot-open').href = img.src;
+    $('shot-view').showModal();
+  }
+  $('shot-close').addEventListener('click', () => $('shot-view').close());
+  $('shot-view').addEventListener('click', e => { if (e.target === $('shot-view')) $('shot-view').close(); });
+  // Shrinks a screenshot in the browser before upload. Re-drawing it also drops hidden photo data such as location.
+  async function shrink(file) {
+    if (!/^image\//.test(file.type)) throw new Error('Choose an image file, such as a PNG or JPEG screenshot.');
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); } catch { throw new Error('This browser cannot read that image. Try a PNG or JPEG screenshot.'); }
+    const scale = Math.min(1, 1800 / bitmap.width, 3200 / bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const encode = (type, quality) => new Promise(done => canvas.toBlob(done, type, quality));
+    let blob = await encode('image/webp', 0.9);
+    if (!blob || blob.type !== 'image/webp' || blob.size > SHOT_BYTES) blob = await encode('image/jpeg', 0.85);
+    if (blob && blob.size > SHOT_BYTES) blob = await encode('image/jpeg', 0.6);
+    if (!blob || blob.size > SHOT_BYTES) throw new Error('That screenshot is too large. Try a smaller one.');
+    return blob;
+  }
+  async function uploadShot(ideaId, blob) {
+    if (state.preview) throw new Error('This is a read-only preview. Exit the preview to make changes.');
+    let response;
+    try { response = await fetch('/api/ideas/' + ideaId + '/images', { method: 'POST', headers: devHeaders({ 'content-type': blob.type }), body: blob }); }
+    catch { throw new Error('Could not reach the server. Check your connection and try again.'); }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Could not add the screenshot. Please try again.');
+    return data;
+  }
+  // A file picker that also takes pasted and dropped screenshots. onFiles receives image files.
+  function shotPicker(id, room, onFiles) {
+    const input = h('input', { type: 'file', id, accept: 'image/png,image/jpeg,image/webp,image/gif', multiple: true, onchange: e => { onFiles([...e.target.files]); e.target.value = ''; } });
+    const zone = h('div', { class: 'drop' }, input,
+      h('label', { for: id, class: 'btn ghost small', tabindex: '0', role: 'button', onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } } }, 'Add screenshot'),
+      h('span', {}, 'or paste or drop one here' + (room < MAX_SHOTS ? ' (' + room + ' more allowed)' : ' (up to ' + MAX_SHOTS + ')')));
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('over'); onFiles([...e.dataTransfer.files]); });
+    return zone;
+  }
+  const pastedImages = e => [...(e.clipboardData && e.clipboardData.files || [])].filter(f => /^image\//.test(f.type));
+  async function addShots(files, room, use) {
+    showError('');
+    const images = files.filter(f => /^image\//.test(f.type));
+    if (!images.length) { if (files.length) showError('Choose an image file, such as a PNG or JPEG screenshot.'); return; }
+    if (images.length > room) showError('An idea can have at most ' + MAX_SHOTS + ' screenshots. Only the first ' + room + ' were added.');
+    for (const file of images.slice(0, Math.max(0, room))) {
+      try { await use(await shrink(file)); } catch (e) { showError(e.message); return; }
+    }
+  }
+
   function ideas(isPt) {
     // A preview shows only what that client's people would see: their own organization's ideas.
     const visible = isPt ? state.ideas : state.ideas.filter(i => !state.preview || i.client_slug === state.slug);
@@ -607,12 +691,37 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const title = h('input', { type: 'text', maxlength: 160, required: true, id: 'i-title' });
     const details = h('textarea', { maxlength: 2000, id: 'i-details' });
     const tier = h('select', { id: 'i-tier' }, IDEA_TIERS.map(([k, l]) => h('option', { value: k, ...(k === 'nice' ? { selected: true } : {}) }, l)));
-    return h('form', { class: 'stack', onsubmit: e => { e.preventDefault(); actIdea('', post({ title: title.value, details: details.value, tier: tier.value })); } },
+    // Screenshots wait in the browser until the idea is sent; only this part redraws, so typed text is kept.
+    const pending = h('div', {});
+    const drawPending = () => pending.replaceChildren(...[h('label', {}, 'Screenshots (optional)'),
+      state.ideaFiles.length > 0 && h('div', { class: 'shots', style: 'margin-bottom:8px' }, state.ideaFiles.map((f, n) => h('div', { class: 'shot' },
+        h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1), onclick: e => showShot(e.currentTarget.querySelector('img')) }, h('img', { src: f.url, alt: 'Screenshot ' + (n + 1) })),
+        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { URL.revokeObjectURL(f.url); state.ideaFiles.splice(n, 1); drawPending(); } }, 'Remove')))),
+      state.ideaFiles.length < MAX_SHOTS && shotPicker('i-shots', MAX_SHOTS - state.ideaFiles.length, take)].filter(Boolean));
+    const take = files => addShots(files, MAX_SHOTS - state.ideaFiles.length, async blob => { state.ideaFiles.push({ blob, url: URL.createObjectURL(blob) }); drawPending(); });
+    drawPending();
+    const form = h('form', { class: 'stack', onsubmit: async e => {
+      e.preventDefault(); showError('');
+      const button = form.querySelector('button[type=submit]');
+      button.disabled = true; button.textContent = 'Sending…';
+      try {
+        const created = await api('/ideas', post({ title: title.value, details: details.value, tier: tier.value }));
+        state.ideas = created.ideas;
+        try { for (const f of state.ideaFiles) state.ideas = (await uploadShot(created.id, f.blob)).ideas; }
+        finally { state.ideaFiles.forEach(f => URL.revokeObjectURL(f.url)); state.ideaFiles = []; render(); }
+      } catch (err) { showError(err.message); button.disabled = false; button.textContent = 'Send idea'; }
+    } },
       h('div', {}, h('label', { for: 'i-title' }, 'What would make this hub better?'), title),
       h('div', {}, h('label', { for: 'i-details' }, 'More detail (optional)'), details),
+      pending,
       h('div', { class: 'row' }, h('div', {}, h('label', { for: 'i-tier' }, 'How much does it matter?'), tier)),
       h('div', {}, h('button', { class: 'btn', type: 'submit' }, 'Send idea')));
+    form.addEventListener('paste', e => { const files = pastedImages(e); if (files.length) { e.preventDefault(); take(files); } });
+    return form;
   }
+  const shotList = (i, remove) => i.images.length > 0 && h('div', { class: 'shots' }, i.images.map((id, n) => h('div', { class: 'shot' },
+    h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1) + ' for ' + i.title, onclick: e => showShot(e.currentTarget.querySelector('img')) }, shotImg(i.id, id, 'Screenshot ' + (n + 1) + ' for ' + i.title)),
+    remove && h('button', { type: 'button', class: 'btn ghost small', onclick: () => remove(id) }, 'Remove'))));
   function ideaCard(i, isPt) {
     if (state.ideaEditing === i.id) return ideaEditor(i, isPt);
     const status = IDEA_STATUS.find(s => s[0] === i.status)[1];
@@ -623,6 +732,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         isPt && h('span', { class: 'pill phase' }, i.client_name)),
       h('h3', {}, i.title),
       i.details && h('p', { class: 'muted' }, i.details),
+      shotList(i),
       i.note ? h('div', { class: 'answer' }, h('b', {}, 'Positive Tribes'), h('p', {}, i.note)) : !isPt && h('p', { class: 'meta' }, IDEA_HELP[i.status]),
       h('div', { class: 'meta' }, (i.added_by || 'Someone') + ' · ' + i.created_at.slice(0, 10) + (i.shipped_at ? ' · shipped ' + i.shipped_at.slice(0, 10) : '')),
       isPt && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'Decide:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Status of ' + i.title },
@@ -634,20 +744,36 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { state.confirming = null; actIdea('/' + i.id, { method: 'DELETE' }); } }, 'Delete'),
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.confirming = null; render(); } }, 'Keep it')));
   }
+  // Screenshot changes while editing keep the editor open.
+  const keepEditing = async (path, options) => {
+    showError('');
+    try { state.ideas = (await api('/ideas' + path, options)).ideas; render(); } catch (e) { showError(e.message); }
+  };
   function ideaEditor(i, isPt) {
     const title = h('input', { type: 'text', maxlength: 160, value: i.title, id: 'ie-title' });
     const details = h('textarea', { maxlength: 2000, id: 'ie-details' }, i.details);
     const tier = h('select', { id: 'ie-tier' }, IDEA_TIERS.map(([k, l]) => h('option', { value: k, ...(k === i.tier ? { selected: true } : {}) }, l)));
     const note = h('textarea', { maxlength: 2000, id: 'ie-note', placeholder: 'Thanks, Molly. This is in the next build.' }, i.note);
-    return h('form', { class: 'card stack', onsubmit: e => {
+    const form = h('form', { class: 'card stack', onsubmit: e => {
       e.preventDefault();
       actIdea('/' + i.id, patch({ title: title.value, details: details.value, tier: tier.value, ...(isPt ? { note: note.value } : {}) }));
     } },
       h('div', {}, h('label', { for: 'ie-title' }, 'Idea'), title),
       h('div', {}, h('label', { for: 'ie-details' }, 'Details'), details),
       h('div', {}, h('label', { for: 'ie-tier' }, 'How much does it matter?'), tier),
+      h('div', {}, h('label', {}, 'Screenshots'), h('p', { class: 'meta', style: 'margin-bottom:8px' }, 'Adding or removing a screenshot saves right away.'),
+        shotList(i, id => keepEditing('/' + i.id + '/images/' + id, { method: 'DELETE' })),
+        i.images.length < MAX_SHOTS && h('div', { style: 'margin-top:8px' }, shotPicker('ie-shots', MAX_SHOTS - i.images.length, files =>
+          addShots(files, MAX_SHOTS - i.images.length, async blob => { state.ideas = (await uploadShot(i.id, blob)).ideas; render(); })))),
       isPt && h('div', {}, h('label', { for: 'ie-note' }, 'Reply to ' + i.client_name + ' (they see this)'), note),
       h('div', { class: 'row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.ideaEditing = null; render(); } }, 'Cancel')));
+    form.addEventListener('paste', e => {
+      const files = pastedImages(e);
+      if (!files.length) return;
+      e.preventDefault();
+      addShots(files, MAX_SHOTS - i.images.length, async blob => { state.ideas = (await uploadShot(i.id, blob)).ideas; render(); });
+    });
+    return form;
   }
 
   $('switch').addEventListener('change', e => { location.hash = '#/' + e.target.value + '/home'; });
