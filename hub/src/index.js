@@ -47,6 +47,15 @@ async function scope(db, user, slug) {
   return client;
 }
 
+// Positive Tribes also sees documents not yet shown to the client (visible = 0).
+async function listDocuments(db, clientId, everything) {
+  const { results } = await db.prepare(
+    `SELECT id, project_id, kind, title, url, note, status, visible FROM documents
+     WHERE client_id = ? AND (visible = 1 OR ?) ORDER BY position, id`
+  ).bind(clientId, everything ? 1 : 0).all();
+  return results.map(d => ({ ...d, visible: Boolean(d.visible) }));
+}
+
 async function listItems(db, clientId) {
   const { results } = await db.prepare(
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
@@ -154,7 +163,8 @@ export default {
         return json({
           client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date },
           projects: results,
-          releases: await listReleases(db, client.id)
+          releases: await listReleases(db, client.id),
+          documents: await listDocuments(db, client.id, user.role === 'pt')
         });
       }
 

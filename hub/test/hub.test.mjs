@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -44,6 +44,23 @@ test('only Positive Tribes can list a client\'s people, for previewing as them',
   assert.equal((await call('sam@uep.org', '/api/c/uep/people')).status, 404);
   assert.equal((await call('dana@safe.org', '/api/c/uep/people')).status, 404);
   assert.equal((await call('eric@positivetribes.org', '/api/c/uep/people', 'POST', {})).status, 404);
+});
+
+test('documents: clients see their own shown documents; Positive Tribes sees hidden ones too', async () => {
+  const { call, sqlite } = setup();
+  sqlite.exec(`
+    INSERT INTO documents (client_id, project_id, title, url, status, visible, position) VALUES
+      (1, 1, 'Scheduler proposal', 'https://docs.example/signed', 'signed', 1, 1),
+      (1, 2, 'Fundraising proposal', 'https://docs.example/draft', 'draft', 0, 2),
+      (2, 3, 'Sober AF proposal', '', '', 1, 1);
+  `);
+  const molly = await (await call('molly@uep.org', '/api/c/uep/projects')).json();
+  assert.deepEqual(molly.documents.map(d => [d.title, d.status, d.visible]), [['Scheduler proposal', 'signed', true]]);
+  const eric = await (await call('eric@positivetribes.org', '/api/c/uep/projects')).json();
+  assert.deepEqual(eric.documents.map(d => [d.title, d.visible]), [['Scheduler proposal', true], ['Fundraising proposal', false]]);
+  // Another client's documents never leak.
+  assert.equal((await call('dana@safe.org', '/api/c/uep/projects')).status, 404);
+  assert.deepEqual((await (await call('dana@safe.org', '/api/c/safe/projects')).json()).documents.map(d => d.title), ['Sober AF proposal']);
 });
 
 test('clients cannot see or touch another client', async () => {

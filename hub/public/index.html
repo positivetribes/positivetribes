@@ -112,6 +112,13 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .admin-only{margin:4px 0 0;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
 .pill.stage{background:var(--soft);color:var(--ink);text-transform:none;letter-spacing:0;font-weight:600}
 .pill.stage.uat{background:var(--client);color:#fff}
+.docs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.docs li{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
+.docs li:first-child{border-top:0;padding-top:4px}
+.docs .doc-title{display:flex;flex-direction:column;gap:2px;flex:1 1 220px;min-width:0}
+.docs .doc-title b{font-weight:650}
+.pill.doc{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}
+.pill.doc.signed{background:var(--ok-bg);color:var(--ok)}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .list li a{color:inherit;display:flex;gap:10px;align-items:baseline;padding:10px 4px;text-decoration:none;border-bottom:1px solid var(--line)}
 .list li:last-child a{border-bottom:0}.list li a:hover{color:var(--rust)}
@@ -176,7 +183,7 @@ select.client-switch{width:auto;padding:6px 10px}
   const LOOP = ['build', 'uat'];
   const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
-  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null };
+  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null, documents: [] };
 
   const store = {
     get(k) { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } },
@@ -238,7 +245,7 @@ select.client-switch{width:auto;padding:6px 10px}
 
   async function loadClient(slug) {
     const [p, i] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items')]);
-    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], items: i.items, preview: null, people: [] });
+    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], items: i.items, preview: null, people: [] });
     if (state.me.user.role === 'pt') { try { state.people = (await api('/c/' + slug + '/people')).people; } catch {} }
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
@@ -351,8 +358,26 @@ select.client-switch{width:auto;padding:6px 10px}
           isPt && p.live_url && !isLive(p, phases) && h('p', { class: 'admin-only' }, h('span', { class: 'meta' }, 'Only Positive Tribes sees this: '),
             h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production')));
       })),
+      documents(),
       mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
         h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
+  }
+
+  // ---- Documents: proposals and other papers, as links ----
+  const DOC_STATUS = { draft: 'Draft', sent: 'Sent', signed: 'Signed' };
+  const DOC_KINDS = { proposal: 'Proposal', agreement: 'Agreement', test_script: 'Test script', design: 'Design', other: 'Document' };
+  function documents() {
+    // Positive Tribes receives hidden documents too; a preview shows only what the client would see.
+    const isPt = viewer().role === 'pt';
+    const docs = state.documents.filter(d => d.visible || isPt);
+    if (!docs.length) return null;
+    const projectName = id => (state.projects.find(p => p.id === id) || {}).name;
+    return h('div', { class: 'card' }, h('h2', {}, 'Documents'),
+      h('ul', { class: 'docs' }, docs.map(d => h('li', {},
+        h('div', { class: 'doc-title' }, h('b', {}, d.title),
+          h('span', { class: 'meta' }, [DOC_KINDS[d.kind], projectName(d.project_id)].filter(Boolean).join(' \u00b7 ') + (d.note ? ' \u00b7 ' + d.note : '') + (!d.visible ? ' \u00b7 only Positive Tribes sees this' : ''))),
+        d.status && h('span', { class: 'pill doc ' + d.status }, DOC_STATUS[d.status]),
+        d.url && h('a', { class: 'btn ghost small', href: d.url, target: '_blank', rel: 'noopener' }, 'Open')))));
   }
 
   // ---- Client phases and their testing window ----
