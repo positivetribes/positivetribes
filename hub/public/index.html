@@ -206,6 +206,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
   const STEPS = [['kickoff', 'Kickoff'], ['discovery', 'Discovery'], ['prototype', 'Prototype'], ['build', 'Build'], ['uat', 'Testing'], ['launch', 'Launch'], ['hypercare', 'Settling in'], ['support', 'Support']];
   const $ = id => document.getElementById(id);
+  const COMMAND_CENTER = 'https://positivetribes.org/admin/';
   const LOOP = ['build', 'uat'];
   const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
@@ -309,8 +310,12 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const isPt = viewer().role === 'pt';
     const sw = $('switch');
     // A client's person only ever sees their own workspace, so the client switch hides during a preview.
-    sw.hidden = state.me.clients.length < 2 || Boolean(state.preview);
-    sw.replaceChildren(...state.me.clients.map(c => h('option', { value: c.slug, ...(c.slug === state.slug ? { selected: true } : {}) }, c.name)));
+    const ptUser = state.me.user.role === 'pt';
+    sw.hidden = (state.me.clients.length < 2 && !ptUser) || Boolean(state.preview);
+    // Positive Tribes' own entry leaves the hub for the command center, where its own work lives.
+    sw.replaceChildren(
+      ...ptUser ? [h('option', { value: COMMAND_CENTER }, 'Positive Tribes (command center)'), h('option', { disabled: true }, '\u2500\u2500\u2500\u2500\u2500\u2500')] : [],
+      ...state.me.clients.map(c => h('option', { value: c.slug, ...(c.slug === state.slug ? { selected: true } : {}) }, c.name)));
     const pv = $('preview');
     pv.hidden = state.me.user.role !== 'pt' || !state.people.length;
     pv.replaceChildren(h('option', { value: '' }, 'Off (your view)'), ...state.people.map(u =>
@@ -776,7 +781,10 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     return form;
   }
 
-  $('switch').addEventListener('change', e => { location.hash = '#/' + e.target.value + '/home'; });
+  $('switch').addEventListener('change', e => {
+    if (e.target.value === COMMAND_CENTER) { e.target.value = state.slug; location.href = COMMAND_CENTER; return; }
+    location.hash = '#/' + e.target.value + '/home';
+  });
   function setPreview(email) {
     state.preview = state.people.find(u => u.email === email) || null;
     Object.assign(state, { editing: null, confirming: null, signing: null, ideaEditing: null });
