@@ -1,5 +1,7 @@
 # Up ENDing Parkinson's scheduler backlog
 
+> **Moved to Tribe Hub (Nov 2026).** UEP's questions, changes and test problems now live at https://hub.positivetribes.org. This page forwards there (old `#problems` and `#item-N` links included), and with `MOVED_TO` set the API refuses changes. The database stays for history.
+
 A small shared list where Molly at Up ENDing Parkinson's and the Positive Tribes team track open questions and suggested changes for the climber scheduling prototype at [positivetribes.org/uep](https://positivetribes.org/uep/). It is a copy of the Project Coyote backlog with one addition: items are an **open question**, a **suggested change** or a **problem**.
 
 - **Open questions** have a "who can answer" field and an answer. Their tiers read **Answer first** (the prototype or plan depends on it), **Answer before the full build**, and **Can wait**. Marking one answered moves it to a collapsed list and keeps the answer.

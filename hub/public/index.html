@@ -239,9 +239,16 @@ select.client-switch{width:auto;padding:6px 10px}
     const wanted = slug || (state.me.clients[0] && state.me.clients[0].slug);
     if (!wanted) { $('main').replaceChildren(h('div', { class: 'card' }, h('h2', {}, 'Welcome'), h('p', { class: 'muted' }, 'There are no workspaces for you yet. Positive Tribes will set one up.'))); return; }
     try { if (wanted !== state.slug) await loadClient(wanted); } catch (e) { showError(e.message); return; }
-    state.view = view === 'backlog' ? 'backlog' : 'home';
+    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : 'home';
+    // #/uep/problems opens the test problems of the project being tested (the link in UAT scripts).
+    if (view === 'problems') {
+      const testing = state.releases.find(r => r.stage === 'uat');
+      state.kind = 'problem'; state.filter = 'all';
+      if (testing) state.project = testing.project_id;
+    }
     if (id) {
-      const item = state.items.find(i => i.id === Number(id));
+      // #/uep/old/42 is item 42 on the client's old backlog site, so old links keep working.
+      const item = view === 'old' ? state.items.find(i => i.legacy_id === Number(id)) : state.items.find(i => i.id === Number(id));
       if (item) { state.view = 'backlog'; state.project = item.project_id; state.kind = item.kind; state.filter = 'all'; state.flash = item.id; }
     }
     render();

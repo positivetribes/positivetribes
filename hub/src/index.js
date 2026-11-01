@@ -50,7 +50,7 @@ async function scope(db, user, slug) {
 async function listItems(db, clientId) {
   const { results } = await db.prepare(
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
-            i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at
+            i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id
      FROM items i JOIN projects p ON p.id = i.project_id
      WHERE i.client_id = ?
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`

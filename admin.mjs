@@ -370,7 +370,9 @@ export function buildMatch(accounts, contacts, meta) {
 // Each client backlog is its own Worker with its own D1 database, bound here read-only by convention.
 // Every add, edit and delete there is logged in backlog_events with the name the person typed.
 export const BACKLOGS = [
-  { key: 'uep', name: "Up ENDing Parkinson's", url: 'https://uep.positivetribes.org/', binding: 'UEP_BACKLOG_DB', accountId: '001Pr00000yy8o9IAA' },
+  // UEP moved to Tribe Hub (one database for every client); its events are read from hub-db by client slug.
+  // A new key keeps hub event ids apart from the old backlog's cleared ids.
+  { key: 'uep-hub', name: "Up ENDing Parkinson's", url: 'https://hub.positivetribes.org/#/uep/home', binding: 'HUB_DB', hub: 'uep', accountId: '001Pr00000yy8o9IAA' },
   { key: 'coyote', name: 'Project Coyote', url: 'https://coyote.positivetribes.org/', binding: 'COYOTE_BACKLOG_DB', accountId: '001Pr00000yyAOXIA2' },
   { key: 'soberafe', name: 'Sober AF', url: 'https://soberafe.positivetribes.org/', binding: 'SOBERAFE_BACKLOG_DB', accountId: '001Pr00000yyXUuIAM' }
 ];
@@ -384,7 +386,12 @@ async function backlogEvents(env, backlog, since) {
   const db = env[backlog.binding];
   if (!db) return { status: 'off', events: [] };
   try {
-    const { results } = await db.prepare('SELECT id, item_id, action, item_title, item_kind, detail, actor, at FROM backlog_events WHERE at >= ? ORDER BY id').bind(since).all();
+    const { results } = backlog.hub
+      ? await db.prepare(
+          `SELECT e.id, e.item_id, e.action, e.item_title, e.item_kind, e.detail, COALESCE(NULLIF(e.actor_name, ''), e.actor_email) AS actor, e.at
+           FROM events e JOIN clients c ON c.id = e.client_id WHERE c.slug = ? AND e.at >= ? ORDER BY e.id`
+        ).bind(backlog.hub, since).all()
+      : await db.prepare('SELECT id, item_id, action, item_title, item_kind, detail, actor, at FROM backlog_events WHERE at >= ? ORDER BY id').bind(since).all();
     return { status: 'ok', events: results };
   } catch (error) {
     if (/no such table/i.test(error.message)) return { status: 'not_ready', events: [] };
@@ -407,7 +414,7 @@ export function buildInbox(backlogs, results, cleared, ownNames) {
         backlog: b.key, client: b.name, accountId: b.accountId, itemId: e.item_id,
         action: e.action, kind: e.item_kind, title: e.item_title, detail: e.detail, actor: e.actor,
         at: e.at.replace(' ', 'T') + (e.at.endsWith('Z') ? '' : 'Z'),
-        url: e.action === 'deleted' ? b.url : b.url + '#item-' + e.item_id,
+        url: e.action === 'deleted' || !e.item_id ? b.url : b.hub ? `https://hub.positivetribes.org/#/${b.hub}/backlog/${e.item_id}` : b.url + '#item-' + e.item_id,
         eventIds: [...earlier?.eventIds || [], e.id],
         // An item added and then changed before Eric looked still reads as new.
         added: earlier?.added || e.action === 'added'

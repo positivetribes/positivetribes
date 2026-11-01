@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { database } from './helpers.mjs';
 import { requireAccess, handleAdmin, isAdminPath, buildOverview, rankNow, buildMatch, buildClient, buildInbox, BACKLOGS } from '../admin.mjs';
 import uepBacklog from '../uep-backlog/src/index.js';
+import hub from '../hub/src/index.js';
+import { readFileSync } from 'node:fs';
 
 const TEAM = 'positivetribes.cloudflareaccess.com';
 const AUD = 'a'.repeat(64);
@@ -288,22 +290,23 @@ test('the inbox shows client changes, one row per item, and leaves out Eric and 
     { status: 'off', events: [] },
     { status: 'not_ready', events: [] }
   ];
-  const inbox = buildInbox(BACKLOGS, results, [{ backlog: 'uep', event_id: 5 }, { backlog: 'coyote', event_id: 4 }], ['eric']);
-  assert.deepEqual(inbox.backlogs.map(b => [b.key, b.status, b.unread]), [['uep', 'ok', 2], ['coyote', 'off', 0], ['soberafe', 'not_ready', 0]]);
+  const inbox = buildInbox(BACKLOGS, results, [{ backlog: 'uep-hub', event_id: 5 }, { backlog: 'coyote', event_id: 4 }], ['eric']);
+  assert.deepEqual(inbox.backlogs.map(b => [b.key, b.status, b.unread]), [['uep-hub', 'ok', 2], ['coyote', 'off', 0], ['soberafe', 'not_ready', 0]]);
   assert.deepEqual(inbox.items.map(i => [i.itemId, i.action, i.added, i.eventIds]), [[10, 'answered', true, [1, 2]], [12, 'deleted', false, [4]]]);
   const [answered, deleted] = inbox.items;
   assert.equal(answered.at, '2026-10-29T16:00:00Z');
   assert.equal(answered.detail, 'Yes, 84 accounts');
-  assert.equal(answered.url, 'https://uep.positivetribes.org/#item-10');
+  assert.equal(answered.url, 'https://hub.positivetribes.org/#/uep/backlog/10');
   assert.equal(answered.accountId, UEP);
   // A deleted item has nothing to scroll to, so it links to the backlog itself.
-  assert.equal(deleted.url, 'https://uep.positivetribes.org/');
+  assert.equal(deleted.url, 'https://hub.positivetribes.org/#/uep/home');
 });
 
 test('the inbox reads a real backlog, reports backlogs it cannot read, and clearing sticks', async () => {
   const { db } = database();
-  const uep = database(), safe = database();
-  const env = { UEP_BACKLOG_DB: uep.db, SOBERAFE_BACKLOG_DB: safe.db };
+  // Sober AF still runs the old backlog Worker (same code as UEP's); Coyote is not bound here.
+  const uep = database();
+  const env = { SOBERAFE_BACKLOG_DB: uep.db };
   const backlog = (name, method, path, payload) => uepBacklog.fetch(new Request('https://uep.test/api' + path, {
     method,
     headers: { 'x-backlog-passcode': 'p', 'content-type': 'application/json', 'x-backlog-name': name },
@@ -314,17 +317,17 @@ test('the inbox reads a real backlog, reports backlogs it cannot read, and clear
 
   let r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.backlogs.map(b => [b.key, b.status, b.unread]), [['uep', 'ok', 1], ['coyote', 'off', 0], ['soberafe', 'not_ready', 0]]);
+  assert.deepEqual(r.body.backlogs.map(b => [b.key, b.status, b.unread]), [['uep-hub', 'off', 0], ['coyote', 'off', 0], ['soberafe', 'ok', 1]]);
   assert.equal(r.body.items[0].title, 'Bigger buttons');
   assert.equal(r.body.items[0].actor, 'Molly');
   assert.equal((await call(db, 'GET', '/api/admin/overview', undefined, { env })).body.inboxCount, 1);
 
   // Only Eric, from this site, can clear; bad input is refused.
-  const clear = { items: [{ backlog: 'uep', eventIds: r.body.items[0].eventIds }] };
+  const clear = { items: [{ backlog: 'soberafe', eventIds: r.body.items[0].eventIds }] };
   assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env, who: ROUTINE })).status, 403);
   assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env, origin: 'https://evil.example' })).status, 403);
   assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', { items: [{ backlog: 'nope', eventIds: [1] }] }, { env })).status, 400);
-  assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', { items: [{ backlog: 'uep', eventIds: ['1'] }] }, { env })).status, 400);
+  assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', { items: [{ backlog: 'soberafe', eventIds: ['1'] }] }, { env })).status, 400);
   assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env })).status, 200);
   assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env })).status, 200);
   r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
@@ -335,4 +338,27 @@ test('the inbox reads a real backlog, reports backlogs it cannot read, and clear
   await backlog('Molly', 'PATCH', '/items/' + id, { done: true });
   r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
   assert.deepEqual(r.body.items.map(i => [i.action, i.added]), [['done', false]]);
+});
+
+test('the inbox reads UEP from Tribe Hub, only for that client, and links to the hub item', async () => {
+  const { db } = database();
+  const h = database();
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql']) {
+    h.sqlite.exec(readFileSync(new URL('../hub/migrations/' + file, import.meta.url), 'utf8'));
+  }
+  h.sqlite.exec(`
+    INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
+    INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (2, 'chapters', 'Chapters');
+    INSERT INTO users (email, name, role, client_id) VALUES ('molly@uep.org', 'Molly Cupka', 'ed', 1), ('dana@safe.org', 'Dana', 'ed', 2), ('eric@positivetribes.org', 'Eric Roberts', 'pt', NULL);
+  `);
+  const add = (who, slug, project_id, title) => hub.fetch(new Request(`http://localhost/api/c/${slug}/items`, {
+    method: 'POST', headers: { 'x-dev-email': who, 'content-type': 'application/json' }, body: JSON.stringify({ title, kind: 'problem', tier: 'must', project_id })
+  }), { DB: h.db, HUB_DEV: '1' });
+  assert.equal((await add('molly@uep.org', 'uep', 1, 'Save fails on step 3')).status, 201);
+  await add('eric@positivetribes.org', 'uep', 1, 'Eric note');
+  await add('dana@safe.org', 'safe', 2, 'Other client');
+  const r = await call(db, 'GET', '/api/admin/inbox', undefined, { env: { HUB_DB: h.db } });
+  assert.deepEqual(r.body.backlogs.map(b => [b.key, b.status, b.unread]), [['uep-hub', 'ok', 1], ['coyote', 'off', 0], ['soberafe', 'off', 0]]);
+  const [item] = r.body.items;
+  assert.deepEqual([item.title, item.actor, item.kind, item.url], ['Save fails on step 3', 'Molly Cupka', 'problem', 'https://hub.positivetribes.org/#/uep/backlog/1']);
 });
