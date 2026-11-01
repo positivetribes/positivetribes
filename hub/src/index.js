@@ -61,7 +61,7 @@ async function listItems(db, clientId) {
 // Each phase's testing window ends uat_days after it started (at most 30 days).
 async function listReleases(db, clientId) {
   const { results } = await db.prepare(
-    `SELECT id, project_id, number, name, summary, stage, uat_started, uat_days,
+    `SELECT id, project_id, number, name, summary, url, stage, uat_started, uat_days,
             CASE WHEN uat_started IS NULL THEN NULL ELSE date(uat_started, '+' || uat_days || ' days') END AS uat_due,
             signed_off_by, signed_off_at
      FROM releases WHERE client_id = ? ORDER BY project_id, number`
