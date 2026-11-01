@@ -6,7 +6,8 @@ export function database() {
     prepare(sql) {
       let values = [];
       return {
-        bind(...args) { values = args; return this; },
+        // D1 takes an ArrayBuffer for a BLOB; node:sqlite wants a typed array.
+        bind(...args) { values = args.map(v => v instanceof ArrayBuffer ? new Uint8Array(v) : v); return this; },
         async all() { return { results: sqlite.prepare(sql).all(...values) }; },
         async first() { return sqlite.prepare(sql).get(...values); },
         async run() {

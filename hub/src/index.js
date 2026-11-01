@@ -109,12 +109,26 @@ const ideaStatusOf = oneOf(IDEA_STATUSES, 'Choose new, next, later, shipped, or 
 async function listIdeas(db, user) {
   const { results } = await db.prepare(
     `SELECT h.id, h.title, h.details, h.tier, h.status, h.note, h.added_by, h.created_at, h.updated_at, h.shipped_at,
-            c.slug AS client_slug, COALESCE(c.name, 'Positive Tribes') AS client_name
+            c.slug AS client_slug, COALESCE(c.name, 'Positive Tribes') AS client_name,
+            (SELECT group_concat(id) FROM (SELECT id FROM hub_idea_images WHERE idea_id = h.id ORDER BY id)) AS image_ids
      FROM hub_ideas h LEFT JOIN clients c ON c.id = h.client_id
      WHERE ? OR h.client_id = ?
      ORDER BY CASE h.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, h.id`
   ).bind(user.role === 'pt' ? 1 : 0, user.client_id).all();
-  return results;
+  return results.map(({ image_ids, ...idea }) => ({ ...idea, images: image_ids ? String(image_ids).split(',').map(Number) : [] }));
+}
+// Clients may change their own idea (wording, screenshots) until Positive Tribes has reviewed it.
+function mayEditIdea(user, idea) {
+  if (user.role !== 'pt' && idea.status !== 'new') throw new InputError('Positive Tribes has already reviewed this idea. Add a new one instead.', 403);
+}
+const MAX_IMAGE_BYTES = 1500000, MAX_IMAGES = 4;
+// The type comes from the file's own first bytes, never from what the browser claims.
+function imageType(bytes) {
+  const at = (i, ...b) => b.every((v, n) => bytes[i + n] === v);
+  if (at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return 'image/png';
+  if (at(0, 0xff, 0xd8, 0xff)) return 'image/jpeg';
+  if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return 'image/webp';
+  return null;
 }
 async function requireIdea(db, user, value) {
   const id = Number(value);
@@ -162,19 +176,51 @@ export default {
         return json({ user: { email: user.email, name: user.name, role: user.role }, clients });
       }
 
-      const idea = url.pathname.match(/^\/api\/ideas(?:\/(\d+))?$/);
+      const idea = url.pathname.match(/^\/api\/ideas(?:\/(\d+)(?:\/(images)(?:\/(\d+))?)?)?$/);
       if (idea) {
-        const [, ideaId] = idea;
+        const [, ideaId, images, imageId] = idea;
+        if (images) {
+          const current = await requireIdea(db, user, ideaId);
+          if (!imageId && method === 'POST') {
+            mayEditIdea(user, current);
+            const bytes = new Uint8Array(await request.arrayBuffer());
+            if (!bytes.length) throw new InputError('Choose a screenshot to add.');
+            if (bytes.length > MAX_IMAGE_BYTES) throw new InputError('That screenshot is too large. Try a smaller one.', 413);
+            const type = imageType(bytes);
+            if (!type) throw new InputError('Screenshots must be PNG, JPEG or WebP images.');
+            const count = await db.prepare('SELECT COUNT(*) AS n FROM hub_idea_images WHERE idea_id = ?').bind(current.id).first();
+            if (count.n >= MAX_IMAGES) throw new InputError(`An idea can have at most ${MAX_IMAGES} screenshots.`);
+            await db.prepare('INSERT INTO hub_idea_images (idea_id, type, data, added_by) VALUES (?, ?, ?, ?)')
+              .bind(current.id, type, bytes.buffer, user.name || user.email).run();
+            return json({ ok: true, ideas: await listIdeas(db, user) }, 201);
+          }
+          const id = Number(imageId);
+          const image = imageId && await db.prepare('SELECT * FROM hub_idea_images WHERE id = ? AND idea_id = ?').bind(id, current.id).first();
+          if (!image) throw new InputError('Screenshot not found.', 404);
+          if (method === 'GET') {
+            return new Response(new Uint8Array(image.data), { headers: {
+              'content-type': image.type, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff',
+              'content-security-policy': "default-src 'none'", 'content-disposition': 'inline'
+            } });
+          }
+          if (method === 'DELETE') {
+            mayEditIdea(user, current);
+            await db.prepare('DELETE FROM hub_idea_images WHERE id = ?').bind(image.id).run();
+            return json({ ok: true, ideas: await listIdeas(db, user) });
+          }
+          return json({ error: 'Not found.' }, 404);
+        }
         if (!ideaId && method === 'GET') return json({ ideas: await listIdeas(db, user) });
         if (!ideaId && method === 'POST') {
           const b = await body(request);
           const title = text(b.title, 160, { required: true, label: 'Title' });
           const details = text(b.details, 2000, { label: 'Details' });
           const tier = b.tier === undefined ? 'idea' : tierOf(b.tier);
-          await db.prepare(
+          const added = await db.prepare(
             'INSERT INTO hub_ideas (client_id, title, details, tier, added_by, added_email) VALUES (?, ?, ?, ?, ?, ?)'
           ).bind(user.role === 'pt' ? null : user.client_id, title, details, tier, user.name || user.email, user.email).run();
-          return json({ ok: true, ideas: await listIdeas(db, user) }, 201);
+          // The id lets the page attach screenshots to the idea it just sent.
+          return json({ ok: true, id: added.meta.last_row_id, ideas: await listIdeas(db, user) }, 201);
         }
         if (ideaId && method === 'PATCH') {
           const current = await requireIdea(db, user, ideaId);
@@ -199,7 +245,10 @@ export default {
         if (ideaId && method === 'DELETE') {
           if (user.role !== 'pt') throw new InputError('Only Positive Tribes can delete ideas.', 403);
           const current = await requireIdea(db, user, ideaId);
-          await db.prepare('DELETE FROM hub_ideas WHERE id = ?').bind(current.id).run();
+          await db.batch([
+            db.prepare('DELETE FROM hub_idea_images WHERE idea_id = ?').bind(current.id),
+            db.prepare('DELETE FROM hub_ideas WHERE id = ?').bind(current.id)
+          ]);
           return json({ ok: true, ideas: await listIdeas(db, user) });
         }
         return json({ error: 'Not found.' }, 404);

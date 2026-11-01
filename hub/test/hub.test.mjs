@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -19,7 +19,7 @@ function setup() {
     headers: { ...(who ? { 'x-dev-email': who } : {}), 'content-type': 'application/json' },
     body: payload ? JSON.stringify(payload) : undefined
   }), env);
-  return { sqlite, call };
+  return { sqlite, call, env };
 }
 
 test('requires sign in and an invitation', async () => {
@@ -91,6 +91,36 @@ test('hub ideas: everyone suggests, clients see only their own, only Positive Tr
   assert.equal((await call('eric@positivetribes.org', '/api/ideas/1', 'PATCH', { status: 'maybe' })).status, 400);
   assert.equal((await call('eric@positivetribes.org', '/api/ideas/2', 'DELETE')).status, 200);
   assert.equal((await ideas('dana@safe.org')).length, 0);
+});
+
+test('hub idea screenshots: real images only, same visibility as the idea, locked once reviewed', async () => {
+  const { call, env } = setup();
+  const post = (who, path, bytes) => worker.fetch(new Request('http://localhost' + path, { method: 'POST', headers: { 'x-dev-email': who, 'content-type': 'image/png' }, body: bytes }), env);
+  const created = await (await call('molly@uep.org', '/api/ideas', 'POST', { title: 'Bigger buttons' })).json();
+  assert.equal(created.id, 1);
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const r = await post('molly@uep.org', '/api/ideas/1/images', png);
+  assert.equal(r.status, 201);
+  assert.deepEqual((await r.json()).ideas[0].images, [1]);
+  // Not an image, even if it says it is.
+  assert.equal((await post('molly@uep.org', '/api/ideas/1/images', new TextEncoder().encode('<script>alert(1)</script>'))).status, 400);
+  assert.equal((await post('molly@uep.org', '/api/ideas/1/images', new Uint8Array(1500001))).status, 413);
+  // The image comes back with its checked type; another client cannot fetch or add one.
+  const got = await call('molly@uep.org', '/api/ideas/1/images/1');
+  assert.equal(got.headers.get('content-type'), 'image/png');
+  assert.deepEqual(new Uint8Array(await got.arrayBuffer()), png);
+  assert.equal((await call('eric@positivetribes.org', '/api/ideas/1/images/1')).status, 200);
+  assert.equal((await call('dana@safe.org', '/api/ideas/1/images/1')).status, 404);
+  assert.equal((await post('dana@safe.org', '/api/ideas/1/images', png)).status, 404);
+  // At most four.
+  for (let n = 0; n < 3; n++) await post('molly@uep.org', '/api/ideas/1/images', png);
+  assert.equal((await post('molly@uep.org', '/api/ideas/1/images', png)).status, 400);
+  // Once reviewed, the client can no longer add or remove; Positive Tribes still can, and deleting the idea removes them.
+  await call('eric@positivetribes.org', '/api/ideas/1', 'PATCH', { status: 'later' });
+  assert.equal((await call('molly@uep.org', '/api/ideas/1/images/1', 'DELETE')).status, 403);
+  assert.equal((await call('eric@positivetribes.org', '/api/ideas/1/images/1', 'DELETE')).status, 200);
+  assert.equal((await call('eric@positivetribes.org', '/api/ideas/1', 'DELETE')).status, 200);
+  assert.equal((await call('eric@positivetribes.org', '/api/ideas/1/images/2')).status, 404);
 });
 
 test('clients cannot see or touch another client', async () => {
