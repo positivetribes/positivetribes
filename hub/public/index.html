@@ -34,7 +34,7 @@ p{margin:0}
 .shell{max-width:860px;margin-inline:auto;padding:0 16px 64px}
 .shell,.card,.stack>*{min-width:0}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:20px;text-decoration:none}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:20px;text-decoration:none;color:var(--ink)}
 .brand svg{width:30px;height:30px}.brand circle{fill:currentColor}.brand .core{fill:var(--client)}
 .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .who{color:var(--muted);font-size:15px}
@@ -152,7 +152,12 @@ section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wra
 .confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--must-bg);border-radius:10px;padding:8px 12px}
 .empty{color:var(--muted);font-style:italic}
 details.done-list>summary{cursor:pointer;font-weight:600;padding:6px 0}
-select.client-switch{width:auto;padding:6px 10px}
+select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;padding:5px 30px 5px 10px;text-overflow:ellipsis}
+.admin-bar{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;background:var(--soft);border-radius:12px;padding:8px 12px;margin:0 0 8px;font-size:14px;color:var(--muted)}
+.admin-label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-right:auto}
+.admin-field{display:flex;align-items:center;gap:8px;font-weight:600}
+.admin-field select[hidden]{display:none}
+.admin-field:has(select[hidden]){display:none}
 @media (max-width:520px){.shell{padding-inline:14px}.who{display:none}.card{padding:16px}}
 @media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
 </style>
@@ -161,8 +166,13 @@ select.client-switch{width:auto;padding:6px 10px}
 <div class="shell">
   <header class="top">
     <a class="brand" href="#/"><svg viewBox="0 0 152 152" aria-hidden="true"><circle cx="76" cy="22" r="22"/><circle cx="130" cy="76" r="22"/><circle cx="76" cy="130" r="22"/><circle cx="22" cy="76" r="22"/><circle class="core" cx="76" cy="76" r="22"/></svg><span>Positive Tribes</span></a>
-    <div class="tools"><select id="switch" class="client-switch" aria-label="Choose a client" hidden></select><select id="preview" class="client-switch" aria-label="Preview the workspace as someone else" hidden></select><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
+    <div class="tools"><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
   </header>
+  <div class="admin-bar" id="admin-bar" hidden>
+    <span class="admin-label">Positive Tribes</span>
+    <label class="admin-field">Client <select id="switch" class="client-switch" hidden></select></label>
+    <label class="admin-field">Preview as <select id="preview" class="client-switch" hidden></select></label>
+  </div>
   <div id="preview-bar" class="preview-bar" role="status" hidden></div>
   <div id="error" class="error" role="alert" hidden></div>
   <main id="main" aria-live="polite"><p class="muted">Loading your workspace…</p></main>
@@ -287,8 +297,9 @@ select.client-switch{width:auto;padding:6px 10px}
     sw.replaceChildren(...state.me.clients.map(c => h('option', { value: c.slug, ...(c.slug === state.slug ? { selected: true } : {}) }, c.name)));
     const pv = $('preview');
     pv.hidden = state.me.user.role !== 'pt' || !state.people.length;
-    pv.replaceChildren(h('option', { value: '' }, 'Preview as…'), ...state.people.map(u =>
+    pv.replaceChildren(h('option', { value: '' }, 'Off (your view)'), ...state.people.map(u =>
       h('option', { value: u.email, ...(state.preview && state.preview.email === u.email ? { selected: true } : {}) }, u.name + ' (' + ROLE_NAMES[u.role] + ')')));
+    $('admin-bar').hidden = sw.hidden && pv.hidden && !state.preview;
     const bar = $('preview-bar');
     bar.hidden = !state.preview;
     bar.replaceChildren(...(state.preview ? [
