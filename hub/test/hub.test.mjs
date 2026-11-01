@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -61,6 +61,36 @@ test('documents: clients see their own shown documents; Positive Tribes sees hid
   // Another client's documents never leak.
   assert.equal((await call('dana@safe.org', '/api/c/uep/projects')).status, 404);
   assert.deepEqual((await (await call('dana@safe.org', '/api/c/safe/projects')).json()).documents.map(d => d.title), ['Sober AF proposal']);
+});
+
+test('hub ideas: everyone suggests, clients see only their own, only Positive Tribes decides', async () => {
+  const { call, sqlite } = setup();
+  sqlite.exec("INSERT INTO users (email, name, role, client_id) VALUES ('sam@uep.org', 'Sam', 'staff', 1)");
+  const add = (who, title, tier) => call(who, '/api/ideas', 'POST', { title, tier });
+  assert.equal((await add('molly@uep.org', 'Email me when a phase is ready', 'must')).status, 201);
+  await add('dana@safe.org', 'Dark mode logo', 'idea');
+  await add('eric@positivetribes.org', 'Weekly update page', 'nice');
+  const ideas = async who => (await (await call(who, '/api/ideas')).json()).ideas;
+  // Staff see their organization's ideas; nobody sees another client's.
+  assert.deepEqual((await ideas('sam@uep.org')).map(i => i.title), ['Email me when a phase is ready']);
+  assert.deepEqual((await ideas('dana@safe.org')).map(i => i.title), ['Dark mode logo']);
+  const all = await ideas('eric@positivetribes.org');
+  assert.deepEqual(all.map(i => [i.title, i.client_name, i.status]), [
+    ['Email me when a phase is ready', 'UEP', 'new'], ['Weekly update page', 'Positive Tribes', 'new'], ['Dark mode logo', 'Sober AF', 'new']]);
+  // Clients may reword while new, but cannot decide, and cannot reach another client's idea.
+  assert.equal((await call('molly@uep.org', '/api/ideas/1', 'PATCH', { details: 'A short email' })).status, 200);
+  assert.equal((await call('molly@uep.org', '/api/ideas/1', 'PATCH', { status: 'next' })).status, 403);
+  assert.equal((await call('dana@safe.org', '/api/ideas/1', 'PATCH', { title: 'x' })).status, 404);
+  assert.equal((await call('molly@uep.org', '/api/ideas/1', 'DELETE')).status, 403);
+  // Positive Tribes picks it for the next build and replies; then the client can no longer edit it.
+  const r = await (await call('eric@positivetribes.org', '/api/ideas/1', 'PATCH', { status: 'next', note: 'In the next hub build.' })).json();
+  assert.deepEqual([r.ideas[0].status, r.ideas[0].note, r.ideas[0].details], ['next', 'In the next hub build.', 'A short email']);
+  assert.equal((await call('molly@uep.org', '/api/ideas/1', 'PATCH', { title: 'Changed' })).status, 403);
+  const shipped = await (await call('eric@positivetribes.org', '/api/ideas/1', 'PATCH', { status: 'shipped' })).json();
+  assert.ok(shipped.ideas[0].shipped_at);
+  assert.equal((await call('eric@positivetribes.org', '/api/ideas/1', 'PATCH', { status: 'maybe' })).status, 400);
+  assert.equal((await call('eric@positivetribes.org', '/api/ideas/2', 'DELETE')).status, 200);
+  assert.equal((await ideas('dana@safe.org')).length, 0);
 });
 
 test('clients cannot see or touch another client', async () => {

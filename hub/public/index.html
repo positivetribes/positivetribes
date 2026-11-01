@@ -119,6 +119,8 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .docs .doc-title b{font-weight:650}
 .pill.doc{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}
 .pill.doc.signed{background:var(--ok-bg);color:var(--ok)}
+.pill.idea-status{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}
+.pill.idea-status.next{background:var(--client);color:#fff}.pill.idea-status.shipped{background:var(--ok-bg);color:var(--ok)}.pill.idea-status.declined{background:transparent;border:1px solid var(--line);color:var(--muted)}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .list li a{color:inherit;display:flex;gap:10px;align-items:baseline;padding:10px 4px;text-decoration:none;border-bottom:1px solid var(--line)}
 .list li:last-child a{border-bottom:0}.list li a:hover{color:var(--rust)}
@@ -193,7 +195,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   const LOOP = ['build', 'uat'];
   const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
-  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null, documents: [] };
+  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null, documents: [], ideas: [], ideaFilter: 'new', ideaEditing: null };
 
   const store = {
     get(k) { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } },
@@ -254,8 +256,8 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   const link = (view, id) => '#/' + state.slug + '/' + view + (id ? '/' + id : '');
 
   async function loadClient(slug) {
-    const [p, i] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items')]);
-    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], items: i.items, preview: null, people: [] });
+    const [p, i, d] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items'), api('/ideas').catch(() => ({ ideas: [] }))]);
+    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
     if (state.me.user.role === 'pt') { try { state.people = (await api('/c/' + slug + '/people')).people; } catch {} }
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
@@ -268,7 +270,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const wanted = slug || (state.me.clients[0] && state.me.clients[0].slug);
     if (!wanted) { $('main').replaceChildren(h('div', { class: 'card' }, h('h2', {}, 'Welcome'), h('p', { class: 'muted' }, 'There are no workspaces for you yet. Positive Tribes will set one up.'))); return; }
     try { if (wanted !== state.slug) await loadClient(wanted); } catch (e) { showError(e.message); return; }
-    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : 'home';
+    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : view === 'ideas' ? 'ideas' : 'home';
     // #/uep/problems opens the test problems of the project being tested (the link in UAT scripts).
     if (view === 'problems') {
       const testing = state.releases.find(r => r.stage === 'uat');
@@ -311,9 +313,10 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Your workspace'), h('h1', {}, state.client.name)),
       h('nav', { class: 'tabs', 'aria-label': 'Sections' },
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
-        h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : ''))),
-      state.view === 'home' ? home() : backlog(isPt));
-    const badge = document.querySelector('.badge'); if (badge && !badge.textContent) badge.remove();
+        h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : '')),
+        h('a', { href: link('ideas'), ...(state.view === 'ideas' ? { 'aria-current': 'page' } : {}) }, 'Improve this hub', h('span', { class: 'badge' }, isPt && newIdeas() ? String(newIdeas()) : ''))),
+      state.view === 'home' ? home() : state.view === 'ideas' ? ideas(isPt) : backlog(isPt));
+    document.querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
   }
 
   // ---- Home: what happens next ----
@@ -568,10 +571,89 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('div', { class: 'row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.editing = null; render(); } }, 'Cancel')));
   }
 
+  // ---- Ideas for the hub itself, from every client and Positive Tribes ----
+  // Positive Tribes reviews them and picks some for each hub build; the client sees the decision and the reply.
+  const IDEA_STATUS = [['new', 'To review'], ['next', 'Next build'], ['later', 'Approved for later'], ['shipped', 'Shipped'], ['declined', 'Not planned']];
+  const IDEA_HELP = { new: 'Positive Tribes will look at it soon.', next: 'Approved and picked for the next hub build.', later: 'Approved. It will be picked for a later build.', shipped: 'Built and live in the hub.', declined: 'Not planned for now.' };
+  const IDEA_TIERS = TIER_NAMES.change;
+  const newIdeas = () => state.ideas.filter(i => i.status === 'new').length;
+  const actIdea = async (path, options) => {
+    showError('');
+    try { state.ideas = (await api('/ideas' + path, options)).ideas; state.ideaEditing = null; render(); }
+    catch (e) { showError(e.message); }
+  };
+  function ideas(isPt) {
+    // A preview shows only what that client's people would see: their own organization's ideas.
+    const visible = isPt ? state.ideas : state.ideas.filter(i => !state.preview || i.client_slug === state.slug);
+    const nodes = [h('div', { class: 'card stack' },
+      h('h2', {}, 'Help shape this hub'),
+      h('p', { class: 'muted' }, 'This is about the workspace you are looking at now, not your project. Tell us what would make it clearer or easier. ' +
+        (isPt ? 'Ideas come in from every client. Pick the ones for the next build, and Claude builds that set.' : 'Positive Tribes reads every idea, picks some for each update to the hub, and replies here.')),
+      ideaForm())];
+    if (isPt) {
+      nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Show ideas by status' }, IDEA_STATUS.map(([key, label]) =>
+        h('button', { type: 'button', 'aria-pressed': String(state.ideaFilter === key), onclick: () => { state.ideaFilter = key; state.ideaEditing = null; render(); } },
+          label + ' (' + visible.filter(i => i.status === key).length + ')'))));
+      const shown = visible.filter(i => i.status === state.ideaFilter);
+      if (state.ideaFilter === 'next' && shown.length) nodes.push(h('p', { class: 'meta' }, 'When you are ready, ask Claude to build the next hub build. It reads this list, builds these ' + shown.length + ', and marks them shipped once deployed.'));
+      nodes.push(shown.length ? h('div', { class: 'stack' }, shown.map(i => ideaCard(i, true))) : h('p', { class: 'empty' }, 'Nothing here.'));
+    } else {
+      nodes.push(visible.length ? h('div', { class: 'stack' }, IDEA_STATUS.flatMap(([key]) => visible.filter(i => i.status === key)).map(i => ideaCard(i, false)))
+        : h('p', { class: 'empty' }, 'No ideas yet. Yours will show here with our reply.'));
+    }
+    return h('div', { class: 'stack' }, nodes);
+  }
+  function ideaForm() {
+    const title = h('input', { type: 'text', maxlength: 160, required: true, id: 'i-title' });
+    const details = h('textarea', { maxlength: 2000, id: 'i-details' });
+    const tier = h('select', { id: 'i-tier' }, IDEA_TIERS.map(([k, l]) => h('option', { value: k, ...(k === 'nice' ? { selected: true } : {}) }, l)));
+    return h('form', { class: 'stack', onsubmit: e => { e.preventDefault(); actIdea('', post({ title: title.value, details: details.value, tier: tier.value })); } },
+      h('div', {}, h('label', { for: 'i-title' }, 'What would make this hub better?'), title),
+      h('div', {}, h('label', { for: 'i-details' }, 'More detail (optional)'), details),
+      h('div', { class: 'row' }, h('div', {}, h('label', { for: 'i-tier' }, 'How much does it matter?'), tier)),
+      h('div', {}, h('button', { class: 'btn', type: 'submit' }, 'Send idea')));
+  }
+  function ideaCard(i, isPt) {
+    if (state.ideaEditing === i.id) return ideaEditor(i, isPt);
+    const status = IDEA_STATUS.find(s => s[0] === i.status)[1];
+    return h('article', { class: 'card item' },
+      h('div', { class: 'actions' },
+        h('span', { class: 'pill ' + i.tier }, IDEA_TIERS.find(t => t[0] === i.tier)[1]),
+        h('span', { class: 'pill idea-status ' + i.status }, status),
+        isPt && h('span', { class: 'pill phase' }, i.client_name)),
+      h('h3', {}, i.title),
+      i.details && h('p', { class: 'muted' }, i.details),
+      i.note ? h('div', { class: 'answer' }, h('b', {}, 'Positive Tribes'), h('p', {}, i.note)) : !isPt && h('p', { class: 'meta' }, IDEA_HELP[i.status]),
+      h('div', { class: 'meta' }, (i.added_by || 'Someone') + ' · ' + i.created_at.slice(0, 10) + (i.shipped_at ? ' · shipped ' + i.shipped_at.slice(0, 10) : '')),
+      isPt && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'Decide:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Status of ' + i.title },
+        IDEA_STATUS.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(i.status === k), onclick: () => i.status !== k && actIdea('/' + i.id, patch({ status: k })) }, l)))),
+      (isPt || i.status === 'new') && h('div', { class: 'actions' }, h('span', { class: 'spacer' }),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.ideaEditing = i.id; render(); } }, isPt ? 'Reply or edit' : 'Edit'),
+        isPt && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.confirming = 'idea-' + i.id; render(); } }, 'Delete')),
+      state.confirming === 'idea-' + i.id && h('div', { class: 'confirm', role: 'alert' }, h('span', {}, 'Delete this idea for everyone? This cannot be undone.'),
+        h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { state.confirming = null; actIdea('/' + i.id, { method: 'DELETE' }); } }, 'Delete'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.confirming = null; render(); } }, 'Keep it')));
+  }
+  function ideaEditor(i, isPt) {
+    const title = h('input', { type: 'text', maxlength: 160, value: i.title, id: 'ie-title' });
+    const details = h('textarea', { maxlength: 2000, id: 'ie-details' }, i.details);
+    const tier = h('select', { id: 'ie-tier' }, IDEA_TIERS.map(([k, l]) => h('option', { value: k, ...(k === i.tier ? { selected: true } : {}) }, l)));
+    const note = h('textarea', { maxlength: 2000, id: 'ie-note', placeholder: 'Thanks, Molly. This is in the next build.' }, i.note);
+    return h('form', { class: 'card stack', onsubmit: e => {
+      e.preventDefault();
+      actIdea('/' + i.id, patch({ title: title.value, details: details.value, tier: tier.value, ...(isPt ? { note: note.value } : {}) }));
+    } },
+      h('div', {}, h('label', { for: 'ie-title' }, 'Idea'), title),
+      h('div', {}, h('label', { for: 'ie-details' }, 'Details'), details),
+      h('div', {}, h('label', { for: 'ie-tier' }, 'How much does it matter?'), tier),
+      isPt && h('div', {}, h('label', { for: 'ie-note' }, 'Reply to ' + i.client_name + ' (they see this)'), note),
+      h('div', { class: 'row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.ideaEditing = null; render(); } }, 'Cancel')));
+  }
+
   $('switch').addEventListener('change', e => { location.hash = '#/' + e.target.value + '/home'; });
   function setPreview(email) {
     state.preview = state.people.find(u => u.email === email) || null;
-    Object.assign(state, { editing: null, confirming: null, signing: null });
+    Object.assign(state, { editing: null, confirming: null, signing: null, ideaEditing: null });
     showError('');
     render();
   }
