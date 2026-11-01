@@ -80,6 +80,20 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .steps li.done:before{background:var(--client)}
 .steps li.now:before{background:var(--card);border:3px solid var(--client);width:16px;height:16px;top:3px}
 .steps li.now{color:var(--ink);font-weight:700;overflow:visible}
+/* Testing countdown: a client phase in UAT, at most 30 days, then signed off. */
+.uat{border-left:6px solid var(--client);display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px}
+.uat .left{font-family:var(--display);font-size:clamp(44px,9vw,64px);line-height:1;white-space:nowrap}
+.uat.soon .left,.uat.late .left{color:var(--rust)}
+.uat .what{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.uat .what h2{font-size:22px;font-family:var(--font);font-weight:700}
+.uat .actions{flex-basis:100%}
+.track{height:6px;border-radius:3px;background:var(--line);overflow:hidden;flex-basis:100%}
+.track span{display:block;height:100%;background:var(--client)}
+.uat.soon .track span,.uat.late .track span{background:var(--rust)}
+.releases{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.releases li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pill.stage{background:var(--soft);color:var(--ink);text-transform:none;letter-spacing:0;font-weight:600}
+.pill.stage.uat{background:var(--client);color:#fff}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .list li a{color:inherit;display:flex;gap:10px;align-items:baseline;padding:10px 4px;text-decoration:none;border-bottom:1px solid var(--line)}
 .list li:last-child a{border-bottom:0}.list li a:hover{color:var(--rust)}
@@ -140,7 +154,8 @@ select.client-switch{width:auto;padding:6px 10px}
   const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
   const STEPS = [['kickoff', 'Kickoff'], ['discovery', 'Discovery'], ['prototype', 'Prototype'], ['build', 'Build'], ['uat', 'Testing'], ['launch', 'Launch'], ['hypercare', 'Settling in'], ['support', 'Support']];
   const $ = id => document.getElementById(id);
-  const state = { me: null, slug: '', client: null, projects: [], items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null };
+  const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
+  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null };
 
   const store = {
     get(k) { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } },
@@ -197,7 +212,7 @@ select.client-switch{width:auto;padding:6px 10px}
 
   async function loadClient(slug) {
     const [p, i] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items')]);
-    Object.assign(state, { slug, client: p.client, projects: p.projects, items: i.items });
+    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], items: i.items });
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
     if (!state.projects.some(x => x.id === state.project)) state.project = state.projects[0] && state.projects[0].id;
@@ -255,20 +270,72 @@ select.client-switch{width:auto;padding:6px 10px}
           h('h2', {}, 'Nothing is waiting on you right now.'),
           h('p', { class: 'muted' }, 'We’ll tell you here, and by email, as soon as we need something from you.'),
           h('div', {}, h('a', { class: 'btn ghost', href: link('backlog') }, 'Suggest a change or ask a question')));
-    return h('div', { class: 'stack' }, hero,
+    return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero,
       h('div', { class: 'grid' }, state.projects.map(p => {
         const at = STEPS.findIndex(s => s[0] === p.phase);
         const counts = open(state.items.filter(i => i.project_id === p.id));
+        const phases = state.releases.filter(r => r.project_id === p.id);
         return h('div', { class: 'card' },
           h('h2', {}, p.name),
           h('p', { class: 'muted' }, 'Now: ' + STEPS[Math.max(at, 0)][1]),
           h('ol', { class: 'steps', 'aria-label': 'Progress for ' + p.name },
             STEPS.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : { tabindex: '0' }) }, h('span', {}, n < at ? label + ' \u00b7 done' : n > at ? label + ' \u00b7 coming up' : label)))),
+          phases.length > 0 && h('ul', { class: 'releases', 'aria-label': 'Phases of ' + p.name }, phases.map(r =>
+            h('li', {}, h('b', {}, phaseName(r)), h('span', { class: 'pill stage ' + r.stage }, STAGES[r.stage]),
+              r.stage === 'signed_off' && r.signed_off_at && h('span', { class: 'meta' }, 'by ' + r.signed_off_by + ', ' + longDate(r.signed_off_at.slice(0, 10)))))),
           h('p', { class: 'meta' }, counts.length + ' open item' + (counts.length === 1 ? '' : 's')),
           p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')));
       })),
       mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
         h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
+  }
+
+  // ---- Client phases and their testing window ----
+  const phaseName = r => r.name || 'Phase ' + r.number;
+  const longDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  const shortDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  function daysUntil(iso) {
+    const now = new Date();
+    const [y, m, d] = iso.split('-').map(Number);
+    return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+  }
+
+  function testing(r) {
+    const project = state.projects.find(p => p.id === r.project_id);
+    const left = r.uat_due ? daysUntil(r.uat_due) : null;
+    const used = left == null ? 0 : Math.min(100, Math.max(0, (r.uat_days - left) / r.uat_days * 100));
+    const waiting = state.releases.find(x => x.project_id === r.project_id && x.number > r.number && x.stage === 'waiting');
+    const problems = open(state.items.filter(i => i.project_id === r.project_id && i.kind === 'problem'));
+    const blocking = problems.filter(i => i.tier === 'must');
+    const big = left == null ? 'Testing' : left > 1 ? left + ' days left' : left === 1 ? '1 day left' : left === 0 ? 'Due today' : -left + (left === -1 ? ' day' : ' days') + ' over';
+    const canSign = state.me.user.role !== 'staff';
+    const confirming = state.signing === r.id;
+    return h('div', { class: 'card uat' + (left != null && left < 0 ? ' late' : left != null && left <= 7 ? ' soon' : '') },
+      h('div', { class: 'left' }, big),
+      h('div', { class: 'what' },
+        h('div', { class: 'label' }, (project ? project.name + ' · ' : '') + 'Testing'),
+        h('h2', {}, phaseName(r) + ' testing and sign-off'),
+        r.uat_due && h('p', { class: 'muted' }, 'Due ' + longDate(r.uat_due) + ' (' + r.uat_days + ' days from ' + shortDate(r.uat_started) + ')'),
+        h('p', { class: 'meta' }, blocking.length
+          ? blocking.length + ' problem' + (blocking.length === 1 ? '' : 's') + ' must be fixed before sign-off.'
+          : problems.length ? problems.length + ' open problem' + (problems.length === 1 ? '' : 's') + ', none blocking sign-off.' : 'No open problems.'),
+        waiting && h('p', { class: 'meta' }, phaseName(waiting) + ' is built and starts testing as soon as ' + phaseName(r) + ' is signed off.')),
+      r.uat_due && h('div', { class: 'track', role: 'img', 'aria-label': Math.round(used) + '% of the testing window used' }, h('span', { style: 'width:' + used + '%' })),
+      confirming
+        ? h('div', { class: 'confirm actions' },
+            h('span', {}, 'Sign off ' + phaseName(r) + ' as tested and accepted? This is recorded with your name and today’s date.'),
+            h('button', { class: 'btn small', type: 'button', onclick: () => signOff(r) }, 'Yes, sign off'),
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.signing = null; render(); } }, 'Not yet'))
+        : h('div', { class: 'actions' },
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.project = r.project_id; state.kind = 'problem'; state.filter = 'all'; location.hash = link('backlog'); } }, 'Report a problem'),
+            project && project.poc_url && h('a', { class: 'btn ghost small', href: project.poc_url, target: '_blank', rel: 'noopener' }, 'Open ' + phaseName(r)),
+            canSign && h('button', { class: 'btn small', type: 'button', disabled: blocking.length > 0, title: blocking.length ? 'Fix the problems that stop sign-off first' : null, onclick: () => { state.signing = r.id; render(); } }, 'Sign off ' + phaseName(r))));
+  }
+
+  async function signOff(r) {
+    showError('');
+    try { const data = await api(base() + '/releases/' + r.id + '/signoff', post({})); state.releases = data.releases; state.signing = null; render(); }
+    catch (e) { showError(e.message); }
   }
 
   // ---- Backlog ----

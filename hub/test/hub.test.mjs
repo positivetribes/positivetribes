@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  sqlite.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -70,4 +70,29 @@ test('rejects bad input and unknown routes; assets pass through', async () => {
   assert.equal((await call('molly@uep.org', '/api/nope')).status, 404);
   const asset = await worker.fetch(new Request('http://localhost/'), { ASSETS: { fetch: () => new Response('asset') } });
   assert.equal(await asset.text(), 'asset');
+});
+
+test('phases: 30-day testing window, sign-off starts the next phase', async () => {
+  const { call, sqlite } = setup();
+  sqlite.exec(`
+    INSERT INTO users (email, name, role, client_id) VALUES ('sam@uep.org', 'Sam', 'staff', 1);
+    INSERT INTO releases (client_id, project_id, number, stage, uat_started) VALUES (1, 1, 1, 'uat', '2026-10-30');
+    INSERT INTO releases (client_id, project_id, number, stage) VALUES (1, 1, 2, 'waiting');
+  `);
+  const p = await (await call('molly@uep.org', '/api/c/uep/projects')).json();
+  assert.equal(p.releases[0].uat_due, '2026-11-29');
+  assert.equal((await call('dana@safe.org', '/api/c/uep/releases/1/signoff', 'POST', {})).status, 404);
+  assert.equal((await call('sam@uep.org', '/api/c/uep/releases/1/signoff', 'POST', {})).status, 403);
+  // A problem that stops sign-off blocks it until fixed.
+  await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Save fails', kind: 'problem', tier: 'must', project_id: 1 });
+  assert.equal((await call('molly@uep.org', '/api/c/uep/releases/1/signoff', 'POST', {})).status, 400);
+  await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { done: true });
+  const r = await (await call('molly@uep.org', '/api/c/uep/releases/1/signoff', 'POST', {})).json();
+  assert.equal(r.releases[0].stage, 'signed_off');
+  assert.equal(r.releases[0].signed_off_by, 'Molly');
+  assert.equal(r.releases[1].stage, 'uat');
+  assert.equal(r.releases[1].uat_started, new Date().toISOString().slice(0, 10));
+  assert.equal((await call('molly@uep.org', '/api/c/uep/releases/1/signoff', 'POST', {})).status, 400);
+  const last = sqlite.prepare('SELECT action, item_title, detail FROM events ORDER BY id DESC LIMIT 1').get();
+  assert.deepEqual({ ...last }, { action: 'signed_off', item_title: 'Phase 1', detail: 'Phase 2 starts testing' });
 });

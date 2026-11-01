@@ -58,6 +58,17 @@ async function listItems(db, clientId) {
   return results.map(item => ({ ...item, done: Boolean(item.done) }));
 }
 
+// Each phase's testing window ends uat_days after it started (at most 30 days).
+async function listReleases(db, clientId) {
+  const { results } = await db.prepare(
+    `SELECT id, project_id, number, name, summary, stage, uat_started, uat_days,
+            CASE WHEN uat_started IS NULL THEN NULL ELSE date(uat_started, '+' || uat_days || ' days') END AS uat_due,
+            signed_off_by, signed_off_at
+     FROM releases WHERE client_id = ? ORDER BY project_id, number`
+  ).bind(clientId).all();
+  return results;
+}
+
 async function requireItem(db, clientId, value) {
   const id = Number(value);
   const item = Number.isSafeInteger(id) && id > 0
@@ -113,7 +124,7 @@ export default {
         return json({ user: { email: user.email, name: user.name, role: user.role }, clients });
       }
 
-      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items)(?:\/(\d+))?(?:\/(move))?$/);
+      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases)(?:\/(\d+))?(?:\/(move|signoff))?$/);
       if (!match) return json({ error: 'Not found.' }, 404);
       const [, slug, resource, rawId, action] = match;
       const client = await scope(db, user, slug);
@@ -122,7 +133,38 @@ export default {
         const { results } = await db.prepare(
           'SELECT id, slug, name, poc_url, phase FROM projects WHERE client_id = ? ORDER BY position, id'
         ).bind(client.id).all();
-        return json({ client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date }, projects: results });
+        return json({
+          client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date },
+          projects: results,
+          releases: await listReleases(db, client.id)
+        });
+      }
+
+      if (resource === 'releases' && rawId && action === 'signoff' && method === 'POST') {
+        // The director (or Positive Tribes on their behalf) accepts a phase after testing it.
+        if (user.role === 'staff') throw new InputError('Only the director can sign off a phase.', 403);
+        const id = Number(rawId);
+        const release = await db.prepare('SELECT * FROM releases WHERE id = ? AND client_id = ?').bind(id, client.id).first();
+        if (!release) throw new InputError('Phase not found.', 404);
+        if (release.stage !== 'uat') throw new InputError('Only a phase that is being tested can be signed off.');
+        const blocking = await db.prepare(
+          `SELECT COUNT(*) AS n FROM items WHERE client_id = ? AND project_id = ? AND kind = 'problem' AND tier = 'must' AND done = 0`
+        ).bind(client.id, release.project_id).first();
+        if (blocking.n) throw new InputError('Fix the problems that stop sign-off first.');
+        // The next built phase that was waiting on this one starts its own testing window today.
+        const next = await db.prepare(
+          `SELECT * FROM releases WHERE client_id = ? AND project_id = ? AND number > ? AND stage = 'waiting' ORDER BY number LIMIT 1`
+        ).bind(client.id, release.project_id, release.number).first();
+        const label = release.name || 'Phase ' + release.number;
+        await db.batch([
+          db.prepare(
+            `UPDATE releases SET stage = 'signed_off', signed_off_by = ?, signed_off_email = ?, signed_off_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND client_id = ? AND stage = 'uat'`
+          ).bind(user.name || user.email, user.email, release.id, client.id),
+          ...next ? [db.prepare(`UPDATE releases SET stage = 'uat', uat_started = date('now') WHERE id = ? AND client_id = ?`).bind(next.id, client.id)] : [],
+          logEvent(db, client.id, 0, 'signed_off', { title: label, kind: 'release' }, next ? `${next.name || 'Phase ' + next.number} starts testing` : '', user)
+        ]);
+        return json({ ok: true, releases: await listReleases(db, client.id) });
       }
       if (resource !== 'items') return json({ error: 'Not found.' }, 404);
 

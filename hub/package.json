@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "wrangler -c wrangler.jsonc dev",
+    "dev": "wrangler -c wrangler.jsonc dev --local-upstream localhost:8787",
     "migrate": "wrangler -c wrangler.jsonc d1 migrations apply hub-db --remote",
     "deploy": "wrangler -c wrangler.jsonc deploy",
     "test": "node --test test/*.test.mjs"
