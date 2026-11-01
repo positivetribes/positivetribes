@@ -328,6 +328,7 @@ select.client-switch{width:auto;padding:6px 10px}
             h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.signing = null; render(); } }, 'Not yet'))
         : h('div', { class: 'actions' },
             h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.project = r.project_id; state.kind = 'problem'; state.filter = 'all'; location.hash = link('backlog'); } }, 'Report a problem'),
+            r.script_url && h('a', { class: 'btn ghost small', href: r.script_url, target: '_blank', rel: 'noopener' }, 'Test script'),
             r.url && h('a', { class: 'btn ghost small', href: r.url, target: '_blank', rel: 'noopener' }, 'Open ' + phaseName(r)),
             canSign && h('button', { class: 'btn small', type: 'button', disabled: blocking.length > 0, title: blocking.length ? 'Fix the problems that stop sign-off first' : null, onclick: () => { state.signing = r.id; render(); } }, 'Sign off ' + phaseName(r))));
   }
