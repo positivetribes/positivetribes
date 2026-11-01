@@ -105,6 +105,8 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .loop .note svg{width:12px;height:12px;flex:none}
 .releases{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .releases li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.admin-link{font-size:14px;font-weight:600;color:var(--ink);text-decoration-color:var(--client);text-decoration:underline;text-underline-offset:2px}
+.admin-only{margin:4px 0 0;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
 .pill.stage{background:var(--soft);color:var(--ink);text-transform:none;letter-spacing:0;font-weight:600}
 .pill.stage.uat{background:var(--client);color:#fff}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
@@ -297,6 +299,7 @@ select.client-switch{width:auto;padding:6px 10px}
         const at = STEPS.findIndex(s => s[0] === p.phase);
         const counts = open(state.items.filter(i => i.project_id === p.id));
         const phases = state.releases.filter(r => r.project_id === p.id);
+        const isPt = state.me.user.role === 'pt';
         // With more than one client phase, Build and Testing repeat for each phase before Launch.
         const loops = phases.length > 1;
         const current = phases.find(r => r.stage === 'uat') || phases.find(r => r.stage === 'building') || phases.find(r => !['signed_off', 'live'].includes(r.stage));
@@ -317,15 +320,23 @@ select.client-switch{width:auto;padding:6px 10px}
             h('div', { class: 'note' }, loopIcon(), 'Each of ' + phases.length + ' phases')),
           phases.length > 0 && h('ul', { class: 'releases', 'aria-label': 'Phases of ' + p.name }, phases.map(r =>
             h('li', {}, h('b', {}, phaseName(r)), r.summary && h('span', { class: 'muted' }, r.summary), h('span', { class: 'pill stage ' + r.stage }, STAGES[r.stage]),
-              r.stage === 'signed_off' && r.signed_off_at && h('span', { class: 'meta' }, 'by ' + r.signed_off_by + ', ' + longDate(r.signed_off_at.slice(0, 10)))))),
+              r.stage === 'signed_off' && r.signed_off_at && h('span', { class: 'meta' }, 'by ' + r.signed_off_by + ', ' + longDate(r.signed_off_at.slice(0, 10))),
+              // Positive Tribes sees every phase's links, even before the client does.
+              isPt && r.url && h('a', { class: 'admin-link', href: r.url, target: '_blank', rel: 'noopener' }, 'Open'),
+              isPt && r.script_url && h('a', { class: 'admin-link', href: r.script_url, target: '_blank', rel: 'noopener' }, 'Test script')))),
           h('p', { class: 'meta' }, counts.length + ' open item' + (counts.length === 1 ? '' : 's')),
-          p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')));
+          // Once launched, the live app replaces the prototype link; before then the production address stays hidden.
+          isLive(p, phases) ? h('p', {}, h('a', { class: 'btn small', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Open ' + p.name))
+            : p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')),
+          isPt && p.live_url && !isLive(p, phases) && h('p', { class: 'admin-only' }, h('span', { class: 'meta' }, 'Only Positive Tribes sees this: '),
+            h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production')));
       })),
       mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
         h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
   }
 
   // ---- Client phases and their testing window ----
+  const isLive = (p, phases) => Boolean(p.live_url) && (['launch', 'hypercare', 'support'].includes(p.phase) || phases.some(r => r.stage === 'live'));
   const phaseName = r => r.name || 'Phase ' + r.number;
   const longDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   const shortDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
