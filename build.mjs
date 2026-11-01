@@ -24,17 +24,12 @@ if (accessTeam && !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(accessTeam)) throw
 if (accessAud && !/^[a-f0-9]{64}$/.test(accessAud)) throw new Error('ACCESS_AUD must be the 64-character Application Audience (AUD) tag.');
 const adminDb = { binding: 'ADMIN_DB', database_name: 'positivetribes-admin-db', database_id: 'c74ab999-3171-432b-9234-da16795e7e50' };
 const adminPreviewDb = { binding: 'ADMIN_DB', database_name: 'positivetribes-admin-preview-db', database_id: 'f6140db8-4e66-4952-bacc-9a71c293a8f9' };
-// The client backlogs' own databases (and Tribe Hub's, for clients moved there), read by the command center inbox.
-// Each backlog Worker owns and writes its database.
+// Tribe Hub's database, read by the command center inbox for every client. The hub Worker owns and writes it.
 const backlogDbs = [
-  { binding: 'HUB_DB', database_name: 'hub-db', database_id: 'bfa66ad3-605c-4b6c-923e-2329f17e89bf' },
-  { binding: 'COYOTE_BACKLOG_DB', database_name: 'coyote-backlog-db', database_id: '41321f8f-8e42-4eb8-b288-351226f7bd9b' },
-  { binding: 'SOBERAFE_BACKLOG_DB', database_name: 'soberafe-backlog-db', database_id: '6f221a25-b48a-4121-8b24-16f72f83f802' }
+  { binding: 'HUB_DB', database_name: 'hub-db', database_id: 'bfa66ad3-605c-4b6c-923e-2329f17e89bf' }
 ];
 const backlogPreviewDbs = [
-  { binding: 'HUB_DB', database_name: 'hub-preview-db', database_id: '5ccf4e7c-c052-4064-b0bd-f94fdc8b6c86' },
-  { binding: 'COYOTE_BACKLOG_DB', database_name: 'coyote-backlog-preview-db', database_id: 'c7c4332e-c846-49ea-aa82-1af8fab82e19' },
-  { binding: 'SOBERAFE_BACKLOG_DB', database_name: 'soberafe-backlog-preview-db', database_id: '9e9b6403-0523-4f15-864e-e9777fd864dc' }
+  { binding: 'HUB_DB', database_name: 'hub-preview-db', database_id: '5ccf4e7c-c052-4064-b0bd-f94fdc8b6c86' }
 ];
 
 await mkdir('public', { recursive: true });

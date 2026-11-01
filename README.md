@@ -85,7 +85,7 @@ The routine signs in with the `command-center-sync` service token, sending the `
 
 ### Backlog inbox
 
-**Inbox** lists what clients changed in their shared backlogs: Up ENDing Parkinson's (`uep-backlog/`), Project Coyote (`coyote-backlog/`) and Sober AF (`soberafe-backlog/`). Each backlog logs every add, answer, done mark, priority or phase change, edit and delete with the name the person typed. The site reads those logs through the D1 bindings `UEP_BACKLOG_DB`, `COYOTE_BACKLOG_DB` and `SOBERAFE_BACKLOG_DB`, which `build.mjs` adds (previews read the backlogs' preview databases). It never writes to them. The backlogs and their client accounts are listed in `BACKLOGS` in `admin.mjs`.
+**Inbox** lists what clients changed in Tribe Hub (`hub/`): Up ENDing Parkinson's, Project Coyote and Sober AF. The hub logs every add, answer, done mark, priority or phase change, edit, delete and sign-off with the signed-in person. The site reads that log through the D1 binding `HUB_DB`, which `build.mjs` adds (previews read `hub-preview-db`), one client at a time by slug. It never writes to it. The clients and their Salesforce accounts are listed in `BACKLOGS` in `admin.mjs`. The old per-client backlogs (`uep-backlog/`, `coyote-backlog/`, `soberafe-backlog/`) now forward to the hub and are read-only.
 
 - Each item that changed appears once, showing its latest change, for 60 days. Changes made under your own name are left out. The Worker variable `BACKLOG_OWN_NAMES` (comma-separated first names) sets which names count as yours and defaults to `eric`.
 - **Clear** hides the row, and the clear is saved in `ADMIN_DB`. A later change to the same item brings it back. **Add next step** adds a next step to that client and clears the row.

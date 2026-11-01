@@ -179,6 +179,10 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+    // Project Coyote moved to Tribe Hub. With MOVED_TO set, this list is read-only so nothing is added in two places.
+    if (env.MOVED_TO && request.method !== 'GET') {
+      return json({ error: `This list has moved to ${env.MOVED_TO}. Please add it there.` }, 410);
+    }
     try {
       if (!env.BACKLOG_PASSCODE) return json({ error: 'The backlog passcode is not configured yet.', setupRequired: true }, 503);
       if (!await samePasscode(request.headers.get('x-backlog-passcode'), env.BACKLOG_PASSCODE)) {

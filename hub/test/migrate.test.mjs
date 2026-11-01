@@ -58,7 +58,7 @@ test('UEP backlog imports completely, split into its two projects, and is safe t
   assert.ok(hub.prepare("SELECT 1 FROM events WHERE actor_name = 'Molly'").get());
 });
 
-test('two clients with the same old ids do not collide, and Sober AF has one project', async () => {
+test('two clients with the same old ids do not collide, and Sober AF has the app and website', async () => {
   const a = await oldBacklog(uep, []);
   const b = await oldBacklog(safe, []);
   const hub = hubDb();
@@ -66,7 +66,9 @@ test('two clients with the same old ids do not collide, and Sober AF has one pro
   hub.exec(buildMigrationSql('safe', b));
   assert.equal(hub.prepare('SELECT COUNT(*) n FROM items').get().n, a.items.length + b.items.length);
   assert.equal(hub.prepare("SELECT COUNT(*) n FROM items WHERE client_id = (SELECT id FROM clients WHERE slug = 'safe') AND legacy_id = 1").get().n, 1);
-  assert.equal(hub.prepare("SELECT COUNT(*) n FROM projects WHERE client_id = (SELECT id FROM clients WHERE slug = 'safe')").get().n, 1);
+  assert.equal(hub.prepare("SELECT COUNT(*) n FROM projects WHERE client_id = (SELECT id FROM clients WHERE slug = 'safe')").get().n, 2);
+  // Every old Sober AF item lands on the app; the website starts empty.
+  assert.equal(hub.prepare("SELECT COUNT(*) n FROM items i JOIN projects p ON p.id = i.project_id WHERE p.slug = 'website'").get().n, 0);
 });
 
 test('refuses data it does not understand, and quotes awkward text safely', () => {

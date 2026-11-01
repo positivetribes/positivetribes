@@ -1,5 +1,7 @@
 # Sober AF Chapters backlog
 
+> **Moved to Tribe Hub (Nov 2026).** Sober AF's list now lives at https://hub.positivetribes.org/#/safe/home. This page forwards there (old `#item-N` links included), and with `MOVED_TO` set the API refuses changes. The database stays for history.
+
 A small shared list where Duke at Sober AF Entertainment (SAFE) and the Positive Tribes team track open questions and suggested changes for the host and chapter prototype at [positivetribes.org/soberafe/chapters](https://positivetribes.org/soberafe/chapters/). It works like the United Rocks backlog in `unitedrocks-backlog/`: items are either an **open question** or a **suggested change**.
 
 - **Open questions** have a "who can answer" field and an answer. Their tiers read **Answer first** (the prototype or plan depends on it), **Answer before the full build**, and **Can wait**. Marking one answered moves it to a collapsed list and keeps the answer.
