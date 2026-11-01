@@ -34,7 +34,7 @@ p{margin:0}
 .shell{max-width:860px;margin-inline:auto;padding:0 16px 64px}
 .shell,.card,.stack>*{min-width:0}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:20px;text-decoration:none}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:20px;text-decoration:none;color:var(--ink)}
 .brand svg{width:30px;height:30px}.brand circle{fill:currentColor}.brand .core{fill:var(--client)}
 .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .who{color:var(--muted);font-size:15px}
@@ -112,6 +112,13 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .admin-only{margin:4px 0 0;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
 .pill.stage{background:var(--soft);color:var(--ink);text-transform:none;letter-spacing:0;font-weight:600}
 .pill.stage.uat{background:var(--client);color:#fff}
+.docs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.docs li{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
+.docs li:first-child{border-top:0;padding-top:4px}
+.docs .doc-title{display:flex;flex-direction:column;gap:2px;flex:1 1 220px;min-width:0}
+.docs .doc-title b{font-weight:650}
+.pill.doc{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}
+.pill.doc.signed{background:var(--ok-bg);color:var(--ok)}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .list li a{color:inherit;display:flex;gap:10px;align-items:baseline;padding:10px 4px;text-decoration:none;border-bottom:1px solid var(--line)}
 .list li:last-child a{border-bottom:0}.list li a:hover{color:var(--rust)}
@@ -145,7 +152,12 @@ section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wra
 .confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--must-bg);border-radius:10px;padding:8px 12px}
 .empty{color:var(--muted);font-style:italic}
 details.done-list>summary{cursor:pointer;font-weight:600;padding:6px 0}
-select.client-switch{width:auto;padding:6px 10px}
+select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;padding:5px 30px 5px 10px;text-overflow:ellipsis}
+.admin-bar{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;background:var(--soft);border-radius:12px;padding:8px 12px;margin:0 0 8px;font-size:14px;color:var(--muted)}
+.admin-label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-right:auto}
+.admin-field{display:flex;align-items:center;gap:8px;font-weight:600}
+.admin-field select[hidden]{display:none}
+.admin-field:has(select[hidden]){display:none}
 @media (max-width:520px){.shell{padding-inline:14px}.who{display:none}.card{padding:16px}}
 @media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
 </style>
@@ -154,8 +166,13 @@ select.client-switch{width:auto;padding:6px 10px}
 <div class="shell">
   <header class="top">
     <a class="brand" href="#/"><svg viewBox="0 0 152 152" aria-hidden="true"><circle cx="76" cy="22" r="22"/><circle cx="130" cy="76" r="22"/><circle cx="76" cy="130" r="22"/><circle cx="22" cy="76" r="22"/><circle class="core" cx="76" cy="76" r="22"/></svg><span>Positive Tribes</span></a>
-    <div class="tools"><select id="switch" class="client-switch" aria-label="Choose a client" hidden></select><select id="preview" class="client-switch" aria-label="Preview the workspace as someone else" hidden></select><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
+    <div class="tools"><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
   </header>
+  <div class="admin-bar" id="admin-bar" hidden>
+    <span class="admin-label">Positive Tribes</span>
+    <label class="admin-field">Client <select id="switch" class="client-switch" hidden></select></label>
+    <label class="admin-field">Preview as <select id="preview" class="client-switch" hidden></select></label>
+  </div>
   <div id="preview-bar" class="preview-bar" role="status" hidden></div>
   <div id="error" class="error" role="alert" hidden></div>
   <main id="main" aria-live="polite"><p class="muted">Loading your workspace…</p></main>
@@ -176,7 +193,7 @@ select.client-switch{width:auto;padding:6px 10px}
   const LOOP = ['build', 'uat'];
   const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
-  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null };
+  const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null, documents: [] };
 
   const store = {
     get(k) { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } },
@@ -238,7 +255,7 @@ select.client-switch{width:auto;padding:6px 10px}
 
   async function loadClient(slug) {
     const [p, i] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items')]);
-    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], items: i.items, preview: null, people: [] });
+    Object.assign(state, { slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], items: i.items, preview: null, people: [] });
     if (state.me.user.role === 'pt') { try { state.people = (await api('/c/' + slug + '/people')).people; } catch {} }
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
@@ -280,8 +297,9 @@ select.client-switch{width:auto;padding:6px 10px}
     sw.replaceChildren(...state.me.clients.map(c => h('option', { value: c.slug, ...(c.slug === state.slug ? { selected: true } : {}) }, c.name)));
     const pv = $('preview');
     pv.hidden = state.me.user.role !== 'pt' || !state.people.length;
-    pv.replaceChildren(h('option', { value: '' }, 'Preview as…'), ...state.people.map(u =>
+    pv.replaceChildren(h('option', { value: '' }, 'Off (your view)'), ...state.people.map(u =>
       h('option', { value: u.email, ...(state.preview && state.preview.email === u.email ? { selected: true } : {}) }, u.name + ' (' + ROLE_NAMES[u.role] + ')')));
+    $('admin-bar').hidden = sw.hidden && pv.hidden && !state.preview;
     const bar = $('preview-bar');
     bar.hidden = !state.preview;
     bar.replaceChildren(...(state.preview ? [
@@ -351,8 +369,26 @@ select.client-switch{width:auto;padding:6px 10px}
           isPt && p.live_url && !isLive(p, phases) && h('p', { class: 'admin-only' }, h('span', { class: 'meta' }, 'Only Positive Tribes sees this: '),
             h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production')));
       })),
+      documents(),
       mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
         h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
+  }
+
+  // ---- Documents: proposals and other papers, as links ----
+  const DOC_STATUS = { draft: 'Draft', sent: 'Sent', signed: 'Signed' };
+  const DOC_KINDS = { proposal: 'Proposal', agreement: 'Agreement', test_script: 'Test script', design: 'Design', other: 'Document' };
+  function documents() {
+    // Positive Tribes receives hidden documents too; a preview shows only what the client would see.
+    const isPt = viewer().role === 'pt';
+    const docs = state.documents.filter(d => d.visible || isPt);
+    if (!docs.length) return null;
+    const projectName = id => (state.projects.find(p => p.id === id) || {}).name;
+    return h('div', { class: 'card' }, h('h2', {}, 'Documents'),
+      h('ul', { class: 'docs' }, docs.map(d => h('li', {},
+        h('div', { class: 'doc-title' }, h('b', {}, d.title),
+          h('span', { class: 'meta' }, [DOC_KINDS[d.kind], projectName(d.project_id)].filter(Boolean).join(' \u00b7 ') + (d.note ? ' \u00b7 ' + d.note : '') + (!d.visible ? ' \u00b7 only Positive Tribes sees this' : ''))),
+        d.status && h('span', { class: 'pill doc ' + d.status }, DOC_STATUS[d.status]),
+        d.url && h('a', { class: 'btn ghost small', href: d.url, target: '_blank', rel: 'noopener' }, 'Open')))));
   }
 
   // ---- Client phases and their testing window ----
