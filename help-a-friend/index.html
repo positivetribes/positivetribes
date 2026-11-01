@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<meta name="description" content="What to do if a friend drank too much: warning signs of alcohol poisoning, first steps, and who to call.">
+<meta name="description" content="What to do if a friend drank too much or took drugs: warning signs of alcohol poisoning or overdose, first steps, and who to call.">
 <title>Help a Friend</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
@@ -97,14 +97,14 @@ footer { font-size: .85rem; color: var(--muted); border-top: 1px solid var(--lin
   <header>
     <div class="draft"><b>Draft prototype</b><span>For review with Golden High School counselors</span></div>
     <h1 style="margin-top:.6rem">Help a Friend</h1>
-    <p class="lede">Someone drank too much and you're worried. You're doing the right thing by checking. Here's what to do.</p>
+    <p class="lede">Someone drank too much or took something, and you're worried. You're doing the right thing by checking. Here's what to do.</p>
   </header>
 
   <div class="call" role="region" aria-label="Emergency call">
     <h2>If you're not sure, call.</h2>
     <div class="row">
       <a class="num" href="tel:911">911</a>
-      <small>Calling costs nothing. Waiting can cost a life.</small>
+      <small>Calling costs nothing. Waiting can cost a life. Calling is the right call, even if you're worried about getting in trouble.</small>
     </div>
   </div>
 
@@ -118,6 +118,7 @@ footer { font-size: .85rem; color: var(--muted); border-top: 1px solid var(--lin
       <label class="sign"><input type="checkbox" id="s4"><span>Cold, clammy, pale or bluish skin or lips</span></label>
       <label class="sign"><input type="checkbox" id="s5"><span>Seizure, shaking, or twitching</span></label>
       <label class="sign"><input type="checkbox" id="s6"><span>Very confused, can't stand, or can't talk clearly</span></label>
+      <label class="sign"><input type="checkbox" id="s7"><span>Gurgling, choking or snoring sounds, or breathing has stopped</span></label>
     </div>
     <div class="verdict" id="verdict" aria-live="polite">Nothing checked. Stay with them and keep watching.</div>
   </section>
@@ -125,12 +126,22 @@ footer { font-size: .85rem; color: var(--muted); border-top: 1px solid var(--lin
   <section aria-labelledby="h-steps">
     <h2 id="h-steps">What to do right now</h2>
     <ol class="steps">
-      <li><div><strong>Call 911.</strong>Say where you are, that someone drank too much, and what you see.</div></li>
+      <li><div><strong>Call 911.</strong>Say where you are, that someone drank too much or took something, and what you see.</div></li>
+      <li><div><strong>If you have naloxone (Narcan), use it.</strong>If there's any chance of an opioid overdose, give it. It's safe even if you're not sure, and it won't hurt them. Follow the package instructions or what the 911 dispatcher tells you.</div></li>
       <li><div><strong>Don't leave them alone.</strong>Stay with them until help arrives, even if they seem to be sleeping.</div></li>
       <li><div><strong>Turn them on their side.</strong>Top knee bent, head tilted a little back. This keeps them from choking if they throw up.</div></li>
       <li><div><strong>Keep them warm.</strong>Cover them with a jacket or blanket.</div></li>
       <li><div><strong>Tell the responders what you know.</strong>What they drank, how much, and when. Mention any pills or other drugs.</div></li>
     </ol>
+  </section>
+
+  <section aria-labelledby="h-drugs">
+    <h2 id="h-drugs">If pills or drugs are involved</h2>
+    <div class="myths">
+      <div class="myth">You can't tell what's in a pill by looking at it. Pills sold as Xanax, Percocet or Adderall can contain fentanyl, so your friend may not know what they took.</div>
+      <div class="myth">Don't wait to see if they get better. Overdoses can stop breathing quickly. Call 911 first.</div>
+      <div class="myth">Tell responders everything you know, even if you're afraid of getting someone in trouble. It helps them treat your friend faster.</div>
+    </div>
   </section>
 
   <section aria-labelledby="h-myths">
@@ -146,7 +157,7 @@ footer { font-size: .85rem; color: var(--muted); border-top: 1px solid var(--lin
     <h2 id="h-safe">You won't get in trouble for helping</h2>
     <p>Colorado law protects people who call 911 for someone having an alcohol or drug emergency, as long as you stay with them and cooperate with responders. The person who needs help is protected too.</p>
     <p>Saving your friend matters more than any rule you broke tonight.</p>
-    <p class="todo">To confirm before launch: exact wording with the school, district policy, and a legal review of Colorado's Good Samaritan law (C.R.S. 18-1-711).</p>
+    <p class="todo">To confirm before launch: exact wording with the school, district policy, a legal review of Colorado's Good Samaritan law (C.R.S. 18-1-711), and the naloxone and fentanyl wording with a medical or counselor reviewer.</p>
   </div>
 
   <section aria-labelledby="h-contacts">
@@ -154,14 +165,13 @@ footer { font-size: .85rem; color: var(--muted); border-top: 1px solid var(--lin
     <div class="contacts">
       <div class="contact"><div><div class="label">Poison Control</div><div class="val">1-800-222-1222</div></div><button class="copy" type="button" data-copy="1-800-222-1222">Copy</button></div>
       <div class="contact"><div><div class="label">Crisis line (call or text)</div><div class="val">988</div></div><button class="copy" type="button" data-copy="988">Copy</button></div>
-      <div class="contact"><div><div class="label">School counselor</div><div class="val ph">[Name and number from school]</div></div></div>
-      <div class="contact"><div><div class="label">Safe ride home</div><div class="val ph">[Local safe-ride option]</div></div></div>
+      <!-- TODO: add school counselor name/number and a local safe-ride option once the school supplies them -->
     </div>
     <p class="hint">Save these to your phone now so you have them when you need them.</p>
   </section>
 
   <footer>
-    <span>A free resource for Golden High School students from <a href="https://positivetribes.org/">Positive Tribes</a>, in partnership with <a href="https://soberafe.com/">SAFE (Sober AF Entertainment)</a>, a Colorado recovery community nonprofit.</span>
+    <span>A resource for Golden High School students from <a href="https://positivetribes.org/">Positive Tribes</a>, in partnership with <a href="https://soberafe.com/">SAFE (Sober AF Entertainment)</a>, a Colorado recovery community nonprofit.</span>
     <span>This page is general safety information, not medical advice. In an emergency, always call 911.</span>
   </footer>
 </div>
