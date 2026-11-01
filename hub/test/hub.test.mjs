@@ -1,0 +1,73 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import worker from '../src/index.js';
+import { database } from './helpers.mjs';
+
+function setup() {
+  const { sqlite, db } = database();
+  sqlite.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
+  sqlite.exec(`
+    INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
+    INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
+    INSERT INTO users (email, name, role, client_id) VALUES
+      ('molly@uep.org', 'Molly', 'ed', 1), ('eric@positivetribes.org', 'Eric', 'pt', NULL), ('dana@safe.org', 'Dana', 'ed', 2);
+  `);
+  const env = { DB: db, HUB_DEV: '1', ASSETS: { fetch: () => new Response('asset') } };
+  const call = (who, path, method = 'GET', payload) => worker.fetch(new Request('http://localhost' + path, {
+    method,
+    headers: { ...(who ? { 'x-dev-email': who } : {}), 'content-type': 'application/json' },
+    body: payload ? JSON.stringify(payload) : undefined
+  }), env);
+  return { sqlite, call };
+}
+
+test('requires sign in and an invitation', async () => {
+  const { call } = setup();
+  assert.equal((await call(null, '/api/me')).status, 401);
+  assert.equal((await call('stranger@x.org', '/api/me')).status, 403);
+  const me = await (await call('molly@uep.org', '/api/me')).json();
+  assert.deepEqual(me.clients.map(c => c.slug), ['uep']);
+  const pt = await (await call('eric@positivetribes.org', '/api/me')).json();
+  assert.deepEqual(pt.clients.map(c => c.slug), ['safe', 'uep']);
+});
+
+test('clients cannot see or touch another client', async () => {
+  const { call } = setup();
+  const add = await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Waitlist rules', kind: 'question', tier: 'must', project_id: 1 });
+  assert.equal(add.status, 201);
+  assert.equal((await call('dana@safe.org', '/api/c/uep/items')).status, 404);
+  assert.equal((await call('dana@safe.org', '/api/c/uep/items/1', 'PATCH', { done: true })).status, 404);
+  // Cannot file into another client's list, even while in your own workspace.
+  assert.equal((await call('dana@safe.org', '/api/c/safe/items', 'POST', { title: 'x', project_id: 1 })).status, 400);
+  const own = await (await call('dana@safe.org', '/api/c/safe/items')).json();
+  assert.equal(own.items.length, 0);
+  const pt = await (await call('eric@positivetribes.org', '/api/c/uep/items')).json();
+  assert.equal(pt.items.length, 1);
+});
+
+test('add, answer, move, done and delete are logged with the real person', async () => {
+  const { call, sqlite } = setup();
+  for (const title of ['A', 'B']) await call('molly@uep.org', '/api/c/uep/items', 'POST', { title, tier: 'must', project_id: 1 });
+  let r = await (await call('molly@uep.org', '/api/c/uep/items/2/move', 'POST', { direction: 'up' })).json();
+  assert.deepEqual(r.items.map(i => i.title), ['B', 'A']);
+  r = await (await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { answer: 'Both email and text' })).json();
+  assert.equal(r.items.find(i => i.id === 1).answer, 'Both email and text');
+  await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { done: true });
+  assert.equal((await call('molly@uep.org', '/api/c/uep/items/1', 'DELETE')).status, 403);
+  assert.equal((await call('eric@positivetribes.org', '/api/c/uep/items/1', 'DELETE')).status, 200);
+  const events = sqlite.prepare('SELECT action, actor_email, actor_name FROM events ORDER BY id').all();
+  assert.deepEqual(events.map(e => e.action), ['added', 'added', 'answered', 'done', 'deleted']);
+  assert.equal(events[2].actor_email, 'molly@uep.org');
+  assert.equal(events[4].actor_name, 'Eric');
+});
+
+test('rejects bad input and unknown routes; assets pass through', async () => {
+  const { call } = setup();
+  assert.equal((await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: '', project_id: 1 })).status, 400);
+  assert.equal((await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'x', tier: 'huge', project_id: 1 })).status, 400);
+  assert.equal((await call('molly@uep.org', '/api/c/uep/items/999', 'PATCH', { done: true })).status, 404);
+  assert.equal((await call('molly@uep.org', '/api/nope')).status, 404);
+  const asset = await worker.fetch(new Request('http://localhost/'), { ASSETS: { fetch: () => new Response('asset') } });
+  assert.equal(await asset.text(), 'asset');
+});
