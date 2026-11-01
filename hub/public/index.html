@@ -90,6 +90,19 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .track{height:6px;border-radius:3px;background:var(--line);overflow:hidden;flex-basis:100%}
 .track span{display:block;height:100%;background:var(--client)}
 .uat.soon .track span,.uat.late .track span{background:var(--rust)}
+/* Build and Testing repeat once per client phase: a bracket under those two steps with one pip per phase. */
+.steps-wrap{position:relative;display:flow-root}
+.steps-wrap .zone{position:absolute;top:11px;height:24px;left:calc(var(--from) * 100% / var(--steps) + 4px);width:calc(var(--span) * 100% / var(--steps) - 8px);border-radius:12px;background:color-mix(in srgb,var(--client) 18%,transparent)}
+.steps-wrap .steps{position:relative}
+.loop{margin:2px 0 0 calc(var(--from) * 100% / var(--steps));width:calc(var(--span) * 100% / var(--steps));display:flex;flex-direction:column;align-items:center;gap:5px}
+.loop .bracket{width:calc(100% - 24px);height:8px;border:2px solid var(--client);border-top:0;border-radius:0 0 8px 8px;opacity:.7}
+.loop .pips{display:flex;gap:5px;list-style:none;margin:0;padding:0}
+.loop .pips li{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.loop .pips li.done{background:var(--client)}
+.loop .pips li.now{background:var(--card);box-shadow:inset 0 0 0 3px var(--client)}
+.loop .pips li.ready{background:color-mix(in srgb,var(--client) 40%,var(--line))}
+.loop .note{font-size:12px;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:4px}
+.loop .note svg{width:12px;height:12px;flex:none}
 .releases{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .releases li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .pill.stage{background:var(--soft);color:var(--ink);text-transform:none;letter-spacing:0;font-weight:600}
@@ -154,6 +167,8 @@ select.client-switch{width:auto;padding:6px 10px}
   const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
   const STEPS = [['kickoff', 'Kickoff'], ['discovery', 'Discovery'], ['prototype', 'Prototype'], ['build', 'Build'], ['uat', 'Testing'], ['launch', 'Launch'], ['hypercare', 'Settling in'], ['support', 'Support']];
   const $ = id => document.getElementById(id);
+  const LOOP = ['build', 'uat'];
+  const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
   const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null };
 
@@ -275,13 +290,26 @@ select.client-switch{width:auto;padding:6px 10px}
         const at = STEPS.findIndex(s => s[0] === p.phase);
         const counts = open(state.items.filter(i => i.project_id === p.id));
         const phases = state.releases.filter(r => r.project_id === p.id);
+        // With more than one client phase, Build and Testing repeat for each phase before Launch.
+        const loops = phases.length > 1;
+        const current = phases.find(r => r.stage === 'uat') || phases.find(r => r.stage === 'building') || phases.find(r => !['signed_off', 'live'].includes(r.stage));
+        const inLoop = loops && LOOP.includes(STEPS[Math.max(at, 0)][0]);
+        const loopVars = '--from:' + STEPS.findIndex(s => s[0] === LOOP[0]) + ';--span:' + LOOP.length + ';--steps:' + STEPS.length;
+        const tip = (key, label, n) => (n < at ? label + ' \u00b7 done' : n > at ? label + ' \u00b7 coming up' : label) + (loops && LOOP.includes(key) && n !== at ? ', repeats for each phase' : '');
         return h('div', { class: 'card' },
           h('h2', {}, p.name),
-          h('p', { class: 'muted' }, 'Now: ' + STEPS[Math.max(at, 0)][1]),
-          h('ol', { class: 'steps', 'aria-label': 'Progress for ' + p.name },
-            STEPS.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : { tabindex: '0' }) }, h('span', {}, n < at ? label + ' \u00b7 done' : n > at ? label + ' \u00b7 coming up' : label)))),
+          h('p', { class: 'muted' }, 'Now: ' + STEPS[Math.max(at, 0)][1] + (inLoop && current ? ' ' + phaseName(current) + ' of ' + phases.length : '')),
+          h('div', { class: 'steps-wrap', style: loopVars },
+            loops && h('div', { class: 'zone', 'aria-hidden': 'true' }),
+            h('ol', { class: 'steps', 'aria-label': 'Progress for ' + p.name },
+              STEPS.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : { tabindex: '0' }) }, h('span', {}, tip(key, label, n)))))),
+          loops && h('div', { class: 'loop', style: loopVars },
+            h('div', { class: 'bracket', 'aria-hidden': 'true' }),
+            h('ul', { class: 'pips', 'aria-label': 'Build and testing, once per phase' }, phases.map(r =>
+              h('li', { class: ['signed_off', 'live'].includes(r.stage) ? 'done' : r.stage === 'uat' ? 'now' : r.stage === 'waiting' ? 'ready' : '', title: phaseName(r) + ': ' + STAGES[r.stage], 'aria-label': phaseName(r) + ': ' + STAGES[r.stage] }))),
+            h('div', { class: 'note' }, loopIcon(), 'Each of ' + phases.length + ' phases')),
           phases.length > 0 && h('ul', { class: 'releases', 'aria-label': 'Phases of ' + p.name }, phases.map(r =>
-            h('li', {}, h('b', {}, phaseName(r)), h('span', { class: 'pill stage ' + r.stage }, STAGES[r.stage]),
+            h('li', {}, h('b', {}, phaseName(r)), r.summary && h('span', { class: 'muted' }, r.summary), h('span', { class: 'pill stage ' + r.stage }, STAGES[r.stage]),
               r.stage === 'signed_off' && r.signed_off_at && h('span', { class: 'meta' }, 'by ' + r.signed_off_by + ', ' + longDate(r.signed_off_at.slice(0, 10)))))),
           h('p', { class: 'meta' }, counts.length + ' open item' + (counts.length === 1 ? '' : 's')),
           p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')));
@@ -306,6 +334,7 @@ select.client-switch{width:auto;padding:6px 10px}
     return left;
   }
 
+  const ofTotal = r => { const n = state.releases.filter(x => x.project_id === r.project_id).length; return n > 1 ? phaseName(r) + ' of ' + n : ''; };
   function testing(r) {
     const project = state.projects.find(p => p.id === r.project_id);
     const business = r.uat_day_type === 'business';
@@ -324,7 +353,7 @@ select.client-switch{width:auto;padding:6px 10px}
     return h('div', { class: 'card uat' + (left != null && left < 0 ? ' late' : left != null && left <= 7 ? ' soon' : '') },
       h('div', { class: 'left' }, big),
       h('div', { class: 'what' },
-        h('div', { class: 'label' }, (project ? project.name + ' · ' : '') + 'Testing'),
+        h('div', { class: 'label' }, [project && project.name, ofTotal(r), r.summary || 'Testing'].filter(Boolean).join(' · ')),
         h('h2', {}, phaseName(r) + ' testing and sign-off'),
         r.uat_due && h('p', { class: 'muted' }, 'Due ' + longDate(r.uat_due) + ' (' + r.uat_days + (business ? ' business days' : ' days') + ' from ' + shortDate(r.uat_started) + ')'),
         acceptance && h('p', { class: 'meta' }, acceptance),
