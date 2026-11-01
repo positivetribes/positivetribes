@@ -103,6 +103,26 @@ async function requireProject(db, clientId, value) {
   return project;
 }
 
+// Ideas for the hub itself. Positive Tribes sees every client's (with the client's name); a client sees its own.
+const IDEA_STATUSES = ['new', 'next', 'later', 'shipped', 'declined'];
+const ideaStatusOf = oneOf(IDEA_STATUSES, 'Choose new, next, later, shipped, or declined.');
+async function listIdeas(db, user) {
+  const { results } = await db.prepare(
+    `SELECT h.id, h.title, h.details, h.tier, h.status, h.note, h.added_by, h.created_at, h.updated_at, h.shipped_at,
+            c.slug AS client_slug, COALESCE(c.name, 'Positive Tribes') AS client_name
+     FROM hub_ideas h LEFT JOIN clients c ON c.id = h.client_id
+     WHERE ? OR h.client_id = ?
+     ORDER BY CASE h.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, h.id`
+  ).bind(user.role === 'pt' ? 1 : 0, user.client_id).all();
+  return results;
+}
+async function requireIdea(db, user, value) {
+  const id = Number(value);
+  const idea = Number.isSafeInteger(id) && id > 0 && await db.prepare('SELECT * FROM hub_ideas WHERE id = ?').bind(id).first();
+  if (!idea || (user.role !== 'pt' && idea.client_id !== user.client_id)) throw new InputError('Idea not found.', 404);
+  return idea;
+}
+
 const nextPosition = (db, clientId, projectId, kind, tier) => db.prepare(
   'SELECT COALESCE(MAX(position), 0) + 1 AS next FROM items WHERE client_id = ? AND project_id = ? AND kind = ? AND tier = ?'
 ).bind(clientId, projectId, kind, tier).first().then(row => row.next);
@@ -140,6 +160,49 @@ export default {
           ? await db.prepare('SELECT slug, name, accent, status FROM clients ORDER BY name').all()
           : await db.prepare('SELECT slug, name, accent, status FROM clients WHERE id = ?').bind(user.client_id).all();
         return json({ user: { email: user.email, name: user.name, role: user.role }, clients });
+      }
+
+      const idea = url.pathname.match(/^\/api\/ideas(?:\/(\d+))?$/);
+      if (idea) {
+        const [, ideaId] = idea;
+        if (!ideaId && method === 'GET') return json({ ideas: await listIdeas(db, user) });
+        if (!ideaId && method === 'POST') {
+          const b = await body(request);
+          const title = text(b.title, 160, { required: true, label: 'Title' });
+          const details = text(b.details, 2000, { label: 'Details' });
+          const tier = b.tier === undefined ? 'idea' : tierOf(b.tier);
+          await db.prepare(
+            'INSERT INTO hub_ideas (client_id, title, details, tier, added_by, added_email) VALUES (?, ?, ?, ?, ?, ?)'
+          ).bind(user.role === 'pt' ? null : user.client_id, title, details, tier, user.name || user.email, user.email).run();
+          return json({ ok: true, ideas: await listIdeas(db, user) }, 201);
+        }
+        if (ideaId && method === 'PATCH') {
+          const current = await requireIdea(db, user, ideaId);
+          const b = await body(request);
+          const pt = user.role === 'pt';
+          // Clients may fix the wording of their idea until Positive Tribes has decided on it; only Positive Tribes decides.
+          if (!pt && (current.status !== 'new' || b.status !== undefined || b.note !== undefined)) {
+            throw new InputError('Positive Tribes has already reviewed this idea. Add a new one instead.', 403);
+          }
+          const title = b.title === undefined ? current.title : text(b.title, 160, { required: true, label: 'Title' });
+          const details = b.details === undefined ? current.details : text(b.details, 2000, { label: 'Details' });
+          const tier = b.tier === undefined ? current.tier : tierOf(b.tier);
+          const status = b.status === undefined ? current.status : ideaStatusOf(b.status);
+          const note = b.note === undefined ? current.note : text(b.note, 2000, { label: 'Reply' });
+          await db.prepare(
+            `UPDATE hub_ideas SET title = ?, details = ?, tier = ?, status = ?, note = ?, updated_at = CURRENT_TIMESTAMP,
+               shipped_at = CASE WHEN ? = 'shipped' THEN COALESCE(shipped_at, CURRENT_TIMESTAMP) ELSE NULL END
+             WHERE id = ?`
+          ).bind(title, details, tier, status, note, status, current.id).run();
+          return json({ ok: true, ideas: await listIdeas(db, user) });
+        }
+        if (ideaId && method === 'DELETE') {
+          if (user.role !== 'pt') throw new InputError('Only Positive Tribes can delete ideas.', 403);
+          const current = await requireIdea(db, user, ideaId);
+          await db.prepare('DELETE FROM hub_ideas WHERE id = ?').bind(current.id).run();
+          return json({ ok: true, ideas: await listIdeas(db, user) });
+        }
+        return json({ error: 'Not found.' }, 404);
       }
 
       const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people)(?:\/(\d+))?(?:\/(move|signoff))?$/);
