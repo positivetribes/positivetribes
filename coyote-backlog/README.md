@@ -1,5 +1,7 @@
 # Project Coyote prototype backlog
 
+> **Moved to Tribe Hub (Nov 2026).** Project Coyote's list now lives at https://hub.positivetribes.org/#/coyote/home. This page forwards there (old `#item-N` links included), and with `MOVED_TO` set the API refuses changes. The database stays for history.
+
 A small shared list where Mark, Rainer, and the Positive Tribes team collect feedback on the Project Coyote mange app prototype. Anyone with the passcode can add a suggestion, mark it **Must have**, **Nice to have**, or **Idea for now**, and move items up or down to set the order inside a tier. Items can be edited, marked done, or deleted.
 
 Each item also has a **phase**, which says when it gets built, separate from how much it matters: **To review** (new, not sorted yet), **Prototype** (next prototype round), **Full build** (the real app after approval), or **Later**. New suggestions start as To review. The page can be filtered by phase, and Up and Down reorder within the phase being shown.

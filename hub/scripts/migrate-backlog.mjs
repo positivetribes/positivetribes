@@ -22,11 +22,15 @@ export const CLIENTS = {
   },
   safe: {
     name: 'Sober AF', accent: '#2440e0', database: 'soberafe-backlog-db', events: true,
-    projects: { '*': { slug: 'chapters', name: 'Sober AF app', poc_url: 'https://positivetribes.org/soberafe/chapters/', phase: 'prototype', position: 1 } }
+    // The old backlog has no areas, so every old item belongs to the app; the website starts with an empty list.
+    projects: {
+      '*': { slug: 'chapters', name: 'Sober AF app', poc_url: 'https://positivetribes.org/soberafe/chapters/', phase: 'prototype', position: 1 },
+      website: { slug: 'website', name: 'Website', poc_url: 'https://positivetribes.org/soberafe/', phase: 'prototype', position: 2 }
+    }
   },
   coyote: {
     name: 'Project Coyote', accent: '#a2593f', database: 'coyote-backlog-db', events: true,
-    projects: { '*': { slug: 'coyote', name: 'Project Coyote', poc_url: '', phase: 'prototype', position: 1 } }
+    projects: { '*': { slug: 'mange-app', name: 'Mange app', poc_url: 'https://positivetribes.org/coyote/', phase: 'prototype', position: 1 } }
   },
   unitedrocks: {
     name: 'United Rocks', accent: '#127057', database: 'unitedrocks-backlog-db', events: false,
