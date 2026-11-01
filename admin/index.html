@@ -136,22 +136,39 @@ function uatCountdown(today) {
 // "Not now" only hides an item for the rest of today, in this browser.
 const skipKey = () => 'now-skipped-' + (overview?.today || '');
 const skipped = () => { try { return JSON.parse(localStorage.getItem(skipKey()) || '[]'); } catch { return []; } };
+// "Done" hides an item for 7 days (until a date), in this browser. It comes back after that if it still applies.
+const DONE_DAYS = 7, doneKey = 'now-done';
+const doneMap = () => { try { return JSON.parse(localStorage.getItem(doneKey) || '{}') || {}; } catch { return {}; } };
+const doneUntil = today => new Date(Date.parse(today + 'T12:00:00Z') + DONE_DAYS * 864e5).toISOString().slice(0, 10);
 const nowId = i => [i.type, i.id || i.title, i.accountId || ''].join('|');
 function nowCard(data) {
-  const skip = skipped(), list = (data.now || []).filter(i => !skip.includes(nowId(i)));
-  if (!list.length) return `<section class="panel nowcard"><p class="label">Now</p><h2>Nothing needs you right now</h2><p class="muted why">${skip.length ? 'You have skipped everything for today. <button type="button" class="link" id="now-reset">Bring them back</button>' : 'No deadlines, waiting clients or revenue items. Pick something from Coming up.'}</p></section>`;
+  const skip = skipped(), dones = doneMap(), isDone = i => (dones[nowId(i)] || '') > data.today;
+  const list = (data.now || []).filter(i => !skip.includes(nowId(i)) && !isDone(i));
+  if (!list.length) return `<section class="panel nowcard"><p class="label">Now</p><h2>Nothing needs you right now</h2><p class="muted why">${skip.length || (data.now || []).some(isDone) ? 'You have skipped or finished everything for now. <button type="button" class="link" id="now-reset">Bring them back</button>' : 'No deadlines, waiting clients or revenue items. Pick something from Coming up.'}</p></section>`;
   const [top, ...rest] = list, url = top.type === 'stale' ? '#/client/' + esc(top.accountId) : safeUrl(top.url);
   const title = url ? `<a href="${url}"${top.type === 'stale' ? '' : ' target="_blank" rel="noopener"'}>${esc(top.title)}</a>` : esc(top.title);
   const client = top.client && top.type !== 'stale' ? `<a class="client-link" href="#/client/${esc(top.accountId)}">${esc(top.client)}</a> · ` : '';
   return `<section class="panel nowcard" aria-label="Now"><p class="label">Now</p><h2>${title}</h2>
     <p class="why">${client}<strong>${esc(top.why)}</strong>${top.detail ? ' · <span class="muted">' + esc(top.detail) + '</span>' : ''}</p>
-    ${top.type === 'step' && top.id ? `<button type="button" class="primary" data-today-done="${esc(top.id)}">Mark done</button> ` : ''}<button type="button" id="now-skip" data-id="${esc(nowId(top))}">Not now</button>
+    ${top.type === 'step' && top.id ? `<button type="button" class="primary" data-today-done="${esc(top.id)}">Mark done</button> ` : ''}${top.type === 'step' && top.id ? '' : `<button type="button" class="primary" id="now-done" data-id="${esc(nowId(top))}" data-account="${top.type === 'lead' ? '' : esc(top.accountId || '')}" data-title="${esc(top.title)}">Done</button> `}<button type="button" id="now-skip" data-id="${esc(nowId(top))}">Not now</button>
     ${rest.length ? `<p class="meta later">Then: ${rest.slice(0, 3).map(i => esc(i.title)).join(' · ')}</p>` : ''}</section>`;
 }
 function wireNow() {
   const save = ids => { try { localStorage.setItem(skipKey(), JSON.stringify(ids)); } catch {} renderToday(overview); };
   document.getElementById('now-skip')?.addEventListener('click', e => save([...skipped(), e.currentTarget.dataset.id]));
-  document.getElementById('now-reset')?.addEventListener('click', () => save([]));
+  document.getElementById('now-done')?.addEventListener('click', async e => {
+    const btn = e.currentTarget, until = doneUntil(overview.today), m = doneMap();
+    m[btn.dataset.id] = until;
+    try { localStorage.setItem(doneKey, JSON.stringify(m)); } catch {}
+    btn.disabled = true;
+    try {
+      // A client item also gets a tracked follow-up step due when it comes back. Leads have no client record to hold a step.
+      if (btn.dataset.account) await send('/steps', 'POST', { accountId: btn.dataset.account, title: 'Follow up: ' + btn.dataset.title, dueDate: until });
+      await loadOverview(true); // re-read Salesforce so the next card is ranked on fresh data
+    } catch (error) { alert(error.message); }
+    renderToday(overview);
+  });
+  document.getElementById('now-reset')?.addEventListener('click', () => { try { localStorage.removeItem(doneKey); } catch {} save([]); });
 }
 
 function renderToday(data) {
