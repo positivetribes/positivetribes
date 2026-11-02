@@ -437,27 +437,42 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     command = command || window.CommandCenter({ api });
     const { view } = command.viewOf(sub);
     const tab = (key, href, label, extra) => h('a', { href, ...(view === key || (key === 'clients' && view === 'client') ? { 'aria-current': 'page' } : {}) }, label, extra);
+    const tabs = inboxBadge => [tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', inboxBadge), tab('clients', '#/command/clients', 'Clients'),
+      tab('documents', '#/command/documents', 'Documents'), tab('ideas', '#/command/ideas', 'Improve this hub', h('span', { class: 'badge', id: 'cc-ideas-count' }))];
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {
       // Moving between command center views keeps the hero and tab row; only the view below changes.
-      $('cc-tabs').replaceChildren(tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', $('cc-inbox-count')), tab('clients', '#/command/clients', 'Clients'), tab('documents', '#/command/documents', 'Documents'));
+      $('cc-tabs').replaceChildren(...tabs($('cc-inbox-count')));
       $('cc').replaceWith(box);
     } else {
       $('main').replaceChildren(
         h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Command center'), h('h1', {}, 'Positive Tribes')),
         h('div', { class: 'cc-bar' },
-          h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' },
-            tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', h('span', { class: 'badge', id: 'cc-inbox-count' })), tab('clients', '#/command/clients', 'Clients'), tab('documents', '#/command/documents', 'Documents')),
+          h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' }, ...tabs(h('span', { class: 'badge', id: 'cc-inbox-count' }))),
           h('span', { class: 'meta cc-sync', id: 'cc-sync' }),
-          h('button', { class: 'btn ghost small', type: 'button', onclick: () => command.refresh() }, 'Refresh')),
+          h('button', { class: 'btn ghost small', type: 'button', onclick: () => state.ccView === 'ideas' ? loadCommandIdeas() : command.refresh() }, 'Refresh')),
         box);
     }
-    command.show(box, sub);
+    state.ccView = view;
+    // Improve this hub is the same view as in a client workspace, showing every client's ideas and Positive Tribes' own.
+    if (view === 'ideas') { document.title = 'Improve this hub | Command center'; loadCommandIdeas(); }
+    else { command.show(box, sub); loadCommandIdeas(true); }
+  }
+  // quiet: only refresh the tab's count of ideas waiting for review.
+  async function loadCommandIdeas(quiet) {
+    try { state.ideas = (await api('/ideas')).ideas; } catch (e) { if (!quiet) showError(e.message); }
+    render();
   }
 
   function render() {
-    if (!state.client || state.mode === COMMAND) return;
+    if (state.mode === COMMAND) {
+      const badge = $('cc-ideas-count');
+      if (badge) badge.textContent = newIdeas() ? String(newIdeas()) : '';
+      if (state.ccView === 'ideas' && $('cc')) $('cc').replaceChildren(ideas(true));
+      return;
+    }
+    if (!state.client) return;
     const isPt = viewer().role === 'pt';
     renderBar();
     const waiting = open(state.items).filter(i => i.kind === 'question').length;
