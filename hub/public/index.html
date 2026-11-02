@@ -692,7 +692,8 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       const phase = filter === 'all' ? '' : ' in ' + PHASES.find(p => p[0] === filter)[1];
       nodes.push(h('p', { class: 'empty' }, 'No open ' + { question: 'questions', change: 'suggestions', problem: 'problems', request: 'requests' }[kind] + phase + '.'));
     }
-    const finished = mine.filter(i => i.done);
+    // Newest first: most recently answered (or edited) on top.
+    const finished = mine.filter(i => i.done).sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '') || b.id - a.id);
     if (finished.length) {
       nodes.push(h('details', { class: 'done-list' }, h('summary', {}, DONE_WORD[kind][0].toUpperCase() + DONE_WORD[kind].slice(1) + ' (' + finished.length + ')'),
         h('div', { class: 'stack' }, finished.map(i => card(i, finished, isPt)))));
