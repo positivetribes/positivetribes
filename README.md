@@ -56,41 +56,4 @@ The page and API also stay closed unless these Worker secrets are set in Cloudfl
 
 ## Admin command center
 
-`/admin/` is Eric's private view of every client: what happened, where things stand and what's next. `admin/index.html` is the page and `admin.mjs` is its API under `/api/admin/`. Both are refused unless Cloudflare Access has signed the visitor in. The Worker checks the Access token again on every request, so if Access is missing or misconfigured the admin area is closed rather than open.
-
-- **Today** shows three lists. *Needs attention* has overdue steps and Salesforce tasks, open Cases, new Leads from the last 30 days, opportunities past their target close date, and active clients with no contact in 21 days or no next step. *Coming up* covers the next 14 days and *Recent* the last 14.
-- **Clients** has a card for each business Account in Salesforce (every Account except Positive Tribes itself), with the stages of its open opportunities, the last contact and the next step. A client counts as active while it has an open opportunity.
-- **A client page** shows a timeline split at "now", next steps, opportunities, people, links, and the email domains, addresses and keywords the daily sync uses to recognize that client.
-
-Salesforce is read live and never written. Notes, next steps, links, pins and synced activity are stored in the `ADMIN_DB` D1 database (`positivetribes-admin-db`; pull request previews use `positivetribes-admin-preview-db`). Tables are created on the first request.
-
-### Setup
-
-1. In Cloudflare Zero Trust > Access > Applications, add a self-hosted application for `positivetribes.org/admin` and `positivetribes.org/api/admin`. Give it an Allow policy for eric@positivetribes.org, signing in with Google or a one-time PIN. Add a Service Auth policy for a service token named `command-center-sync`.
-2. Set two build variables, which are not secret: `ACCESS_TEAM_DOMAIN` (for example `positivetribes.cloudflareaccess.com`) and `ACCESS_AUD` (the application's Audience tag). The build output says "admin sign-in configured" once both are set.
-3. Optional: set the Worker variable `ADMIN_EMAILS` (comma-separated) to let more people in. It defaults to eric@positivetribes.org. Each person also has to be allowed by the Access policy.
-
-It uses the same Salesforce secrets as the contact form.
-
-### Daily activity sync
-
-A weekday Claude routine reads Gmail, Google Calendar and Fathom, then posts what it finds to the command center. Each run follows these steps:
-
-1. `GET /api/admin/match` returns every client with the contact emails, email domains (taken from Contacts and the Account website, plus any extras saved on the client page) and keywords used to recognize it.
-2. The routine posts to `POST /api/admin/activity` with `{ note, items: [...], steps: [...] }`:
-   - **items** (up to 200): `{ external_id, account_id, kind: "email" | "meeting" | "calendar", occurred_at, title, summary, url }`. Use a stable `external_id` such as `gmail:<thread id>`, `gcal:<event id>` or `fathom:<recording id>`. Sending an item again updates it, and `{ external_id, cancelled: true }` removes it, for example a cancelled meeting.
-   - **steps** (up to 50): `{ external_id, account_id, title, due_date }`. These are suggested next steps, such as action items from a meeting. Each one is added only once, and one Eric has dismissed does not come back.
-
-The routine signs in with the `command-center-sync` service token, sending the `CF-Access-Client-Id` and `CF-Access-Client-Secret` headers. A service token can call only those two endpoints. The page warns when the last sync is more than 36 hours old.
-
-### Backlog inbox
-
-**Inbox** lists what clients changed in Tribe Hub (`hub/`): Up ENDing Parkinson's, Project Coyote and Sober AF. The hub logs every add, answer, done mark, priority or phase change, edit, delete and sign-off with the signed-in person. The site reads that log through the D1 binding `HUB_DB`, which `build.mjs` adds (previews read `hub-preview-db`), one client at a time by slug. It never writes to it. The clients and their Salesforce accounts are listed in `BACKLOGS` in `admin.mjs`. The old per-client backlogs (`uep-backlog/`, `coyote-backlog/`, `soberafe-backlog/`) now forward to the hub and are read-only.
-
-- Each item that changed appears once, showing its latest change, for 60 days. Changes made under your own name are left out. The Worker variable `BACKLOG_OWN_NAMES` (comma-separated first names) sets which names count as yours and defaults to `eric`.
-- **Clear** hides the row, and the clear is saved in `ADMIN_DB`. A later change to the same item brings it back. **Add next step** adds a next step to that client and clears the row.
-- A backlog with no change log yet says "No change log yet". Its table is created the first time someone opens the backlog after it is redeployed. The other backlogs still load. Deploy the backlog Workers before the site.
-
-### Local development and tests
-
-Run `node --test test/*.test.mjs`. The tests check the Access token, run the real SQL against SQLite, and cover the Today rules. To try the page locally without Access, run `node build.mjs`, then `npx wrangler dev --local --var ADMIN_DEV:1` and open `http://localhost:8787/admin/`. The bypass works only on localhost. Never set `ADMIN_DEV` in Cloudflare. Without Salesforce secrets the page lists no clients.
+The command center now lives in Tribe Hub at `https://hub.positivetribes.org/#/command` (code in `hub/src/admin.js` and `hub/public/command.js`; see `hub/`). `/admin` on this site redirects there, and the old `/api/admin/` endpoints answer 410. Its data stays in the `positivetribes-admin-db` D1 database, which the hub Worker now binds as `ADMIN_DB`. The daily sync routine posts to `https://hub.positivetribes.org/api/admin/activity`.
