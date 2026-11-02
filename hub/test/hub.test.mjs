@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -264,4 +264,22 @@ test('bell: phases, documents and idea decisions notify, even when changed by ha
   assert.deepEqual(b.reminders.map(r => [r.type, r.daysLeft ?? r.count]), [['testing_ends', 2], ['questions', 1]]);
   // Sober AF hears nothing of it.
   assert.equal((await (await call('dana@safe.org', '/api/notifications')).json()).items.length, 0);
+});
+
+test('bell: phase moves only on the client\'s own suggestions, history before launch is hidden, clear all empties it', async () => {
+  const { call, sqlite } = setup();
+  await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Molly idea', kind: 'change', tier: 'nice', project_id: 1 });
+  await call('eric@positivetribes.org', '/api/c/uep/items', 'POST', { title: 'Eric idea', kind: 'change', tier: 'nice', project_id: 1 });
+  await call('eric@positivetribes.org', '/api/c/uep/items/1', 'PATCH', { phase: 'full' });
+  await call('eric@positivetribes.org', '/api/c/uep/items/2', 'PATCH', { phase: 'later' });
+  // An event imported from before the bell went live never shows.
+  sqlite.exec("INSERT INTO events (client_id, item_id, action, item_title, item_kind, actor_name, at) VALUES (1, 1, 'answered', 'Old', 'question', 'Eric', '2026-10-30 09:58:11')");
+  let b = await (await call('molly@uep.org', '/api/notifications')).json();
+  assert.deepEqual(b.items.map(i => [i.action, i.title]), [['phase', 'Molly idea'], ['added', 'Eric idea']]);
+  b = await (await call('molly@uep.org', '/api/notifications/clear', 'POST', { all: true })).json();
+  assert.deepEqual([b.items.length, b.unread], [0, 0]);
+  // New activity after a clear still arrives.
+  await call('eric@positivetribes.org', '/api/c/uep/items/1', 'PATCH', { done: true });
+  b = await (await call('molly@uep.org', '/api/notifications')).json();
+  assert.deepEqual(b.items.map(i => [i.action, i.read]), [['done', false]]);
 });
