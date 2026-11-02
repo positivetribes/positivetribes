@@ -61,6 +61,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     el.classList.toggle('late', hours > 36);
   }
   const inboxBadge = n => { const el = $('cc-inbox-count'); if (el) el.textContent = n || ''; };
+  // The bell in the header shows the same Inbox; tell it after a clear here.
+  const inboxChanged = () => window.dispatchEvent(new Event('hub-inbox-changed'));
   function banners(data) {
     let html = '';
     if (data.salesforce === 'error') html += '<div class="banner">Salesforce could not be reached, so only your notes, steps and synced activity are shown. Try Refresh in a minute.</div>';
@@ -170,7 +172,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   // ---- Inbox: what clients changed in their hub workspaces ----
   const dayOf = at => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(at));
-  const KIND = { question: 'question', change: 'suggestion', problem: 'problem', request: 'support request', release: 'phase' };
+  const KIND = { question: 'question', change: 'suggestion', problem: 'problem', request: 'support request', release: 'phase', idea: 'hub idea' };
   function actionName(i) {
     if (i.action === 'added') return 'New ' + (KIND[i.kind] || 'item');
     if (i.action === 'done') return i.kind === 'question' ? 'Marked answered' : i.kind === 'problem' ? 'Marked fixed' : 'Marked done';
@@ -205,7 +207,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   function wireInbox(box) {
     const clear = rows => send('/inbox/clear', 'POST', { items: rows.map(i => ({ backlog: i.backlog, eventIds: i.eventIds })) });
-    const reload = async () => renderInbox(box, await api('/inbox'));
+    const reload = async () => { renderInbox(box, await api('/inbox')); inboxChanged(); };
     box.onclick = async e => {
       const t = e.target.closest('[data-clear],[data-clear-all],[data-step-for]');
       if (!t) return;
