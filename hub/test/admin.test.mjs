@@ -306,6 +306,19 @@ test('a client page splits the timeline at now', () => {
   assert.deepEqual(view.steps.map(s => s.title), ['Send revised scope', 'Prep demo']);
 });
 
+test('one email sent to several Contacts shows once, naming each recipient', () => {
+  const sent = { Subject: 'Email: Hub launch', ActivityDate: '2026-10-29', CreatedDate: '2026-10-29T12:29:23.000+0000', IsClosed: true, AccountId: UEP };
+  const tasks = [
+    { ...sent, Id: '00T7', Who: { Name: 'Ann Lee' } },
+    { ...sent, Id: '00T8', Who: { Name: 'Ben Ortiz' } },
+    { ...sent, Id: '00T9', Subject: 'Email: Different email', Who: { Name: 'Ann Lee' } }
+  ];
+  const view = buildClient(SF_ENV, { account: sf.accounts[0], tasks, events: [], cases: [], contacts: [], history: [] },
+    { meta: null, steps: [], notes: [], activity: [] }, today);
+  const emails = view.past.filter(i => i.type === 'email');
+  assert.deepEqual(emails.map(i => [i.title, i.detail]).sort(), [['Different email', 'To Ann Lee'], ['Hub launch', 'To Ann Lee, Ben Ortiz']]);
+});
+
 test('match rules come from Contacts, the website and saved extras', () => {
   const rules = buildMatch(
     [{ Id: UEP, Name: 'UEP', Website: 'www.upendingparkinsons.org' }, { Id: '001Pr0000111WhXIAU', Name: 'Hidden Co' }],
