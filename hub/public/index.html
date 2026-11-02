@@ -676,13 +676,26 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
           return h('button', { type: 'button', 'aria-pressed': String(filter === key), onclick: () => { state.filter = key; render(); } }, label + ' (' + n + ')');
         })));
     }
+    // The phase filter applies to open items only. Finished items all go in one
+    // list at the bottom, whatever their tier or phase, and empty tiers are hidden.
+    let shown = 0;
     for (const [key, label] of tiers) {
       const group = mine.filter(i => i.tier === key && (filter === 'all' || i.phase === filter));
-      const active = open(group), finished = group.filter(i => i.done);
+      const active = open(group);
+      if (!active.length) continue;
+      shown += active.length;
       nodes.push(h('section', { class: 'tier' },
         h('h2', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'count' }, active.length + (active.length === 1 ? ' item' : ' items'))),
-        active.length ? active.map(i => card(i, group, isPt)) : h('p', { class: 'empty' }, 'Nothing here yet.'),
-        finished.length > 0 && h('details', { class: 'done-list' }, h('summary', {}, finished.length + ' ' + DONE_WORD[kind]), h('div', { class: 'stack' }, finished.map(i => card(i, group, isPt))))));
+        active.map(i => card(i, group, isPt))));
+    }
+    if (!shown) {
+      const phase = filter === 'all' ? '' : ' in ' + PHASES.find(p => p[0] === filter)[1];
+      nodes.push(h('p', { class: 'empty' }, 'No open ' + { question: 'questions', change: 'suggestions', problem: 'problems', request: 'requests' }[kind] + phase + '.'));
+    }
+    const finished = mine.filter(i => i.done);
+    if (finished.length) {
+      nodes.push(h('details', { class: 'done-list' }, h('summary', {}, DONE_WORD[kind][0].toUpperCase() + DONE_WORD[kind].slice(1) + ' (' + finished.length + ')'),
+        h('div', { class: 'stack' }, finished.map(i => card(i, finished, isPt)))));
     }
     return h('div', { class: 'stack' }, nodes);
   }
