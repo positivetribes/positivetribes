@@ -107,7 +107,7 @@
   <label class="switch-row"><span><span class="switch-title">Share with the whole family</span><small class="hint" id="listShareHint"></small></span><input type="checkbox" class="switch" id="listShared" role="switch"></label>
   <div class="actions"><button type="button" class="ghost danger" id="deleteList">Delete list</button><button type="button" class="ghost close-dialog">Cancel</button><button class="primary" id="saveList">Create list</button></div>
 </form></dialog>
-<dialog id="choreDialog"><form id="choreForm" class="modal"><h2 id="choreDialogTitle">New chore</h2>
+<dialog id="choreDialog"><form id="choreForm" class="modal"><h2 id="choreDialogTitle" tabindex="-1">New chore</h2>
   <label>Chore<input id="choreName" maxlength="80" autocomplete="off" placeholder="Empty the dishwasher, Walk the dog…" required></label>
   <fieldset class="setting"><legend>How often</legend><div class="segmented" role="radiogroup"><label><input type="radio" name="choreRepeat" value="once" checked><span>Once</span></label><label><input type="radio" name="choreRepeat" value="daily"><span>Daily</span></label><label><input type="radio" name="choreRepeat" value="weekly"><span>Weekly</span></label></div></fieldset>
   <fieldset class="setting" id="choreDaysField"><legend>On these days</legend><div class="chips day-chips" id="choreDays"></div></fieldset>

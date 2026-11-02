@@ -557,6 +557,11 @@ test('chores: one-time, daily, and weekly schedules; completions per day; shared
     assert.deepEqual((await call('/chores?week=' + week)).body.chores[0].assignees, ['Alex', 'Sam']);
     assert.equal((await call('/chores', 'PUT', { id: 999, title: 'x', repeat: 'daily', start_date: week })).status, 404);
     assert.equal((await call('/chores?week=' + week)).body.done.filter(d => d.chore_id === dishes.body.id).length, 1);
+    // After a schedule change, an old completion can still be unchecked, but not checked again.
+    await call('/chores', 'PUT', { id: dishes.body.id, title: 'Dishwasher', repeat: 'weekly', days: [1], start_date: week });
+    assert.equal((await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: '2026-09-29', done: true })).status, 400);
+    assert.equal((await call('/chores/done', 'POST', { chore_id: dishes.body.id, date: '2026-09-29', done: false })).status, 200);
+    assert.equal((await call('/chores?week=' + week)).body.done.filter(d => d.chore_id === dishes.body.id).length, 0);
     assert.equal((await call('/chores', 'DELETE', { id: dishes.body.id })).status, 200);
     state = (await call('/chores?week=' + week)).body;
     assert.deepEqual(state.chores.map(c => c.title), ['Trash out', 'Clean garage']);
