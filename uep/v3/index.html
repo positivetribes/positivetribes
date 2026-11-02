@@ -226,6 +226,11 @@ svg text{fill:var(--muted);font-family:var(--body);font-size:12px}
 </style>
 <style>[hidden]{display:none!important} img{max-width:100%}
 /* Fundraising (v3) */
+.thermo{display:flex;gap:18px;align-items:flex-start}
+.thermo .tube{width:30px;height:170px;background:var(--line);border:1px solid var(--ink);border-radius:15px 15px 0 0;position:relative;overflow:hidden;flex:none}
+.thermo .tube i{position:absolute;left:0;right:0;bottom:0;background:var(--honey)}
+.thermo .bulb{width:44px;height:44px;border-radius:50%;background:var(--honey);border:1px solid var(--ink);margin:-6px 0 0 -7px}
+.thermo .scale{display:flex;flex-direction:column;justify-content:space-between;height:170px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .goal{height:12px;background:var(--line);overflow:hidden}
 .goal i{display:block;height:100%;background:var(--olive)}
 .hero .goal{background:#3a3a36}.hero .goal i{background:var(--honey)}
@@ -317,7 +322,8 @@ const S=(id,siteId,name,rule,from,to,cap,booked,tbc=false,wait=0)=>({id,site:sit
 
 /* ---------- Fundraising sample data (v3) ---------- */
 // One campaign row per event, so next year's climb is new data, not new code.
-const CAMPAIGN={name:'April 3 Climb',date:'2027-04-03',defGoal:500,goals:[250,500,1000,2500],gifts:[25,50,100,250]};
+// Name, goals and t-shirt sizes from Molly (Nov 2: #80, #75, #121). The overall goal and the t-shirt level are samples until UEP sets them.
+const CAMPAIGN={name:"Climb against Parkinson's Day",date:'2027-04-03',defGoal:500,goals:[100,250,500,1000],gifts:[25,50,100,250],goal:20000,shirt:250,sizes:['S','M','L','XL','2XL']};
 const AFFS=['Climber','Volunteer','Family member of a climber','Other'];
 const usd=n=>'$'+Math.round(n).toLocaleString('en-US');
 const slugOf=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
@@ -703,6 +709,24 @@ function goalBar(pg,dark=false){
     <div class="goal" role="img" aria-label="${pct}% of the goal"><i style="width:${pct}%"></i></div>
     <div class="small" style="${dark?'color:var(--tan)':''}">${pg.gifts.length} ${pg.gifts.length===1?'gift':'gifts'} · ${pct}% of goal</div></div>`;
 }
+const overall=()=>allFundraisers().reduce((t,f)=>t+f.raised,0);
+// Everyone's gifts together, against UEP's goal for the climb (#120). Molly: overall matters most.
+function overallBar(){
+  const r=overall(),pct=Math.min(100,Math.round(r/CAMPAIGN.goal*100));
+  return `<div class="card"><h3>Together we've raised ${usd(r)}</h3><div class="goal" role="img" aria-label="${pct}% of UEP's goal"><i style="width:${pct}%"></i></div><p class="small">${pct}% of UEP's ${usd(CAMPAIGN.goal)} goal for ${esc(CAMPAIGN.name)}.</p></div>`;
+}
+const stateOf=id=>site(id).city.split(', ')[1];
+// T-shirt gift at UEP's level (#121): ask for size and mailing address once the page reaches it.
+function shirtCard(pg){
+  const r=raisedOf(pg),lvl=CAMPAIGN.shirt;
+  if(r<lvl)return `<div class="card"><h3>Earn a UEP t-shirt</h3><p class="small">Raise ${usd(lvl)} and UEP sends you a t-shirt. You're <b>${usd(lvl-r)}</b> away.</p><div class="meter"><i style="width:${Math.round(r/lvl*100)}%"></i></div><p class="muted small">Sample level. UEP sets the levels.</p></div>`;
+  if(pg.shirt&&pg.shirt.saved)return `<div class="card"><div class="row"><h3>Your UEP t-shirt</h3><span class="pill ok">Size ${esc(pg.shirt.size)}</span></div><p class="small">You earned it. UEP mails it to ${esc(pg.shirt.addr)}.</p><button class="linkbtn" data-act="shedit" style="align-self:flex-start">Change size or address</button></div>`;
+  const S=pg.shirt||(pg.shirt={size:'',addr:'',saved:false});
+  return `<div class="card"><div class="row"><h3>You earned a UEP t-shirt!</h3><span class="pill sun">${usd(lvl)} reached</span></div><p class="small">Tell us your size and where to mail it.</p>
+    <div class="chips" role="group" aria-label="T-shirt size">${CAMPAIGN.sizes.map(z=>`<button class="chip" data-act="shsize" data-v="${z}" aria-pressed="${S.size===z}">${z}</button>`).join('')}</div>
+    <label class="f" for="shaddr">Mailing address<textarea id="shaddr" data-bind="sh.addr" rows="2" autocomplete="street-address">${esc(S.addr)}</textarea></label>
+    <button class="btn sm" data-act="shsave" style="align-self:flex-start" ${S.size&&S.addr.trim()?'':'disabled'}>Save</button></div>`;
+}
 const teamName=id=>id?site(id).city+' team':'No team';
 const teamTotal=id=>allFundraisers().filter(f=>f.team===id).reduce((t,f)=>t+f.raised,0);
 const pageUrl=pg=>'climb.upendingparkinsons.org/f/'+pg.slug;
@@ -710,7 +734,7 @@ const pageUrl=pg=>'climb.upendingparkinsons.org/f/'+pg.slug;
 function giveFlow(){
   const G=state.give;
   if(G.step===1)return `
-    <div class="hero"><span class="small">${esc(fmtLong(fromIso(CAMPAIGN.date)))}, 2027</span><div class="big">Climb for UEP</div><p>Make your own fundraising page, set a goal, and share it. Every gift helps people with Parkinson's climb.</p></div>
+    <div class="hero"><span class="small">${esc(fmtLong(fromIso(CAMPAIGN.date)))}, 2027</span><div class="big">${esc(CAMPAIGN.name)}</div><p>Make your own fundraising page, set a goal, and share it. Every gift helps people with Parkinson's climb.</p></div>
     <label class="f" for="gname">Your name<input type="text" id="gname" data-bind="g.name" value="${esc(G.name)}" autocomplete="name"></label>
     <label class="f" for="gemail">Email or mobile number<input type="email" id="gemail" data-bind="g.email" value="${esc(G.email)}" autocomplete="email" placeholder="you@example.org"></label>
     <div><div class="small" style="font-weight:700;margin-bottom:6px">I'm a</div>
@@ -740,6 +764,8 @@ function fundMyPage(){
     <button class="btn full" data-act="fdone">Save</button>`;
   return `<div class="hero"><span class="small">${daysTo()} days to the ${esc(CAMPAIGN.name)}</span>${goalBar(pg,true)}
       <div class="row" style="justify-content:flex-start"><button class="btn" data-act="fview" data-v="${esc(state.user)}">See my page</button><button class="btn ghost" data-act="fedit">Edit</button></div></div>
+    ${shirtCard(pg)}
+    ${overallBar()}
     <div class="card"><h3>${esc(teamName(pg.team))}</h3>${pg.team?`<p class="small">Your team has raised <b>${usd(teamTotal(pg.team))}</b> so far, from ${allFundraisers().filter(f=>f.team===pg.team).length} fundraisers.</p>`:'<p class="small">Join your gym\'s team under Edit to raise money together.</p>'}</div>
     <div class="card"><h3>Your page says</h3><p class="small">${esc(pg.story||'Add a few words about why you\'re climbing. Pages with a story raise more.')}</p></div>`;
 }
@@ -767,11 +793,12 @@ function fundPublic(){
   const top=`<div class="backbar"><span>What donors see</span><button class="linkbtn" data-act="fback">Back to the app</button></div>`;
   if(D.step===3)return top+`<div class="hero"><span class="small">Thank you</span><div class="big">${usd(D.done)} to ${esc(p.name.split(' ')[0])}'s climb</div><p>A receipt is on its way by email. Your gift goes to Up ENDing Parkinson's.</p><button class="btn" data-act="gagain">Back to the page</button></div>`;
   if(D.step===2)return top+`<h2>Payment</h2><p class="muted">${usd(amt)} to ${esc(p.name)}'s page</p>
-    <div class="notice info"><b>Card, Apple Pay, Google Pay or PayPal</b>The secure payment form goes here. Which payment service UEP uses is still to decide.</div>
+    <div class="notice info"><b>Card, Apple Pay, Google Pay or PayPal</b>The secure payment form goes here: Stripe for cards, Apple Pay and Google Pay, with a PayPal button beside it.</div>
     <div class="row"><button class="btn ghost" data-act="gstep" data-v="1">Back</button><button class="btn" style="flex:1" data-act="gpay">Give ${usd(amt)}</button></div>`;
   return top+`<div class="row" style="justify-content:flex-start;flex-wrap:nowrap;gap:14px"><span class="avatar" aria-hidden="true">${esc(ini)}</span><div style="min-width:0"><span class="req">${esc(CAMPAIGN.name)} · April 3, 2027</span><h2 style="margin-top:4px">${esc(p.name)}</h2><div class="muted small">${esc(teamName(pg.team))}</div></div></div>
     ${goalBar(pg)}
     <p>${esc(pg.story||'I\'m climbing to raise money for Up ENDing Parkinson\'s.')}</p>
+    ${overallBar()}
     <div class="card"><h3>Give to ${esc(p.name.split(' ')[0])}'s climb</h3>
       <div class="chips" role="group" aria-label="Amount">${CAMPAIGN.gifts.map(a=>`<button class="chip" data-act="gamt" data-v="${a}" aria-pressed="${!D.other&&D.a===a}">${usd(a)}</button>`).join('')}</div>
       <label class="f" for="gother">Other amount<input type="number" id="gother" min="5" inputmode="numeric" data-bind="gv.other" value="${esc(D.other)}" placeholder="$"></label>
@@ -786,23 +813,34 @@ function adminFundraising(){
   const gifts=Object.values(state.fund.pages).reduce((t,pg)=>t+pg.gifts.length,0);
   const by=a=>all.filter(f=>f.aff===a).length;
   const teams=SITES.map(s=>({s,fs:all.filter(f=>f.team===s.id)})).filter(t=>t.fs.length).map(t=>({...t,raised:t.fs.reduce((x,f)=>x+f.raised,0),goal:t.fs.reduce((x,f)=>x+f.goal,0)})).sort((a,b)=>b.raised-a.raised);
+  const states=[...new Set(teams.map(t=>stateOf(t.s.id)))].map(st=>{const ts=teams.filter(t=>stateOf(t.s.id)===st);return {st,n:ts.reduce((x,t)=>x+t.fs.length,0),raised:ts.reduce((x,t)=>x+t.raised,0),goal:ts.reduce((x,t)=>x+t.goal,0)}}).sort((a,b)=>b.raised-a.raised);
+  const pct=Math.min(100,Math.round(total/CAMPAIGN.goal*100)),earned=all.filter(f=>f.raised>=CAMPAIGN.shirt).length;
+  const sized=Object.values(state.fund.pages).filter(pg=>pg.shirt&&pg.shirt.saved);
+  const meterRow=(name,sub,n,raised,goal)=>`<tr><td><b>${esc(name)}</b>${sub?`<div class="muted small">${esc(sub)}</div>`:''}</td><td class="num">${n}</td><td class="num">${usd(raised)}</td>
+        <td><div class="meter" style="min-width:110px"><i style="width:${Math.min(100,Math.round(raised/goal*100))}%"></i></div><span class="small">${usd(goal)} goal</span></td></tr>`;
   return `<h2>Fundraising: ${esc(CAMPAIGN.name)}</h2><p class="muted">${daysTo()} days to go. Sample data: ${all.length} fundraisers here, up to about 2,000 at launch.</p>
   <div class="kpis">
     <div class="kpi"><span class="l">Raised so far</span><span class="n">${usd(total)}</span></div>
     <div class="kpi"><span class="l">Fundraisers</span><span class="n">${all.length}</span><span class="small">${by('Climber')} climbers, ${by('Volunteer')} volunteers, ${by('Family member of a climber')+by('Other')} family and others</span></div>
     <div class="kpi"><span class="l">At or past goal</span><span class="n">${all.filter(f=>f.raised>=f.goal).length}</span></div>
-    <div class="kpi"><span class="l">Gifts on sample pages</span><span class="n">${gifts}</span></div>
+    <div class="kpi"><span class="l">T-shirts earned</span><span class="n">${earned}</span><span class="small">${sized.length} sizes and addresses in on sample pages</span></div>
   </div>
+  <div class="card"><h3>Overall thermometer</h3><div class="thermo"><div><div class="tube" role="img" aria-label="${pct}% of the ${usd(CAMPAIGN.goal)} goal"><i style="height:${pct}%"></i></div><div class="bulb"></div></div>
+    <div class="scale"><span>${usd(CAMPAIGN.goal)}</span><span>${usd(CAMPAIGN.goal*.75)}</span><span>${usd(CAMPAIGN.goal/2)}</span><span>${usd(CAMPAIGN.goal/4)}</span><span>$0</span></div>
+    <div class="stack" style="gap:6px"><div class="raised">${usd(total)} <span>of ${usd(CAMPAIGN.goal)}</span></div><p class="small">${pct}% of UEP's goal, from ${all.length} fundraisers in ${states.length} states. Fundraisers and donors see this total on every page.</p><p class="muted small">Sample goal. UEP sets it for each campaign.</p></div></div></div>
   <div class="split">
     <div class="card"><h3>By team</h3>
       <div class="scroll-x"><table><thead><tr><th>Team</th><th class="num">Fundraisers</th><th class="num">Raised</th><th>Toward team goal</th></tr></thead><tbody>
-      ${teams.map(t=>`<tr><td><b>${esc(t.s.city)}</b><div class="muted small">${esc(t.s.gym)}</div></td><td class="num">${t.fs.length}</td><td class="num">${usd(t.raised)}</td>
-        <td><div class="meter" style="min-width:110px"><i style="width:${Math.min(100,Math.round(t.raised/t.goal*100))}%"></i></div><span class="small">${usd(t.goal)} goal</span></td></tr>`).join('')}
+      ${teams.map(t=>meterRow(t.s.city,t.s.gym,t.fs.length,t.raised,t.goal)).join('')}
       </tbody></table></div></div>
-    <div class="card"><h3>Top fundraisers</h3>${all.slice().sort((a,b)=>b.raised-a.raised).slice(0,6).map(f=>`<div class="row small" style="border-top:1px solid var(--line);padding-top:8px"><span><b>${esc(f.name)}</b><br><span class="muted small">${esc(f.aff)} · ${esc(teamName(f.team))}</span></span><span>${usd(f.raised)}</span></div>`).join('')}</div>
+    <div class="stack" style="gap:16px"><div class="card"><h3>By state</h3>
+      <div class="scroll-x"><table><thead><tr><th>State</th><th class="num">Fundraisers</th><th class="num">Raised</th><th>Toward state goal</th></tr></thead><tbody>
+      ${states.map(x=>meterRow(x.st,'',x.n,x.raised,x.goal)).join('')}
+      </tbody></table></div></div>
+    <div class="card"><h3>Top fundraisers</h3>${all.slice().sort((a,b)=>b.raised-a.raised).slice(0,6).map(f=>`<div class="row small" style="border-top:1px solid var(--line);padding-top:8px"><span><b>${esc(f.name)}</b><br><span class="muted small">${esc(f.aff)} · ${esc(teamName(f.team))}</span></span><span>${usd(f.raised)}</span></div>`).join('')}</div></div>
   </div>
   <div class="split">
-    <div class="card"><h3>Invite volunteers</h3><p class="small">Send the sign-up link to the volunteers in Virtuous (Affiliation: Volunteer). They make a page without a climber account, and never see the scheduler.</p><button class="btn sm" data-act="finvite" style="align-self:flex-start">Send invitations</button></div>
+    <div class="card"><h3>Invite volunteers</h3><p class="small">Virtuous sends the invitations. Copy the sign-up link and paste it into a Virtuous email to volunteers (Affiliation: Volunteer). They make a page without a climber account, and never see the scheduler.</p><div class="sample">climb.upendingparkinsons.org/give</div><button class="btn sm" data-act="finvite" style="align-self:flex-start">Copy sign-up link</button></div>
     <div class="card"><h3>Virtuous</h3><p class="small">Each night, every gift goes to Virtuous with the donor's name, linked to the fundraiser and the April 3 campaign. New fundraisers go in with their Affiliation.</p><button class="btn quiet sm" data-act="fexport" style="align-self:flex-start">Export gifts</button></div>
   </div>`;
 }
@@ -812,7 +850,7 @@ const TOUR=[
   {k:'dana@example.org',who:'Dana, a VOMO volunteer',do:['Tap "Start my fundraising page." Pick Volunteer, the Golden team and a $500 goal, then create the page. No waiver, no climbing questions.','Dana sees only My page, Donations and Share. Open Share, then "See my page as a donor," and give $50 as a friend.']},
   {k:'ruth@example.org',who:'Ruth, a climber who fundraises',do:['Her climbing tabs are unchanged, with a Fundraising tab added. Open it and say thanks to a donor.','Try "Start my fundraising page" as a volunteer with ruth@example.org: it joins Ruth\'s account instead of making a second one.']},
   {k:'pat@example.org',who:'Pat, a lead volunteer',do:['Switch to My climbing and tap "Start my fundraising page." The Fundraising tab appears with the Golden team already set.']},
-  {k:'molly@example.org',who:'Molly, the admin',do:['Open the Fundraising tab: total raised, fundraisers by Affiliation, team totals by gym and top fundraisers.','Invite volunteers, and see how gifts reach Virtuous.']}
+  {k:'molly@example.org',who:'Molly, the admin',do:['Open the Fundraising tab: total raised, fundraisers by Affiliation, team totals by gym and top fundraisers.','See the overall thermometer and the totals by state, copy the sign-up link for the Virtuous invitation email, and see how gifts reach Virtuous.']}
 ];
 const NOTES={
   give:{h:'Anyone can fundraise',p:'One plain link lets climbers, lead volunteers, VOMO volunteers, family and friends make a page for the April 3 climb.',
@@ -822,7 +860,7 @@ const NOTES={
     b:['What someone sees comes from what they are. A page makes someone a fundraiser; a signed waiver makes someone a climber. There is still no role picker.','In the full build the server checks this too: a fundraising-only account cannot open booking or waiver pages, and never gets climbing reminders or waiver texts.','Donors don\'t need an account. They give from the public page.','Every gift goes to Virtuous with the donor\'s name.'],
     t:'Open Share, then "See my page as a donor," and give $50.',r:'Volunteers'},
   fund:{h:'One account, two parts',p:'A climber or lead who fundraises keeps the scheduler and gets a Fundraising tab beside it.',
-    b:['The page starts with their name and home gym\'s team filled in.','Goal presets and a default goal are set by UEP for each campaign.','Donations and thank-yous are in one list.','Molly sees every page, team and gift, and can turn the climber prompt off after the event.'],
+    b:['The page starts with their name and home gym\'s team filled in.','Goal presets and a default goal are set by UEP for each campaign.','Donations and thank-yous are in one list.','At UEP\'s t-shirt level (a sample $250 here), the page asks for a size and mailing address.','Every page shows the overall total against UEP\'s goal.','Molly sees every page, team and gift, and can turn the climber prompt off after the event.'],
     t:'Say thanks to a donor, then see the page as a donor.',r:'Fundraising'},
   out:{h:'One sign-in, no role picker',p:'Climbers, care partners, lead volunteers and staff all sign in the same way. The system looks up the account and opens the right view.',
     b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two or more leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
@@ -937,6 +975,9 @@ document.addEventListener('click',e=>{
   else if(a==='fedit')state.fund.edit=true;
   else if(a==='fdone'){state.fund.edit=false;say('Page saved.')}
   else if(a==='fgoal')pageOf(state.user).goal=+v;
+  else if(a==='shsize')pageOf(state.user).shirt.size=v;
+  else if(a==='shsave'){pageOf(state.user).shirt.saved=true;say('Thanks! UEP will mail your t-shirt.')}
+  else if(a==='shedit')pageOf(state.user).shirt.saved=false;
   else if(a==='fview'){state.fund.view=v;state.fund.give={a:50,other:'',name:'',anon:false,note:'',step:1}}
   else if(a==='fback'){state.fund.view=null}
   else if(a==='gamt'){state.fund.give.a=+v;state.fund.give.other=''}
@@ -947,7 +988,7 @@ document.addEventListener('click',e=>{
   else if(a==='fthankall'){const gs=pageOf(state.user).gifts.filter(g=>!g.thanked&&g.n!=='Anonymous');gs.forEach(g=>g.thanked=true);say(`Thank-you sent to ${gs.length} donors.`)}
   else if(a==='fcopy')say('Link copied.');
   else if(a==='fsend')say(v==='qr'?'Your QR card opens as a page to print.':v==='text'?'Opens your phone\'s messages with this text filled in.':'Opens your email with this message filled in.');
-  else if(a==='finvite')say('In the full build this emails the sign-up link to volunteers in Virtuous. Who sends it, Virtuous or this app, is still to decide.');
+  else if(a==='finvite')say('Sign-up link copied. Paste it into the Virtuous email to volunteers.');
   else if(a==='fexport')say('Gifts downloaded as a spreadsheet, with donor names and the fundraiser each gift was for.');
   else if(a==='signout'){state.user=null;state.mode=null;state.tab={};state.draft=null;state.give=null;state.fund.view=null;state.fund.tab='page'}
   else if(a==='mode'){state.mode=v}
@@ -1012,6 +1053,7 @@ document.addEventListener('input',e=>{
   if(k.startsWith('gv.')){const D=state.fund.give,f=k.slice(3);D[f]=val;if(f==='anon')return;const amt=D.other?+D.other||0:D.a;const b=$('[data-act="gstep"][data-v="2"]');if(b)b.disabled=!(amt>=5&&D.name.trim());
     if(f==='other')document.querySelectorAll('[data-act="gamt"]').forEach(c=>c.setAttribute('aria-pressed',String(!D.other&&D.a===+c.dataset.v)));return}
   if(k.startsWith('fe.')){pageOf(state.user)[k.slice(3)]=val;return}
+  if(k==='sh.addr'){const S=pageOf(state.user).shirt;S.addr=val;const b=$('[data-act="shsave"]');if(b)b.disabled=!(S.size&&val.trim());return}
   if(k==='email'){state.login.email=val;const b=$('[data-act="sendcode"]');if(b)b.disabled=!val.trim();return}
   if(k==='code'){state.login.code=val.replace(/\D/g,'').slice(0,6);const b=$('[data-act="verify"]');if(b)b.disabled=state.login.code.length!==6;return}
   if(k==='walkin'){state.walkin=val;const b=$('[data-act="addwalk"]');if(b)b.disabled=!val.trim();return}
