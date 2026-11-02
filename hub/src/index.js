@@ -166,7 +166,7 @@ export default {
         return handleAdmin(request, env, url, { service: who.service });
       }
       const email = who.email;
-      const user = await db.prepare('SELECT id, email, name, role, client_id FROM users WHERE email = ?').bind(email).first();
+      const user = await db.prepare('SELECT id, email, name, role, client_id, created_at FROM users WHERE email = ?').bind(email).first();
       // The command center is Positive Tribes' own; to anyone else it does not exist.
       if (commandCenter) {
         if (!user || user.role !== 'pt') return json({ error: 'Not found.' }, 404);
@@ -184,18 +184,18 @@ export default {
       }
 
       // The bell, for a client's people. Positive Tribes' bell is the command center Inbox.
-      if (url.pathname === '/api/notifications' || url.pathname === '/api/notifications/read') {
+      if (url.pathname === '/api/notifications' || url.pathname === '/api/notifications/read' || url.pathname === '/api/notifications/clear') {
         if (user.role === 'pt') throw new InputError('Positive Tribes\' notifications are the command center Inbox.', 404);
         const client = await db.prepare('SELECT id, slug FROM clients WHERE id = ?').bind(user.client_id).first();
         if (url.pathname === '/api/notifications' && method === 'GET') return json(await listForClient(db, user, client));
-        if (url.pathname === '/api/notifications/read' && method === 'POST') {
+        if (method === 'POST') {
           const b = await body(request);
           let ids = 'all';
           if (b.all !== true) {
-            if (!Array.isArray(b.ids) || b.ids.length > 200 || !b.ids.every(id => Number.isSafeInteger(id) && id > 0)) throw new InputError('Choose the notifications to mark read.');
+            if (!Array.isArray(b.ids) || b.ids.length > 200 || !b.ids.every(id => Number.isSafeInteger(id) && id > 0)) throw new InputError('Choose the notifications.');
             ids = b.ids;
           }
-          await markRead(db, user, client.id, ids);
+          await markRead(db, user, client.id, ids, { clear: url.pathname.endsWith('/clear') });
           return json({ ok: true, ...await listForClient(db, user, client) });
         }
         return json({ error: 'Not found.' }, 404);
@@ -305,7 +305,7 @@ export default {
       // Positive Tribes previewing the bell as one of the client's people. Read-only: nothing is marked read.
       if (resource === 'notifications' && !rawId && method === 'GET') {
         if (user.role !== 'pt') return json({ error: 'Not found.' }, 404);
-        const person = await db.prepare('SELECT id, email, name, role, client_id FROM users WHERE email = ? AND client_id = ?')
+        const person = await db.prepare('SELECT id, email, name, role, client_id, created_at FROM users WHERE email = ? AND client_id = ?')
           .bind(String(url.searchParams.get('as') || ''), client.id).first();
         if (!person) throw new InputError('Choose one of this client\'s people.', 404);
         return json(await listForClient(db, person, client));

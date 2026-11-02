@@ -48,6 +48,7 @@ p{margin:0}
 .bell-panel .bp-head{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--line)}
 .bell-panel .bp-head h2{font-size:18px;margin:0}
 .bell-panel .bp-link{background:none;border:0;padding:6px 0;color:var(--ink);font:inherit;font-size:14px;font-weight:600;text-decoration:underline;cursor:pointer;min-height:32px}
+.bell-panel .bp-acts{display:flex;gap:14px}
 .bell-panel ul{list-style:none;margin:0;padding:0}
 .bell-panel li{border-bottom:1px solid var(--line)}
 .bell-panel li:last-child{border-bottom:0}
@@ -1040,7 +1041,9 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       };
       const reminders = pt ? [] : data.reminders.map(r => h('li', { class: 'bp-pin' },
         h('a', { class: 'bp-row', href: r.url, onclick: () => open(false) }, h('span', { class: 'bp-dot', 'aria-hidden': 'true' }), h('span', { class: 'bp-body' }, h('span', { class: 'bp-text' }, reminderText(r))))));
-      const action = pt ? null : !preview && data.unread ? h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all') }, 'Mark all read') : null;
+      const action = pt || preview || !data.items.length ? null : h('div', { class: 'bp-acts' },
+        data.unread ? h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all') }, 'Mark all read') : null,
+        h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all', true) }, 'Clear all'));
       const empty = pt ? 'Nothing new from clients.' : 'You’re all caught up.';
       // replaceChildren would print a null as the word "null", so empty parts are dropped first.
       p.replaceChildren(...[
@@ -1059,8 +1062,9 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       } catch { /* The bell never gets in the way of the page. */ }
       paint();
     }
-    async function markRead(ids) {
-      try { data = await api('/notifications/read', { method: 'POST', body: JSON.stringify(ids === 'all' ? { all: true } : { ids }) }); paint(); } catch (e) { showError(e.message); }
+    // Read keeps a notification in the list; clear takes it out for good.
+    async function markRead(ids, clear = false) {
+      try { data = await api('/notifications/' + (clear ? 'clear' : 'read'), { method: 'POST', body: JSON.stringify(ids === 'all' ? { all: true } : { ids }) }); paint(); } catch (e) { showError(e.message); }
     }
     async function clearInbox(rows) {
       try {
