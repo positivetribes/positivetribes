@@ -31,7 +31,7 @@ button{cursor:pointer}
 :focus-visible{outline:3px solid var(--rust);outline-offset:2px}
 h1,h2,h3{margin:0;font-family:var(--display);font-weight:500;line-height:1.15;text-wrap:balance}
 p{margin:0}
-.shell{max-width:860px;margin-inline:auto;padding:0 16px 64px}
+.shell{max-width:1080px;margin-inline:auto;padding:0 16px 64px}
 .shell,.card,.stack>*{min-width:0}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:20px;text-decoration:none;color:var(--ink)}
@@ -174,7 +174,6 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 .admin-field select[hidden]{display:none}
 .admin-field:has(select[hidden]){display:none}
 /* Command center (Positive Tribes' home page). Scoped under .cc so it never changes a client workspace. */
-body.wide .shell{max-width:1240px}
 .badge:empty{display:none}
 .cc-bar{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:6px 0 22px}
 .cc-bar nav.tabs{margin:0;flex:1 1 auto}
@@ -365,7 +364,6 @@ body.wide .shell{max-width:1240px}
     const cmd = location.hash.match(/^#\/command(?:\/(.*))?$/);
     if (ptUser && (cmd || !location.hash.replace(/^#\/?/, ''))) { renderCommand(cmd ? cmd[1] || '' : ''); return; }
     state.mode = 'client';
-    document.body.classList.remove('wide');
     const [, slug, view, id] = location.hash.match(/^#\/([a-z0-9-]*)\/?([a-z]*)\/?(\d*)/) || [];
     const wanted = (slug !== COMMAND && slug) || (state.me.clients[0] && state.me.clients[0].slug);
     if (!wanted) { $('main').replaceChildren(h('div', { class: 'card' }, h('h2', {}, 'Welcome'), h('p', { class: 'muted' }, 'There are no workspaces for you yet. Positive Tribes will set one up.'))); return; }
@@ -422,7 +420,6 @@ body.wide .shell{max-width:1240px}
   function renderCommand(sub) {
     const first = state.mode !== COMMAND;
     Object.assign(state, { mode: COMMAND, preview: null, editing: null, confirming: null, signing: null, ideaEditing: null });
-    document.body.classList.add('wide');
     document.documentElement.style.setProperty('--client', 'var(--rust)');
     renderBar();
     command = command || window.CommandCenter({ api });
