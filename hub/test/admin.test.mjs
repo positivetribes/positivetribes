@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { database } from './helpers.mjs';
 import { accessIdentity } from '../src/access.js';
-import { handleAdmin, buildOverview, rankNow, buildMatch, buildClient, buildInbox, BACKLOGS } from '../src/admin.js';
+import { handleAdmin, buildOverview, rankNow, buildMatch, buildClient, buildInbox, BACKLOGS, lastSeenBy } from '../src/admin.js';
 import hub from '../src/index.js';
 
 const TEAM = 'positivetribes.cloudflareaccess.com';
@@ -70,7 +70,7 @@ test('the local development stand-ins only work on localhost', async () => {
 // A hub database with three clients and their people, plus the command center's own database.
 function hubDb() {
   const h = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql']) {
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql']) {
     h.sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   }
   h.sqlite.exec(`
@@ -448,4 +448,11 @@ test('documents: Positive Tribes keeps its own and every client\'s; clients see 
   assert.equal((await as('eric@positivetribes.org', 'DELETE', 'admin/documents/' + designs)).status, 200);
   assert.equal((await as('eric@positivetribes.org', 'DELETE', 'admin/documents/' + designs)).status, 404);
   assert.equal(h.sqlite.prepare('SELECT COUNT(*) AS n FROM documents').get().n, 3);
+});
+
+test('each client\'s latest hub visit is its most recent person\'s', () => {
+  assert.deepEqual(lastSeenBy([
+    { slug: 'uep', last_seen_at: '2026-11-01T10:00:00Z' }, { slug: 'uep', last_seen_at: '2026-11-02T09:00:00Z' },
+    { slug: 'uep', last_seen_at: null }, { slug: 'safe', last_seen_at: null }
+  ]), { uep: '2026-11-02T09:00:00Z' });
 });

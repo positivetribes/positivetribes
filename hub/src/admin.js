@@ -387,6 +387,25 @@ async function loadTesting(env) {
   }
 }
 
+// Who at each client has the hub, and when they last had it open. Never in the way if it cannot be read.
+async function hubPeople(env, slug = null) {
+  if (!env.DB) return [];
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT c.slug, u.name, u.email, u.role, u.last_seen_at FROM users u JOIN clients c ON c.id = u.client_id
+       WHERE (? IS NULL OR c.slug = ?) ORDER BY CASE u.role WHEN 'ed' THEN 0 ELSE 1 END, u.name`
+    ).bind(slug, slug).all();
+    return results.map(p => ({ ...p, last_seen_at: p.last_seen_at ? p.last_seen_at.replace(' ', 'T') + 'Z' : null }));
+  } catch (error) {
+    console.error('admin_people_failed', error.message);
+    return [];
+  }
+}
+export const lastSeenBy = people => people.reduce((map, p) => {
+  if (p.last_seen_at && !(map[p.slug] > p.last_seen_at)) map[p.slug] = p.last_seen_at;
+  return map;
+}, {});
+
 async function loadInbox(env, db, today) {
   const since = addDays(today, -INBOX_DAYS);
   const [cleared, ...results] = await Promise.all([
@@ -532,22 +551,24 @@ export async function handleAdmin(request, env, url, who) {
     const today = localDay(Date.now());
 
     if (route === 'GET /api/admin/overview') {
-      const [meta, steps, notes, activity, lastSync, inbox, testing] = await Promise.all([
+      const [meta, steps, notes, activity, lastSync, inbox, testing, people] = await Promise.all([
         db.prepare('SELECT * FROM client_meta').all(),
         db.prepare("SELECT * FROM next_steps WHERE status = 'open' OR done_at >= ?").bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM notes WHERE created_at >= ?').bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM activity WHERE occurred_at >= ? ORDER BY occurred_at').bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1').first(),
         loadInbox(env, db, today),
-        loadTesting(env)
+        loadTesting(env),
+        hubPeople(env)
       ]);
+      const seen = lastSeenBy(people);
       let sf = { accounts: [], tasks: [], events: [], cases: [], leads: [] }, salesforceStatus = 'off';
       if (salesforceReady(env)) {
         try { sf = await salesforceOverview(env, url.searchParams.get('refresh') === '1'); salesforceStatus = 'ok'; }
         catch (error) { console.error('admin_salesforce_failed', error.message); salesforceStatus = 'error'; }
       }
       const view = buildOverview(env, sf, { meta: meta.results, steps: steps.results, notes: notes.results, activity: activity.results }, today);
-      view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id) }));
+      view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id), hubSeen: seen[workspaceOf(c.id)] || null }));
       return json({ ...view, testing, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, user: who.email });
     }
 
@@ -571,6 +592,7 @@ export async function handleAdmin(request, env, url, who) {
       ]);
       const view = buildClient(env, sf, { meta, steps: steps.results, notes: notes.results, activity: activity.results }, today);
       view.client.workspace = workspaceOf(accountId);
+      view.client.hubPeople = view.client.workspace ? (await hubPeople(env, view.client.workspace)).map(({ slug, ...p }) => p) : [];
       return json(view);
     }
     if (client && method === 'PUT' && client[2]) {
