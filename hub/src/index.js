@@ -1,6 +1,9 @@
 // Tribe Hub API: one Worker for every client. Sign-in is Cloudflare Access (emailed one-time PIN); the email is
 // mapped to a users row, which decides which client the person may see. Tenant checks happen in one place (scope).
-import { signedInEmail } from './access.js';
+import { accessIdentity } from './access.js';
+import { handleAdmin } from './admin.js';
+import { windowEnd } from './dates.js';
+export { windowEnd };
 
 const TIERS = ['must', 'nice', 'idea'];
 const PHASES = ['review', 'prototype', 'full', 'later'];
@@ -65,17 +68,6 @@ async function listItems(db, clientId) {
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
   ).bind(clientId).all();
   return results.map(item => ({ ...item, done: Boolean(item.done) }));
-}
-
-// The last day of a testing window: uat_days calendar days, or uat_days weekdays (weekends skipped), after it starts.
-export function windowEnd(start, days, type) {
-  const date = new Date(start + 'T00:00:00Z');
-  if (type !== 'business') { date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); }
-  for (let left = days; left > 0;) {
-    date.setUTCDate(date.getUTCDate() + 1);
-    if (date.getUTCDay() % 6 !== 0) left--;
-  }
-  return date.toISOString().slice(0, 10);
 }
 
 async function listReleases(db, clientId) {
@@ -161,10 +153,23 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     try {
-      const email = await signedInEmail(request, env, url);
-      if (!email) return json({ error: 'Please sign in.' }, 401);
+      const who = await accessIdentity(request, env, url);
+      if (!who) return json({ error: 'Please sign in.' }, 401);
       const db = env.DB;
+      const commandCenter = url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/');
+      if (who.service) {
+        // Only the command center's sync token, listed in SYNC_SERVICE_TOKENS, and only on the command center's sync routes.
+        const allowed = String(env.SYNC_SERVICE_TOKENS || '').split(/[\s,]+/).filter(Boolean);
+        if (!commandCenter || !allowed.includes(who.service)) return json({ error: 'Not allowed.' }, 403);
+        return handleAdmin(request, env, url, { service: who.service });
+      }
+      const email = who.email;
       const user = await db.prepare('SELECT id, email, name, role, client_id FROM users WHERE email = ?').bind(email).first();
+      // The command center is Positive Tribes' own; to anyone else it does not exist.
+      if (commandCenter) {
+        if (!user || user.role !== 'pt') return json({ error: 'Not found.' }, 404);
+        return handleAdmin(request, env, url, { email: user.email });
+      }
       // Signed in through Access but not invited to any workspace.
       if (!user) return json({ error: 'This email has not been invited yet. Please ask Positive Tribes.' }, 403);
       const method = request.method;
