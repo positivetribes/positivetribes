@@ -513,6 +513,23 @@ function fakeOrg() {
 }
 const SF = { SF_DOMAIN: 'https://sf.example', SF_CLIENT_ID: 'id', SF_CLIENT_SECRET: 'secret', SF_TASK_OWNER_ID: ERIC_USER, SF_TASK_SYNC_HOST: 'hub.positivetribes.org' };
 
+test('adding a step that is already open reuses it, moving its due date and its Task', async () => {
+  const org = fakeOrg();
+  const { db, sqlite } = database();
+  const first = (await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'Follow up: Golden High School', dueDate: '2026-11-08' }, { env: SF })).body;
+  const again = await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'follow up: golden high school', dueDate: '2026-11-15' }, { env: SF });
+  assert.equal(again.status, 200);
+  assert.deepEqual([again.body.id, again.body.existing], [first.id, true]);
+  assert.deepEqual(sqlite.prepare('SELECT due_date FROM next_steps').all().map(r => r.due_date), ['2026-11-15']);
+  assert.equal(org.tasks.size, 1);
+  assert.equal([...org.tasks.values()][0].ActivityDate, '2026-11-15');
+  // Another client, or a step that is already done, still gets its own.
+  assert.equal((await call(db, 'POST', '/api/admin/steps', { accountId: SAFE, title: 'Follow up: Golden High School' }, { env: SF })).status, 201);
+  await call(db, 'PATCH', `/api/admin/steps/${first.id}`, { status: 'done' }, { env: SF });
+  assert.equal((await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'Follow up: Golden High School' }, { env: SF })).status, 201);
+  fakeSalesforce = null;
+});
+
 test('a preview on another host never writes Salesforce Tasks', async () => {
   const org = fakeOrg();
   const { db } = database();

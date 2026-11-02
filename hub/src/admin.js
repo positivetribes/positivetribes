@@ -746,7 +746,16 @@ export async function handleAdmin(request, env, url, who) {
       const input = await body(request);
       const accountId = accountIdOf(input.accountId);
       const title = text(input.title, 300, { required: true, label: 'Step' });
-      const { meta } = await db.prepare('INSERT INTO next_steps (account_id, title, due_date) VALUES (?, ?, ?)').bind(accountId, title, dateOf(input.dueDate, 'Due date')).run();
+      const due = dateOf(input.dueDate, 'Due date');
+      // The same open step for the same client is reused, not added again (Done on the Now card can repeat for a quiet
+      // client). A new due date moves it, and a matching suggestion becomes Eric's own.
+      const same = await db.prepare("SELECT * FROM next_steps WHERE account_id = ? AND status = 'open' AND lower(title) = lower(?) ORDER BY id LIMIT 1").bind(accountId, title).first();
+      if (same) {
+        await db.prepare("UPDATE next_steps SET due_date = ?, source = 'you' WHERE id = ?").bind(due || same.due_date, same.id).run();
+        const after = await db.prepare('SELECT * FROM next_steps WHERE id = ?').bind(same.id).first();
+        return json({ ok: true, id: same.id, existing: true, salesforce: await stepToSalesforce(env, url, db, same, after) });
+      }
+      const { meta } = await db.prepare('INSERT INTO next_steps (account_id, title, due_date) VALUES (?, ?, ?)').bind(accountId, title, due).run();
       const step = await db.prepare('SELECT * FROM next_steps WHERE id = ?').bind(meta.last_row_id).first();
       return json({ ok: true, id: meta.last_row_id, salesforce: await stepToSalesforce(env, url, db, null, step) }, 201);
     }
