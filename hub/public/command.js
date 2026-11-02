@@ -387,7 +387,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   // sub is what follows #/command: '', 'inbox', 'clients', 'documents' or 'client/<Salesforce account id>'.
   const viewOf = sub => {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
-    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients', 'documents'].includes(sub) ? sub : 'today' };
+    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients', 'documents', 'ideas'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
