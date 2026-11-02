@@ -984,7 +984,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         case 'answered': return `${who} answered ${q(i.title)}`;
         case 'done': return `${who} marked ${q(i.title)} ${done(i)}`;
         case 'reopened': return `${who} reopened ${q(i.title)}`;
-        case 'phase': return `${q(i.title)} is scheduled: ${(i.detail.split('→')[1] || i.detail).trim()}`;
+        case 'phase': return `${q(i.title)} moved to ${(i.detail.split('→')[1] || i.detail).trim()}`;
         case 'signed_off': return `${who} signed off ${i.title}`;
         case 'uat_started': return `${i.title} is ready for you to test`;
         case 'live': return `${i.title} is live`;
@@ -1042,10 +1042,11 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         h('a', { class: 'bp-row', href: r.url, onclick: () => open(false) }, h('span', { class: 'bp-dot', 'aria-hidden': 'true' }), h('span', { class: 'bp-body' }, h('span', { class: 'bp-text' }, reminderText(r))))));
       const action = pt ? null : !preview && data.unread ? h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all') }, 'Mark all read') : null;
       const empty = pt ? 'Nothing new from clients.' : 'You’re all caught up.';
-      p.replaceChildren(
+      // replaceChildren would print a null as the word "null", so empty parts are dropped first.
+      p.replaceChildren(...[
         h('div', { class: 'bp-head' }, h('h2', {}, preview ? state.preview.name + '’s notifications' : 'Notifications'), action),
         reminders.length || items.length ? h('ul', {}, ...reminders, ...items.map(row)) : h('p', { class: 'bp-empty' }, empty),
-        pt ? h('div', { class: 'bp-foot' }, h('a', { href: '#/command/inbox', onclick: () => open(false) }, data.items.length > items.length ? `See all ${data.items.length} in the Inbox` : 'Open the Inbox')) : null);
+        pt ? h('div', { class: 'bp-foot' }, h('a', { href: '#/command/inbox', onclick: () => open(false) }, data.items.length > items.length ? `See all ${data.items.length} in the Inbox` : 'Open the Inbox')) : null].filter(Boolean));
     }
 
     async function load() {
