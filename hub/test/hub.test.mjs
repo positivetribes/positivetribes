@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -282,4 +282,20 @@ test('bell: phase moves only on the client\'s own suggestions, history before la
   await call('eric@positivetribes.org', '/api/c/uep/items/1', 'PATCH', { done: true });
   b = await (await call('molly@uep.org', '/api/notifications')).json();
   assert.deepEqual(b.items.map(i => [i.action, i.read]), [['done', false]]);
+});
+
+test('opening the hub records when each person was last seen', async () => {
+  const { call, sqlite } = setup();
+  const seen = () => sqlite.prepare("SELECT last_seen_at FROM users WHERE email = 'molly@uep.org'").get().last_seen_at;
+  assert.equal(seen(), null);
+  await call('molly@uep.org', '/api/me');
+  assert.ok(seen());
+  sqlite.exec("UPDATE users SET last_seen_at = '2026-10-01 00:00:00' WHERE email = 'molly@uep.org'");
+  await call('molly@uep.org', '/api/notifications');
+  assert.notEqual(seen(), '2026-10-01 00:00:00');
+  // Within 10 minutes a second visit writes nothing.
+  sqlite.exec("UPDATE users SET last_seen_at = datetime('now', '-5 minutes') WHERE email = 'molly@uep.org'");
+  const before = seen();
+  await call('molly@uep.org', '/api/me');
+  assert.equal(seen(), before);
 });

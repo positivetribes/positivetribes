@@ -29,6 +29,19 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const days = Math.round((Date.parse(overview?.today || day) - Date.parse(day)) / 86400e3);
     return days <= 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago';
   };
+  // "12 min ago", "3 h ago", "yesterday", "5 days ago" for a full timestamp.
+  const seenAgo = at => {
+    if (!at) return 'never';
+    const mins = Math.round((Date.now() - Date.parse(at)) / 60000);
+    if (mins < 15) return 'just now';
+    if (mins < 60) return mins + ' min ago';
+    if (mins < 24 * 60) return Math.round(mins / 60) + ' h ago';
+    const days = Math.round(mins / 1440);
+    return days === 1 ? 'yesterday' : days + ' days ago';
+  };
+  const ROLE = { ed: 'Director', staff: 'Staff' };
+  // Visits are recorded from Nov 2, 2026; before that the hub did not keep them.
+  const NOT_SEEN = 'No hub visit since Nov 2';
   const longDate = day => new Date(day + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
   function item(i, { showClient = true, showDay = false, controls = null } = {}) {
@@ -165,7 +178,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       return `<a class="card${c.active ? '' : ' inactive'}" href="${to.client(c.id)}"><div class="row"><h2 class="grow">${esc(c.name)}</h2>${c.workspace ? '<span class="chip">In the hub</span>' : ''}${c.pinned ? '<span class="chip">Pinned</span>' : ''}</div>
         <div class="stages">${stages}</div>
         <div class="small"><strong>Next:</strong> ${next}</div>
-        <div class="meta">Last contact ${esc(ago(c.lastTouch))}${c.type ? ' · ' + esc(c.type) : ''}${c.openSteps > 1 ? ` · ${c.openSteps} open steps` : ''}</div></a>`;
+        <div class="meta">Last contact ${esc(ago(c.lastTouch))}${c.workspace ? (c.hubSeen ? ' · In the hub ' + esc(seenAgo(c.hubSeen)) : ' · ' + NOT_SEEN) : ''}${c.type ? ' · ' + esc(c.type) : ''}${c.openSteps > 1 ? ` · ${c.openSteps} open steps` : ''}</div></a>`;
     }).join('');
     box.innerHTML = `${banners(data)}<div class="head"><h2 class="greet">Clients</h2><p class="muted small">${data.clients.filter(c => c.active).length} active of ${data.clients.length}</p></div><div class="grid">${cards || '<p class="empty">No clients yet.</p>'}</div>`;
   }
@@ -243,6 +256,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <div class="small">${s.source === 'claude' ? `<button class="link" data-step-keep="${s.id}">Keep</button>` : ''}<button class="link" data-step-dismiss="${s.id}">${s.source === 'claude' ? 'Dismiss' : 'Remove'}</button></div></li>`;
     const opps = c.opportunities.map(o => `<li><div class="row"><div class="grow"><div class="title"><a href="${esc(safeUrl(o.url))}" target="_blank" rel="noopener">${esc(o.name)}</a></div><div class="meta">${o.open ? 'Target ' + esc(dayName(o.closeDate)) : o.won ? 'Won' : 'Closed'}${o.nextStep ? ' · Next: ' + esc(o.nextStep) : ''}</div></div><span class="chip">${esc(o.stage)}</span></div></li>`).join('');
     const contacts = c.contacts.map(p => `<li><div class="title"><a href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">${esc(p.name)}</a>${p.title ? ` <span class="muted small">${esc(p.title)}</span>` : ''}</div><div class="meta">${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}${p.phone ? ' · ' + esc(p.phone) : ''}</div></li>`).join('');
+    const hubPeople = (c.hubPeople || []).map(p => `<li><div class="row"><div class="grow"><div class="title">${esc(p.name || p.email)} <span class="muted small">${esc(ROLE[p.role] || p.role)}</span></div><div class="meta">${p.last_seen_at ? 'Last in the hub ' + esc(seenAgo(p.last_seen_at)) : NOT_SEEN}</div></div></div></li>`).join('');
     const links = c.links.map(l => `<li><a href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">${esc(l.label)}</a></li>`).join('');
     const noteControls = i => i.type === 'note' ? `<div class="small"><button class="link" data-note-delete="${i.id}">Delete</button></div>` : '';
     const timeline = (list, empty) => list.length ? byDay(list, { showClient: false, controls: noteControls }) : `<p class="empty">${empty}</p>`;
@@ -253,6 +267,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <section class="panel"><h2>Next steps<span class="count">${data.steps.length}</span></h2>${data.steps.length ? `<ul class="items">${data.steps.map(stepRow).join('')}</ul>` : '<p class="empty">No open steps.</p>'}
         <form class="inline" id="add-step"><input type="text" name="title" placeholder="Add a next step" maxlength="300" required aria-label="Next step"><input type="date" name="dueDate" aria-label="Due date"><button class="primary">Add</button></form><p class="err" id="step-err"></p></section>
       <section class="panel"><h2>Opportunities</h2>${opps ? `<ul class="items">${opps}</ul>` : '<p class="empty">None in Salesforce.</p>'}</section>
+      ${c.workspace ? `<section class="panel"><h2>In the hub</h2>${hubPeople ? `<ul class="items">${hubPeople}</ul>` : '<p class="empty">No one invited yet.</p>'}</section>` : ''}
       <section class="panel"><h2>People</h2>${contacts ? `<ul class="items">${contacts}</ul>` : '<p class="empty">No contacts in Salesforce.</p>'}</section>
       <section class="panel"><h2>Links</h2>${links ? `<ul class="items">${links}</ul>` : '<p class="empty">Add the prototype, Drive folder or docs.</p>'}
         <details><summary class="small">Edit links and sync matching</summary>

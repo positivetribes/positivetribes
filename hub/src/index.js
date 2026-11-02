@@ -13,6 +13,11 @@ const TIER_NAMES = { must: 'Must have', nice: 'Nice to have', idea: 'Idea for no
 const PHASE_NAMES = { review: 'To review', prototype: 'Prototype', full: 'Full build', later: 'Later' };
 const FIELD_NAMES = { title: 'title', details: 'details', owner: 'who answers', project_id: 'list' };
 
+// Remembers that this person has the hub open: once per 10 minutes at most, so a page left open costs little.
+const markSeen = (db, user) => db.prepare(
+  "UPDATE users SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at < datetime('now', '-10 minutes'))"
+).bind(user.id).run();
+
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }
@@ -177,6 +182,7 @@ export default {
       const method = request.method;
 
       if (url.pathname === '/api/me' && method === 'GET') {
+        await markSeen(db, user);
         const { results: clients } = user.role === 'pt'
           ? await db.prepare('SELECT slug, name, accent, status FROM clients ORDER BY name').all()
           : await db.prepare('SELECT slug, name, accent, status FROM clients WHERE id = ?').bind(user.client_id).all();
@@ -187,7 +193,10 @@ export default {
       if (url.pathname === '/api/notifications' || url.pathname === '/api/notifications/read' || url.pathname === '/api/notifications/clear') {
         if (user.role === 'pt') throw new InputError('Positive Tribes\' notifications are the command center Inbox.', 404);
         const client = await db.prepare('SELECT id, slug FROM clients WHERE id = ?').bind(user.client_id).first();
-        if (url.pathname === '/api/notifications' && method === 'GET') return json(await listForClient(db, user, client));
+        if (url.pathname === '/api/notifications' && method === 'GET') {
+          await markSeen(db, user);
+          return json(await listForClient(db, user, client));
+        }
         if (method === 'POST') {
           const b = await body(request);
           let ids = 'all';
