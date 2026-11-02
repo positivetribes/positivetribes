@@ -305,10 +305,89 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     };
   }
 
-  // sub is what follows #/command: '', 'inbox', 'clients' or 'client/<Salesforce account id>'.
+  // ---- Documents: Positive Tribes' own and every client's, as links ----
+  const DOC_KIND = { plan: 'Plan', process: 'Process', proposal: 'Proposal', agreement: 'Agreement', test_script: 'Test script', design: 'Design', link: 'Link', other: 'Document' };
+  const DOC_STATUS = { '': 'No status', draft: 'Draft', sent: 'Sent', signed: 'Signed' };
+  let docs = null, docEditing = null;
+  const options = (map, value) => Object.entries(map).map(([k, l]) => `<option value="${esc(k)}"${k === value ? ' selected' : ''}>${esc(l)}</option>`).join('');
+
+  function docForm(data, d) {
+    const forOptions = '<option value="">Positive Tribes (only you)</option>' + data.clients.map(c => `<option value="${esc(c.slug)}"${c.slug === d.client ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+    return `<form class="panel docform" id="doc-form"><h2>${d.id ? 'Edit document' : 'Add a document or link'}</h2>
+      <div class="fields">
+        <label class="wide">Link<input type="url" name="url" value="${esc(d.url)}" maxlength="1000" placeholder="https://docs.google.com/… or https://claude.ai/artifact/…"></label>
+        <label class="wide">Title<input type="text" name="title" value="${esc(d.title)}" maxlength="200" required></label>
+        <label>For<select name="client">${forOptions}</select></label>
+        <label>Project<select name="project_id"></select></label>
+        <label>Type<select name="kind">${options(DOC_KIND, d.kind)}</select></label>
+        <label>Status<select name="status">${options(DOC_STATUS, d.status)}</select></label>
+        <label class="wide">Note (optional)<input type="text" name="note" value="${esc(d.note)}" maxlength="500" placeholder="Coming after the Nov 4 budget call"></label>
+        <label class="check wide"><input type="checkbox" name="visible"${d.visible ? ' checked' : ''}><span>Show it in the client's workspace</span></label>
+      </div>
+      <p class="actions"><button class="primary">${d.id ? 'Save' : 'Add document'}</button>${d.id ? ' <button type="button" id="doc-cancel">Cancel</button>' : ''}</p><p class="err" id="doc-err"></p></form>`;
+  }
+
+  function docRow(d, client) {
+    const url = safeUrl(d.url);
+    const project = client && (client.projects.find(p => p.id === d.project_id) || {}).name;
+    const meta = [DOC_KIND[d.kind], project, d.note].filter(Boolean).map(esc).join(' · ');
+    const seen = !d.client ? '' : d.visible ? '<span class="chip">Client sees it</span>' : '<span class="chip warn">Hidden from client</span>';
+    return `<li${d.id === docEditing ? ' class="editing"' : ''}><div class="row"><div class="grow"><div class="title">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(d.title)}</a>` : esc(d.title)}</div><div class="meta">${meta}</div></div>${d.status ? `<span class="chip">${esc(DOC_STATUS[d.status])}</span>` : ''}${seen}</div>
+      <div class="small"><button class="link" data-doc-edit="${d.id}">Edit</button><button class="link" data-doc-delete="${d.id}">Delete</button></div></li>`;
+  }
+
+  function renderDocuments(box, data) {
+    docs = data;
+    const editing = data.documents.find(d => d.id === docEditing);
+    if (!editing) docEditing = null;
+    const blank = { client: '', project_id: null, kind: 'other', title: '', url: '', note: '', status: '', visible: false };
+    const groups = [{ slug: '', name: 'Positive Tribes', projects: [] }, ...data.clients].map(g => {
+      const mine = data.documents.filter(d => d.client === g.slug);
+      return `<section class="panel"><div class="row"><h2 class="grow">${esc(g.name)}<span class="count">${mine.length || ''}</span></h2></div>
+        <p class="small muted links">${g.slug ? `Shown documents also appear in the client's workspace. <a class="client-link" href="#/${esc(g.slug)}/home">Open workspace</a>` : 'Only you see these.'}</p>
+        ${mine.length ? `<ul class="items">${mine.map(d => docRow(d, g.slug ? g : null)).join('')}</ul>` : '<p class="empty">No documents yet.</p>'}</section>`;
+    }).join('');
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Documents</h2><p class="muted small">Your own documents and every client's, in one place. Links open in a new tab.</p></div></div>
+      ${docForm(data, editing || blank)}<div class="doc-groups">${groups}</div>`;
+    wireDocuments(box, editing);
+  }
+
+  function wireDocuments(box, editing) {
+    const form = box.querySelector('#doc-form');
+    const projects = keep => {
+      const client = docs.clients.find(c => c.slug === form.client.value);
+      form.project_id.innerHTML = `<option value="">${client ? 'Whole client' : 'None'}</option>` + (client ? client.projects.map(p => `<option value="${p.id}"${p.id === keep ? ' selected' : ''}>${esc(p.name)}</option>`).join('') : '');
+      form.project_id.disabled = !client;
+      form.visible.disabled = !client;
+      if (!client) form.visible.checked = false;
+    };
+    projects(editing && editing.project_id);
+    form.client.onchange = () => projects(null);
+    form.onsubmit = async e => {
+      e.preventDefault();
+      const payload = { client: form.client.value, project_id: form.project_id.value ? Number(form.project_id.value) : null, kind: form.kind.value, title: form.title.value, url: form.url.value, note: form.note.value, status: form.status.value, visible: form.visible.checked };
+      const button = form.querySelector('button.primary');
+      button.disabled = true;
+      try {
+        if (docEditing) await send('/documents/' + docEditing, 'PUT', payload); else await send('/documents', 'POST', payload);
+        docEditing = null; again();
+      } catch (error) { button.disabled = false; box.querySelector('#doc-err').textContent = error.message; }
+    };
+    box.querySelector('#doc-cancel')?.addEventListener('click', () => { docEditing = null; renderDocuments(box, docs); });
+    box.onclick = async e => {
+      const t = e.target.closest('[data-doc-edit],[data-doc-delete]');
+      if (!t) return;
+      if (t.dataset.docEdit) { docEditing = Number(t.dataset.docEdit); renderDocuments(box, docs); box.querySelector('#doc-form').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      const d = docs.documents.find(x => x.id === Number(t.dataset.docDelete));
+      if (!d || !confirm(`Delete "${d.title}" from the hub? The document itself is not touched.`)) return;
+      try { await api('/documents/' + d.id, { method: 'DELETE' }); if (docEditing === d.id) docEditing = null; again(); } catch (error) { alert(error.message); }
+    };
+  }
+
+  // sub is what follows #/command: '', 'inbox', 'clients', 'documents' or 'client/<Salesforce account id>'.
   const viewOf = sub => {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
-    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients'].includes(sub) ? sub : 'today' };
+    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients', 'documents'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
@@ -323,6 +402,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         if (current.box !== box) return;
         document.title = data.client.name + ' | Command center';
         renderClient(box, data);
+      } else if (view === 'documents') {
+        const data = await api('/documents');
+        if (current.box !== box) return;
+        document.title = 'Documents | Command center';
+        renderDocuments(box, data);
       } else if (view === 'inbox') {
         const data = await api('/inbox');
         if (current.box !== box) return;

@@ -225,11 +225,23 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 .cc form.inline{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .cc form.inline input[type=text]{flex:1 1 180px;width:auto}
 .cc form.inline .err{flex-basis:100%;margin:0}
-.cc input[type=text],.cc input[type=date],.cc textarea{font-size:14px;padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
+.cc input[type=text],.cc input[type=url],.cc input[type=date],.cc select,.cc textarea{font-size:14px;padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
 .cc textarea{width:100%;min-height:64px}
 .cc label.check{display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-weight:400;font-size:inherit;margin:0}
 .cc label.check input{margin-top:4px}
 .cc details{margin-top:12px}
+.cc .docform{margin-bottom:18px}
+.cc .docform .fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;margin-top:6px}
+.cc .docform label{display:flex;flex-direction:column;gap:5px;margin:0;font-size:13px;font-weight:600;color:var(--muted)}
+.cc .docform label.wide{grid-column:span 2}
+.cc .docform label.check{flex-direction:row;align-items:center;color:var(--ink);font-weight:400;font-size:14px}
+.cc .docform label.check input{margin:0}
+.cc .docform input,.cc .docform select{width:100%;font-weight:400}
+.cc .docform select:disabled,.cc .docform input:disabled{opacity:.5}
+.cc .docform .actions{margin:14px 0 0}
+.cc .doc-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:18px;align-items:start}
+.cc .items li.editing{outline:2px solid var(--rust);outline-offset:4px;border-radius:6px}
+@media (max-width:700px){.cc .docform .fields{grid-template-columns:minmax(0,1fr)}.cc .docform label.wide{grid-column:auto}}
 .cc details summary{cursor:pointer;font-weight:600}
 .cc details[open] summary{margin-bottom:10px}
 .cc .note-save{margin:8px 0 0}
@@ -429,14 +441,14 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {
       // Moving between command center views keeps the hero and tab row; only the view below changes.
-      $('cc-tabs').replaceChildren(tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', $('cc-inbox-count')), tab('clients', '#/command/clients', 'Clients'));
+      $('cc-tabs').replaceChildren(tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', $('cc-inbox-count')), tab('clients', '#/command/clients', 'Clients'), tab('documents', '#/command/documents', 'Documents'));
       $('cc').replaceWith(box);
     } else {
       $('main').replaceChildren(
         h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Command center'), h('h1', {}, 'Positive Tribes')),
         h('div', { class: 'cc-bar' },
           h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' },
-            tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', h('span', { class: 'badge', id: 'cc-inbox-count' })), tab('clients', '#/command/clients', 'Clients')),
+            tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', h('span', { class: 'badge', id: 'cc-inbox-count' })), tab('clients', '#/command/clients', 'Clients'), tab('documents', '#/command/documents', 'Documents')),
           h('span', { class: 'meta cc-sync', id: 'cc-sync' }),
           h('button', { class: 'btn ghost small', type: 'button', onclick: () => command.refresh() }, 'Refresh')),
         box);
@@ -519,7 +531,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 
   // ---- Documents: proposals and other papers, as links ----
   const DOC_STATUS = { draft: 'Draft', sent: 'Sent', signed: 'Signed' };
-  const DOC_KINDS = { proposal: 'Proposal', agreement: 'Agreement', test_script: 'Test script', design: 'Design', other: 'Document' };
+  const DOC_KINDS = { proposal: 'Proposal', agreement: 'Agreement', test_script: 'Test script', design: 'Design', plan: 'Plan', process: 'Process', link: 'Link', other: 'Document' };
   function documents() {
     // Positive Tribes receives hidden documents too; a preview shows only what the client would see.
     const isPt = viewer().role === 'pt';

@@ -70,7 +70,7 @@ test('the local development stand-ins only work on localhost', async () => {
 // A hub database with three clients and their people, plus the command center's own database.
 function hubDb() {
   const h = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql']) {
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql']) {
     h.sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   }
   h.sqlite.exec(`
@@ -391,4 +391,51 @@ test('the inbox reads each client from the hub database, keeps them apart, and c
   await as('dana@safe.org', 'PATCH', 'c/safe/items/' + safe.itemId, { done: true });
   r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
   assert.deepEqual(r.body.items.filter(i => i.backlog === 'safe-hub').map(i => [i.action, i.added]), [['done', false]]);
+});
+
+// ---- Documents ----
+
+test('documents: Positive Tribes keeps its own and every client\'s; clients see only their own shown ones', async () => {
+  const { hub: h, as } = hubDb();
+  const add = (payload, who = 'eric@positivetribes.org') => as(who, 'POST', 'admin/documents', payload);
+  let r = await add({ client: '', kind: 'process', title: 'Sales process', url: 'https://claude.ai/artifact/abc', visible: true });
+  assert.equal(r.status, 201);
+  const own = (await r.json()).id;
+  assert.equal((await add({ client: 'uep', project_id: 1, kind: 'proposal', title: 'Phase 3 proposal', url: 'https://drive.google.com/file/d/1', status: 'sent', visible: true })).status, 201);
+  assert.equal((await add({ client: 'uep', kind: 'design', title: 'Draft designs', url: 'https://figma.com/x' })).status, 201);
+  assert.equal((await add({ client: 'safe', kind: 'proposal', title: 'Chapters proposal', note: 'After the Nov 4 budget call', visible: true })).status, 201);
+
+  // Positive Tribes' own document is never shown, even when asked.
+  assert.equal(h.sqlite.prepare('SELECT client_id, visible FROM documents WHERE id = ?').get(own).visible, 0);
+
+  for (const bad of [
+    { client: 'nope', title: 'x', url: 'https://a.org' },
+    { client: 'safe', project_id: 1, title: 'x', url: 'https://a.org' },
+    { client: '', project_id: 1, title: 'x', url: 'https://a.org' },
+    { client: '', kind: 'memo', title: 'x', url: 'https://a.org' },
+    { client: '', status: 'lost', title: 'x', url: 'https://a.org' },
+    { client: '', title: '', url: 'https://a.org' },
+    { client: '', title: 'x', url: 'javascript:alert(1)' },
+    { client: '', title: 'x' }
+  ]) assert.equal((await add(bad)).status, 400, JSON.stringify(bad));
+
+  const list = await (await as('eric@positivetribes.org', 'GET', 'admin/documents')).json();
+  assert.deepEqual(list.documents.map(d => [d.client, d.title, d.visible]), [
+    ['', 'Sales process', false], ['uep', 'Phase 3 proposal', true], ['uep', 'Draft designs', false], ['safe', 'Chapters proposal', true]
+  ]);
+  assert.deepEqual(list.clients.find(c => c.slug === 'uep').projects, [{ id: 1, name: 'Scheduler' }]);
+
+  // Clients cannot reach the list, and their workspace shows only their own shown documents.
+  assert.equal((await as('molly@uep.org', 'GET', 'admin/documents')).status, 404);
+  assert.equal((await add({ client: 'uep', title: 'x', url: 'https://a.org' }, 'molly@uep.org')).status, 404);
+  const uep = await (await as('molly@uep.org', 'GET', 'c/uep/projects')).json();
+  assert.deepEqual(uep.documents.map(d => d.title), ['Phase 3 proposal']);
+
+  // Edit moves a document and shows it; delete removes it.
+  const designs = list.documents.find(d => d.title === 'Draft designs').id;
+  assert.equal((await as('eric@positivetribes.org', 'PUT', 'admin/documents/' + designs, { client: 'uep', project_id: 1, kind: 'design', title: 'Designs', url: 'https://figma.com/x', visible: true })).status, 200);
+  assert.deepEqual((await (await as('molly@uep.org', 'GET', 'c/uep/projects')).json()).documents.map(d => d.title), ['Phase 3 proposal', 'Designs']);
+  assert.equal((await as('eric@positivetribes.org', 'DELETE', 'admin/documents/' + designs)).status, 200);
+  assert.equal((await as('eric@positivetribes.org', 'DELETE', 'admin/documents/' + designs)).status, 404);
+  assert.equal(h.sqlite.prepare('SELECT COUNT(*) AS n FROM documents').get().n, 3);
 });

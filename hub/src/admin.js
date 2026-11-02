@@ -464,6 +464,50 @@ function metaInput(input) {
   };
 }
 
+// ---- Documents: Positive Tribes' own (client_id NULL, never shown to a client) and every client's ----
+
+const DOC_KINDS = ['proposal', 'agreement', 'test_script', 'design', 'plan', 'process', 'link', 'other'];
+const DOC_STATUSES = ['', 'draft', 'sent', 'signed'];
+
+async function loadDocuments(hub) {
+  const [docs, clients, projects] = await Promise.all([
+    hub.prepare(`SELECT d.id, c.slug AS client, d.project_id, d.kind, d.title, d.url, d.note, d.status, d.visible, d.created_at
+                 FROM documents d LEFT JOIN clients c ON c.id = d.client_id ORDER BY d.position, d.id`).all(),
+    hub.prepare('SELECT id, slug, name FROM clients ORDER BY name').all(),
+    hub.prepare('SELECT id, client_id, name FROM projects ORDER BY position, id').all()
+  ]);
+  return {
+    documents: docs.results.map(d => ({ ...d, client: d.client || '', visible: Boolean(d.visible) })),
+    clients: clients.results.map(c => ({ slug: c.slug, name: c.name, projects: projects.results.filter(p => p.client_id === c.id).map(p => ({ id: p.id, name: p.name })) }))
+  };
+}
+
+// The whole document every time (the form always sends every field). An empty client means Positive Tribes.
+async function documentInput(hub, input) {
+  let clientId = null, projectId = null;
+  if (input.client) {
+    const client = typeof input.client === 'string' && await hub.prepare('SELECT id FROM clients WHERE slug = ?').bind(input.client).first();
+    if (!client) throw new InputError('Choose Positive Tribes or a client.');
+    clientId = client.id;
+  }
+  if (input.project_id != null && input.project_id !== '') {
+    const project = Number.isInteger(input.project_id) && await hub.prepare('SELECT client_id FROM projects WHERE id = ?').bind(input.project_id).first();
+    if (!project || project.client_id !== clientId) throw new InputError('Choose one of that client\'s projects.');
+    projectId = input.project_id;
+  }
+  const kind = input.kind || 'other';
+  if (!DOC_KINDS.includes(kind)) throw new InputError('Choose a type.');
+  const status = input.status || '';
+  if (!DOC_STATUSES.includes(status)) throw new InputError('Choose draft, sent, signed or no status.');
+  const title = text(input.title, 200, { required: true, label: 'Title' });
+  const url = urlOf(input.url);
+  const note = text(input.note, 500, { label: 'Note' });
+  if (!url && !note) throw new InputError('Add a link, or a note saying when it is coming.');
+  // Only a client's document can be shown, and only to that client.
+  const visible = clientId !== null && input.visible === true ? 1 : 0;
+  return [clientId, projectId, kind, title, url, note, status, visible];
+}
+
 // ---- Routes ----
 
 const SERVICE_ROUTES = ['GET /api/admin/match', 'POST /api/admin/activity'];
@@ -570,6 +614,27 @@ export async function handleAdmin(request, env, url, who) {
       const source = 'title' in input || 'dueDate' in input || input.keep === true ? 'you' : step.source;
       await db.prepare('UPDATE next_steps SET title = ?, due_date = ?, status = ?, done_at = ?, source = ? WHERE id = ?').bind(title, due, status, doneAt, source, id).run();
       return json({ ok: true });
+    }
+
+    const docId = path.match(/^\/api\/admin\/documents(?:\/(\d+))?$/);
+    if (docId) {
+      if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
+      const hub = env.DB, id = docId[1] && Number(docId[1]);
+      if (!id && method === 'GET') return json(await loadDocuments(hub));
+      if (!id && method === 'POST') {
+        const values = await documentInput(hub, await body(request));
+        const { meta } = await hub.prepare(`INSERT INTO documents (client_id, project_id, kind, title, url, note, status, visible, position)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM documents))`).bind(...values).run();
+        return json({ ok: true, id: meta.last_row_id }, 201);
+      }
+      if (id && (method === 'PUT' || method === 'DELETE')) {
+        if (!await hub.prepare('SELECT id FROM documents WHERE id = ?').bind(id).first()) throw new InputError('That document no longer exists.', 404);
+        if (method === 'DELETE') await hub.prepare('DELETE FROM documents WHERE id = ?').bind(id).run();
+        else await hub.prepare('UPDATE documents SET client_id = ?, project_id = ?, kind = ?, title = ?, url = ?, note = ?, status = ?, visible = ? WHERE id = ?')
+          .bind(...await documentInput(hub, await body(request)), id).run();
+        return json({ ok: true });
+      }
+      return json({ error: 'Not found.' }, 404);
     }
 
     if (route === 'GET /api/admin/match') {
