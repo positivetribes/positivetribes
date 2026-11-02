@@ -110,7 +110,7 @@ input.switch:checked{background:var(--green)}input.switch:checked::before{transf
 .chore.overdue{border-color:#d9a79e}.chore.overdue small{color:#9c3b2e;font-weight:600}
 .chore-summary{margin-top:18px;padding:16px;display:grid;gap:8px}.chore-summary .eyebrow{margin:0}.chore-summary .chips{margin-top:2px}
 .meter{height:10px;border-radius:999px;background:var(--green2);overflow:hidden}.meter i{display:block;height:100%;background:var(--green);border-radius:999px}
-#choreRecent{margin-top:12px}#choreRecent li{overflow-wrap:anywhere}
+#choreRecent{margin-top:12px}#choreRecent ul{list-style:none;padding-left:0}#choreRecent li{display:flex;align-items:center;justify-content:space-between;gap:8px;overflow-wrap:anywhere}#choreRecent li span{min-width:0}#choreRecent .undo-done{flex-shrink:0;min-height:36px;padding:6px 12px;font-size:12px}#choreDialogTitle:focus{outline:none}
 .day-chips .chip{min-width:48px;justify-content:center;min-height:40px}
 #choreDateLabel{display:block;margin-bottom:6px}#choreDialog .actions .danger{margin-right:auto}
 [data-theme="dark"] .chore.overdue{border-color:#7a4a43}[data-theme="dark"] .chore.overdue small{color:#f0a898}

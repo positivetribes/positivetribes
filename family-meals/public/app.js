@@ -897,7 +897,14 @@ function renderChoreSummary() {
     box.innerHTML = `<p class="eyebrow">${start === choreWeek(today()) ? 'THIS WEEK' : `WEEK OF ${esc(displayDate(start).toUpperCase())}`}</p><strong>${finished} of ${scheduled} chores done</strong><div class="meter" role="img" aria-label="${pct} percent done"><i style="width:${pct}%"></i></div>${people.some(p => p.n) ? `<div class="chips">${people.map(p => `<span class="chip${p.n ? ' voted' : ''}">${esc(p.name)} · ${p.n}</span>`).join('')}</div>` : '<p class="hint">Nothing checked off yet this week.</p>'}`;
   }
   $('#choreRecent').hidden = !recent.length;
-  $('#choreRecentList').innerHTML = recent.map(r => `<li><strong>${esc(r.done_by)}</strong> did ${esc(r.title)} · ${esc(shortDate(r.due_date))}</li>`).join('');
+  $('#choreRecentList').innerHTML = recent.map((r, i) => `<li><span><strong>${esc(r.done_by)}</strong> did ${esc(r.title)} · ${esc(shortDate(r.due_date))}</span><button type="button" class="ghost undo-done" data-recent="${i}" aria-label="Uncheck ${esc(r.title)}">Undo</button></li>`).join('');
+  $$('#choreRecentList .undo-done').forEach(button => button.onclick = () => action(button, async () => {
+    if (!member) return openProfile();
+    const r = recent[+button.dataset.recent];
+    await send('/chores/done', 'POST', { chore_id: r.chore_id, date: r.due_date, done: false });
+    toast(`Unchecked ${r.title}.`);
+    await loadChores();
+  }));
 }
 $$('[data-chore-step]').forEach(button => button.onclick = () => stepChoreDay(+button.dataset.choreStep));
 $('#choreToday').onclick = () => { if (choreDate !== today()) stepChoreDay(0); };
@@ -938,8 +945,10 @@ function openChoreDialog(chore) {
   choreDays = chore ? [...chore.days] : [];
   choreWho = chore ? chore.assignees.filter(name => data.members.some(m => sameName(m, name))) : [];
   paintChoreRepeat(); renderChoreDialogChips();
+  // Editing lands on the title instead of the name field so the phone keyboard stays down.
+  $('#choreDialogTitle').toggleAttribute('autofocus', !!chore);
   $('#choreDialog').showModal();
-  if (!chore) $('#choreName').focus();
+  (chore ? $('#choreDialogTitle') : $('#choreName')).focus();
 }
 $('#addChore').onclick = () => openChoreDialog(null);
 $('#choreForm').onsubmit = event => {

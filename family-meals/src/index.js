@@ -625,8 +625,9 @@ export default {
       }
       if (path === '/api/chores/done' && method === 'POST') {
         const b = await body(request), chore = await requireChore(db, b.chore_id);
-        if (!validDate(b.date) || !choreOn(chore, b.date)) throw new InputError('This chore is not scheduled for that day.');
         if (typeof b.done !== 'boolean') throw new InputError('Done must be true or false.');
+        // Unchecking is allowed off-schedule, so a completion can still be undone after the chore is edited.
+        if (!validDate(b.date) || (b.done && !choreOn(chore, b.date))) throw new InputError('This chore is not scheduled for that day.');
         // The first person to finish a chore keeps the credit if someone else taps it again.
         await (b.done ? db.prepare('INSERT OR IGNORE INTO chore_done (chore_id,due_date,done_by) VALUES (?,?,?)').bind(chore.id, b.date, me)
           : db.prepare('DELETE FROM chore_done WHERE chore_id=? AND due_date=?').bind(chore.id, b.date)).run();
