@@ -325,7 +325,11 @@ async function backlogEvents(env, backlog, since) {
   try {
     const { results } = await db.prepare(
       `SELECT e.id, e.item_id, e.action, e.item_title, e.item_kind, e.detail, COALESCE(NULLIF(e.actor_name, ''), e.actor_email) AS actor, e.at
-       FROM events e JOIN clients c ON c.id = e.client_id WHERE c.slug = ? AND e.at >= ? ORDER BY e.id`
+       FROM events e JOIN clients c ON c.id = e.client_id
+       WHERE c.slug = ? AND e.at >= ?
+         -- Positive Tribes' own changes, and what the database logs by itself (no email), are not news to Eric.
+         AND e.actor_email != '' AND e.actor_email NOT IN (SELECT email FROM users WHERE role = 'pt')
+       ORDER BY e.id`
     ).bind(backlog.hub, since).all();
     return { status: 'ok', events: results };
   } catch (error) {
@@ -344,12 +348,14 @@ export function buildInbox(backlogs, results, cleared, ownNames) {
     const rows = new Map();
     for (const e of events) {
       if (done.has(b.key + ':' + e.id) || isOwn(e.actor, ownNames)) continue;
-      const earlier = rows.get(e.item_id);
-      rows.set(e.item_id, {
+      // Ideas and phases have their own ids, so they never share a row with a backlog item of the same number.
+      const key = (['idea', 'release'].includes(e.item_kind) ? e.item_kind : 'item') + ':' + e.item_id;
+      const earlier = rows.get(key);
+      rows.set(key, {
         backlog: b.key, client: b.name, accountId: b.accountId, itemId: e.item_id,
         action: e.action, kind: e.item_kind, title: e.item_title, detail: e.detail, actor: e.actor,
         at: e.at.replace(' ', 'T') + (e.at.endsWith('Z') ? '' : 'Z'),
-        url: e.action === 'deleted' || !e.item_id ? b.url : `#/${b.hub}/backlog/${e.item_id}`,
+        url: e.item_kind === 'idea' ? '#/command/ideas' : e.action === 'deleted' || !e.item_id || e.item_kind === 'release' ? b.url : `#/${b.hub}/backlog/${e.item_id}`,
         eventIds: [...earlier?.eventIds || [], e.id],
         // An item added and then changed before Eric looked still reads as new.
         added: earlier?.added || e.action === 'added'

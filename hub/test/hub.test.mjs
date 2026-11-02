@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -196,4 +196,72 @@ test('testing windows count calendar or business days', () => {
   // UEP Phase 1: ready Friday Oct 30, accepted 10 business days later.
   assert.equal(windowEnd('2026-10-30', 10, 'business'), '2026-11-13');
   assert.equal(windowEnd('2026-11-07', 1, 'business'), '2026-11-09');
+});
+
+test('bell: a client hears what others did for them, never their own changes or another client\'s', async () => {
+  const { call, sqlite } = setup();
+  sqlite.exec("INSERT INTO users (email, name, role, client_id) VALUES ('sam@uep.org', 'Sam', 'staff', 1)");
+  const bell = async who => (await call(who, '/api/notifications')).json();
+  // Molly asks a question and adds her own change: neither is news to Molly.
+  await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Who books rides?', kind: 'question', tier: 'must', project_id: 1 });
+  await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Bigger font', kind: 'change', tier: 'nice', project_id: 1 });
+  let b = await bell('molly@uep.org');
+  assert.equal(b.unread, 0);
+  // Sam sees the question, but a teammate's own change is left out.
+  b = await bell('sam@uep.org');
+  assert.deepEqual(b.items.map(i => [i.action, i.title]), [['added', 'Who books rides?']]);
+  // Eric answers and finishes; edits and priority changes are not news.
+  await call('eric@positivetribes.org', '/api/c/uep/items/1', 'PATCH', { answer: 'The volunteers' });
+  await call('eric@positivetribes.org', '/api/c/uep/items/2', 'PATCH', { title: 'Bigger fonts' });
+  await call('eric@positivetribes.org', '/api/c/uep/items/2', 'PATCH', { tier: 'must' });
+  await call('eric@positivetribes.org', '/api/c/uep/items/2', 'PATCH', { done: true });
+  b = await bell('molly@uep.org');
+  assert.deepEqual(b.items.map(i => [i.action, i.title, i.fromPt, i.url]), [['done', 'Bigger fonts', true, '#/uep/backlog/2'], ['answered', 'Who books rides?', true, '#/uep/backlog/1']]);
+  assert.equal(b.unread, 2);
+  // Another client never sees it, and Positive Tribes' bell is the Inbox.
+  assert.equal((await bell('dana@safe.org')).items.length, 0);
+  assert.equal((await call('eric@positivetribes.org', '/api/notifications')).status, 404);
+
+  // Reading is per person, and only within one's own client.
+  const doneId = b.items[0].id;
+  assert.equal((await call('molly@uep.org', '/api/notifications/read', 'POST', { ids: ['x'] })).status, 400);
+  b = await (await call('molly@uep.org', '/api/notifications/read', 'POST', { ids: [doneId] })).json();
+  assert.equal(b.unread, 1);
+  await call('dana@safe.org', '/api/notifications/read', 'POST', { ids: [doneId] });
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM notification_reads WHERE user_id = 3').get().n, 0);
+  assert.equal((await bell('sam@uep.org')).unread, 3);
+  b = await (await call('molly@uep.org', '/api/notifications/read', 'POST', { all: true })).json();
+  assert.equal(b.unread, 0);
+
+  // Eric previews Sam's bell without marking anything; clients cannot.
+  const preview = await (await call('eric@positivetribes.org', '/api/c/uep/notifications?as=sam@uep.org')).json();
+  assert.equal(preview.unread, 3);
+  assert.equal((await call('eric@positivetribes.org', '/api/c/uep/notifications?as=dana@safe.org')).status, 404);
+  assert.equal((await call('molly@uep.org', '/api/c/uep/notifications?as=sam@uep.org')).status, 404);
+});
+
+test('bell: phases, documents and idea decisions notify, even when changed by hand in SQL', async () => {
+  const { call, sqlite } = setup();
+  const today = new Date().toISOString().slice(0, 10);
+  sqlite.exec(`
+    INSERT INTO releases (client_id, project_id, number, name, stage) VALUES (1, 1, 1, '', 'building');
+    UPDATE releases SET stage = 'uat', uat_started = '${today}', uat_days = 2 WHERE id = 1;
+    INSERT INTO documents (client_id, kind, title, url, visible) VALUES (1, 'proposal', 'Draft', 'https://x', 0), (NULL, 'plan', 'PT plan', 'https://y', 1);
+    UPDATE documents SET visible = 1 WHERE id = 1;
+  `);
+  await call('molly@uep.org', '/api/ideas', 'POST', { title: 'Dark mode' });
+  await call('eric@positivetribes.org', '/api/ideas', 'POST', { title: 'PT idea' });
+  await call('eric@positivetribes.org', '/api/ideas/1', 'PATCH', { status: 'shipped', note: 'Done, try the toggle' });
+  await call('eric@positivetribes.org', '/api/ideas/2', 'PATCH', { status: 'next' });
+  await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Open question', kind: 'question', tier: 'must', project_id: 1 });
+  const b = await (await call('molly@uep.org', '/api/notifications')).json();
+  assert.deepEqual(b.items.map(i => [i.action, i.kind, i.title, i.url]), [
+    ['idea_status', 'idea', 'Dark mode', '#/uep/ideas'],
+    ['shared', 'document', 'Draft', '#/uep/home'],
+    ['uat_started', 'release', 'Phase 1', '#/uep/home']
+  ]);
+  assert.equal(b.items[0].detail, 'Shipped: Done, try the toggle');
+  assert.deepEqual(b.reminders.map(r => [r.type, r.daysLeft ?? r.count]), [['testing_ends', 2], ['questions', 1]]);
+  // Sober AF hears nothing of it.
+  assert.equal((await (await call('dana@safe.org', '/api/notifications')).json()).items.length, 0);
 });

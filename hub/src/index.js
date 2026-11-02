@@ -3,6 +3,7 @@
 import { accessIdentity } from './access.js';
 import { handleAdmin } from './admin.js';
 import { windowEnd } from './dates.js';
+import { listForClient, markRead } from './notifications.js';
 export { windowEnd };
 
 const TIERS = ['must', 'nice', 'idea'];
@@ -98,6 +99,7 @@ async function requireProject(db, clientId, value) {
 // Ideas for the hub itself. Positive Tribes sees every client's (with the client's name); a client sees its own.
 const IDEA_STATUSES = ['new', 'next', 'later', 'shipped', 'declined'];
 const ideaStatusOf = oneOf(IDEA_STATUSES, 'Choose new, next, later, shipped, or declined.');
+const IDEA_STATUS_NAMES = { new: 'To review', next: 'In the next hub build', later: 'Planned for later', shipped: 'Shipped', declined: 'Not planned' };
 async function listIdeas(db, user) {
   const { results } = await db.prepare(
     `SELECT h.id, h.title, h.details, h.tier, h.status, h.note, h.added_by, h.created_at, h.updated_at, h.shipped_at,
@@ -181,6 +183,24 @@ export default {
         return json({ user: { email: user.email, name: user.name, role: user.role }, clients });
       }
 
+      // The bell, for a client's people. Positive Tribes' bell is the command center Inbox.
+      if (url.pathname === '/api/notifications' || url.pathname === '/api/notifications/read') {
+        if (user.role === 'pt') throw new InputError('Positive Tribes\' notifications are the command center Inbox.', 404);
+        const client = await db.prepare('SELECT id, slug FROM clients WHERE id = ?').bind(user.client_id).first();
+        if (url.pathname === '/api/notifications' && method === 'GET') return json(await listForClient(db, user, client));
+        if (url.pathname === '/api/notifications/read' && method === 'POST') {
+          const b = await body(request);
+          let ids = 'all';
+          if (b.all !== true) {
+            if (!Array.isArray(b.ids) || b.ids.length > 200 || !b.ids.every(id => Number.isSafeInteger(id) && id > 0)) throw new InputError('Choose the notifications to mark read.');
+            ids = b.ids;
+          }
+          await markRead(db, user, client.id, ids);
+          return json({ ok: true, ...await listForClient(db, user, client) });
+        }
+        return json({ error: 'Not found.' }, 404);
+      }
+
       const idea = url.pathname.match(/^\/api\/ideas(?:\/(\d+)(?:\/(images)(?:\/(\d+))?)?)?$/);
       if (idea) {
         const [, ideaId, images, imageId] = idea;
@@ -221,9 +241,12 @@ export default {
           const title = text(b.title, 160, { required: true, label: 'Title' });
           const details = text(b.details, 2000, { label: 'Details' });
           const tier = b.tier === undefined ? 'idea' : tierOf(b.tier);
-          const added = await db.prepare(
+          const insert = db.prepare(
             'INSERT INTO hub_ideas (client_id, title, details, tier, added_by, added_email) VALUES (?, ?, ?, ?, ?, ?)'
-          ).bind(user.role === 'pt' ? null : user.client_id, title, details, tier, user.name || user.email, user.email).run();
+          ).bind(user.role === 'pt' ? null : user.client_id, title, details, tier, user.name || user.email, user.email);
+          // A client's idea goes to the command center Inbox; Positive Tribes' own ideas belong to no client.
+          const [added] = user.role === 'pt' ? [await insert.run()]
+            : await db.batch([insert, logEvent(db, user.client_id, null, 'added', { title, kind: 'idea' }, clip(details), user)]);
           // The id lets the page attach screenshots to the idea it just sent.
           return json({ ok: true, id: added.meta.last_row_id, ideas: await listIdeas(db, user) }, 201);
         }
@@ -240,11 +263,17 @@ export default {
           const tier = b.tier === undefined ? current.tier : tierOf(b.tier);
           const status = b.status === undefined ? current.status : ideaStatusOf(b.status);
           const note = b.note === undefined ? current.note : text(b.note, 2000, { label: 'Reply' });
-          await db.prepare(
-            `UPDATE hub_ideas SET title = ?, details = ?, tier = ?, status = ?, note = ?, updated_at = CURRENT_TIMESTAMP,
-               shipped_at = CASE WHEN ? = 'shipped' THEN COALESCE(shipped_at, CURRENT_TIMESTAMP) ELSE NULL END
-             WHERE id = ?`
-          ).bind(title, details, tier, status, note, status, current.id).run();
+          // A decision or reply on a client's idea tells that client.
+          const decided = pt && current.client_id && (status !== current.status || note !== current.note);
+          await db.batch([
+            db.prepare(
+              `UPDATE hub_ideas SET title = ?, details = ?, tier = ?, status = ?, note = ?, updated_at = CURRENT_TIMESTAMP,
+                 shipped_at = CASE WHEN ? = 'shipped' THEN COALESCE(shipped_at, CURRENT_TIMESTAMP) ELSE NULL END
+               WHERE id = ?`
+            ).bind(title, details, tier, status, note, status, current.id),
+            ...decided ? [logEvent(db, current.client_id, current.id, 'idea_status', { title, kind: 'idea' },
+              clip(IDEA_STATUS_NAMES[status] + (note ? ': ' + note : '')), user)] : []
+          ]);
           return json({ ok: true, ideas: await listIdeas(db, user) });
         }
         if (ideaId && method === 'DELETE') {
@@ -259,7 +288,7 @@ export default {
         return json({ error: 'Not found.' }, 404);
       }
 
-      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people)(?:\/(\d+))?(?:\/(move|signoff))?$/);
+      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications)(?:\/(\d+))?(?:\/(move|signoff))?$/);
       if (!match) return json({ error: 'Not found.' }, 404);
       const [, slug, resource, rawId, action] = match;
       const client = await scope(db, user, slug);
@@ -271,6 +300,15 @@ export default {
           "SELECT email, name, role FROM users WHERE client_id = ? ORDER BY CASE role WHEN 'ed' THEN 0 ELSE 1 END, name"
         ).bind(client.id).all();
         return json({ people: results });
+      }
+
+      // Positive Tribes previewing the bell as one of the client's people. Read-only: nothing is marked read.
+      if (resource === 'notifications' && !rawId && method === 'GET') {
+        if (user.role !== 'pt') return json({ error: 'Not found.' }, 404);
+        const person = await db.prepare('SELECT id, email, name, role, client_id FROM users WHERE email = ? AND client_id = ?')
+          .bind(String(url.searchParams.get('as') || ''), client.id).first();
+        if (!person) throw new InputError('Choose one of this client\'s people.', 404);
+        return json(await listForClient(db, person, client));
       }
 
       if (resource === 'projects' && !rawId && method === 'GET') {

@@ -70,7 +70,7 @@ test('the local development stand-ins only work on localhost', async () => {
 // A hub database with three clients and their people, plus the command center's own database.
 function hubDb() {
   const h = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql']) {
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql']) {
     h.sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   }
   h.sqlite.exec(`
@@ -386,6 +386,16 @@ test('the inbox reads each client from the hub database, keeps them apart, and c
   assert.equal((await call(db, 'POST', '/api/admin/inbox/clear', clear, { env })).status, 200);
   r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
   assert.deepEqual(r.body.items.map(i => i.backlog).sort(), ['coyote-hub', 'uep-hub']);
+
+  // Eric's own work, phases and documents the database logs by itself, and idea replies are not news to Eric.
+  h.sqlite.exec("INSERT INTO releases (client_id, project_id, number, stage) VALUES (1, 1, 1, 'uat'); INSERT INTO documents (client_id, title, url) VALUES (1, 'Proposal', 'https://x')");
+  await as('molly@uep.org', 'POST', 'ideas', { title: 'Dark mode' });
+  await as('eric@positivetribes.org', 'PATCH', 'ideas/1', { status: 'next' });
+  r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
+  const idea = r.body.items.find(i => i.kind === 'idea');
+  assert.deepEqual([idea.title, idea.action, idea.url, idea.actor], ['Dark mode', 'added', '#/command/ideas', 'Molly Cupka']);
+  assert.deepEqual(r.body.items.map(i => i.backlog).sort(), ['coyote-hub', 'uep-hub', 'uep-hub']);
+  await call(db, 'POST', '/api/admin/inbox/clear', { items: [{ backlog: 'uep-hub', eventIds: idea.eventIds }] }, { env });
 
   // A later change to the same item comes back as a new row.
   await as('dana@safe.org', 'PATCH', 'c/safe/items/' + safe.itemId, { done: true });

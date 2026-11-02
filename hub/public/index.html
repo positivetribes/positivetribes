@@ -38,6 +38,31 @@ p{margin:0}
 .brand svg{width:30px;height:30px}.brand circle{fill:currentColor}.brand .core{fill:var(--client)}
 .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .who{color:var(--muted);font-size:15px}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.bell-wrap{position:relative}
+.bell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);cursor:pointer}
+.bell svg{width:22px;height:22px}
+.bell[aria-expanded=true]{border-color:var(--ink)}
+.bell-count{position:absolute;top:-6px;right:-6px;min-width:20px;padding:0 5px;border-radius:10px;background:var(--rust);color:#fff;font-size:12px;font-weight:700;line-height:20px;text-align:center}
+.bell-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:min(420px,calc(100vw - 28px));max-height:min(70vh,560px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px -8px rgba(0,0,0,.28);font-size:15px}
+.bell-panel .bp-head{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--line)}
+.bell-panel .bp-head h2{font-size:18px;margin:0}
+.bell-panel .bp-link{background:none;border:0;padding:6px 0;color:var(--ink);font:inherit;font-size:14px;font-weight:600;text-decoration:underline;cursor:pointer;min-height:32px}
+.bell-panel ul{list-style:none;margin:0;padding:0}
+.bell-panel li{border-bottom:1px solid var(--line)}
+.bell-panel li:last-child{border-bottom:0}
+.bell-panel .bp-row{display:flex;gap:10px;align-items:flex-start;padding:12px 16px;color:var(--ink);text-decoration:none}
+.bell-panel a.bp-row:hover{background:var(--soft)}
+.bell-panel .bp-dot{flex:none;width:9px;height:9px;margin-top:8px;border-radius:50%;background:transparent}
+.bell-panel .unread .bp-dot{background:var(--rust)}
+.bell-panel .unread .bp-text{font-weight:600}
+.bell-panel .bp-body{flex:1;min-width:0;overflow-wrap:anywhere}
+.bell-panel .bp-detail{margin:2px 0 0;color:var(--muted);font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bell-panel .bp-meta{margin-top:2px;color:var(--muted);font-size:13px}
+.bell-panel .bp-actions{display:flex;justify-content:flex-end;padding:0 16px 8px;margin-top:-6px}
+.bell-panel .bp-pin{background:var(--soft)}
+.bell-panel .bp-empty{padding:20px 16px;color:var(--muted);margin:0}
+.bell-panel .bp-foot{padding:10px 16px;border-top:1px solid var(--line);text-align:center}
 .hero{padding:18px 0 22px;border-bottom:1px solid var(--line);margin-bottom:6px;position:relative}
 .hero:before{content:"";display:block;width:56px;height:5px;border-radius:3px;background:var(--client);margin-bottom:14px}
 .eyebrow{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
@@ -268,7 +293,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 <div class="shell">
   <header class="top">
     <a class="brand" href="#/"><svg viewBox="0 0 152 152" aria-hidden="true"><circle cx="76" cy="22" r="22"/><circle cx="130" cy="76" r="22"/><circle cx="76" cy="130" r="22"/><circle cx="22" cy="76" r="22"/><circle class="core" cx="76" cy="76" r="22"/></svg><span>Positive Tribes</span></a>
-    <div class="tools"><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
+    <div class="tools"><div class="bell-wrap" id="bell-wrap" hidden><button class="bell" id="bell" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bell-panel" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="bell-count" id="bell-count" hidden></span></button><div class="bell-panel" id="bell-panel" role="region" aria-label="Notifications" hidden></div></div><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
   </header>
   <div class="admin-bar" id="admin-bar" hidden>
     <span class="admin-label">Positive Tribes</span>
@@ -929,6 +954,150 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     return form;
   }
 
+  // ---- The bell: what changed for this person. A client's people read /api/notifications; Positive Tribes'
+  // bell is the command center Inbox (same items, same Clear), so there is only one list to keep up with. ----
+  const bell = (() => {
+    const KIND_WORD = { question: 'question', change: 'suggested change', problem: 'test problem', request: 'support request', idea: 'hub idea', release: 'phase' };
+    const DOC_WORD = { proposal: 'proposal', agreement: 'agreement', test_script: 'test script', design: 'design', other: 'document' };
+    const q = t => '“' + t + '”';
+    let data = null, loadedAt = 0, timer = null, loadedFor = '';
+    // Whose bell it is: Positive Tribes' Inbox, a previewed person's, or one's own.
+    const whose = () => isPt() ? 'pt' : state.preview ? 'as:' + state.preview.email : 'me';
+    const isPt = () => state.me.user.role === 'pt' && !state.preview;
+    const panel = () => $('bell-panel');
+    const isOpen = () => !panel().hidden;
+
+    const ago = at => {
+      const mins = Math.round((Date.now() - Date.parse(at)) / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return mins + ' min ago';
+      if (mins < 24 * 60) return Math.round(mins / 60) + ' h ago';
+      const days = Math.round(mins / 1440);
+      return days === 1 ? 'yesterday' : days < 7 ? days + ' days ago' : new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    };
+    const done = i => DONE_WORD[i.kind] || 'done';
+    // One plain sentence per notification, for the client's people.
+    function clientText(i) {
+      const who = i.actor || 'Someone';
+      switch (i.action) {
+        case 'added': return i.kind === 'question' ? `${who} asked a question: ${q(i.title)}` : `${who} added a ${KIND_WORD[i.kind] || 'item'} to your list: ${q(i.title)}`;
+        case 'answered': return `${who} answered ${q(i.title)}`;
+        case 'done': return `${who} marked ${q(i.title)} ${done(i)}`;
+        case 'reopened': return `${who} reopened ${q(i.title)}`;
+        case 'phase': return `${q(i.title)} is scheduled: ${(i.detail.split('→')[1] || i.detail).trim()}`;
+        case 'signed_off': return `${who} signed off ${i.title}`;
+        case 'uat_started': return `${i.title} is ready for you to test`;
+        case 'live': return `${i.title} is live`;
+        case 'shared': return `New ${DOC_WORD[i.detail] || 'document'} shared with you: ${q(i.title)}`;
+        case 'idea_status': return `Positive Tribes replied to your hub idea ${q(i.title)}`;
+        default: return q(i.title);
+      }
+    }
+    const clientDetail = i => ['answered', 'idea_status'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
+    // Inbox rows, for Positive Tribes.
+    function ptText(i) {
+      const who = i.actor || 'Someone';
+      const verb = {
+        added: i.kind === 'idea' ? `suggested a hub idea ${q(i.title)}` : i.kind === 'question' ? `asked ${q(i.title)}` : `added a ${KIND_WORD[i.kind] || 'item'} ${q(i.title)}`,
+        answered: `answered ${q(i.title)}`, done: `marked ${q(i.title)} ${done(i)}`, reopened: `reopened ${q(i.title)}`,
+        signed_off: `signed off ${i.title}`, edited: `edited ${q(i.title)}`, tier: `changed the priority of ${q(i.title)}`,
+        phase: `moved ${q(i.title)}`, deleted: `deleted ${q(i.title)}`
+      }[i.action] || `changed ${q(i.title)}`;
+      return `${who} ${verb}` + (i.eventIds.length > 1 ? ` (${i.eventIds.length} changes)` : '');
+    }
+    function reminderText(r) {
+      if (r.type === 'questions') return `${r.count} must-answer question${r.count === 1 ? ' is' : 's are'} waiting for your team`;
+      const when = r.daysLeft === 0 ? 'today' : r.daysLeft === 1 ? 'tomorrow' : 'in ' + r.daysLeft + ' days';
+      return `${r.title} testing ends ${when}` + (r.autoAccept ? ', then it is accepted automatically unless problems are listed' : '');
+    }
+
+    function paint() {
+      const count = !data ? 0 : isPt() ? data.items.length : data.unread;
+      $('bell-count').textContent = count > 99 ? '99+' : String(count);
+      $('bell-count').hidden = !count;
+      $('bell').setAttribute('aria-label', count ? `Notifications, ${count} ${isPt() ? 'new' : 'unread'}` : 'Notifications');
+      if (isOpen()) drawPanel();
+    }
+
+    function drawPanel() {
+      const p = panel();
+      if (!data) { p.replaceChildren(h('p', { class: 'bp-empty' }, 'Loading…')); return; }
+      const pt = isPt(), preview = Boolean(state.preview);
+      const items = data.items.slice(0, 15);
+      const row = (i, n) => {
+        const text = pt ? ptText(i) : clientText(i);
+        const detail = pt ? i.detail : clientDetail(i);
+        const meta = [pt ? i.client : '', ago(i.at)].filter(Boolean).join(' · ');
+        const unread = pt || !i.read;
+        return h('li', { class: unread ? 'unread' : '' },
+          h('a', { class: 'bp-row', href: i.url, onclick: () => { open(false); if (!pt && !i.read && !preview) markRead([i.id]); } },
+            h('span', { class: 'bp-dot', 'aria-hidden': 'true' }),
+            h('span', { class: 'bp-body' },
+              h('span', { class: 'bp-text' }, unread && !pt ? h('span', { class: 'visually-hidden' }, 'Unread: ') : null, text),
+              detail ? h('p', { class: 'bp-detail' }, detail) : null,
+              h('div', { class: 'bp-meta' }, meta))),
+          pt ? h('div', { class: 'bp-actions' }, h('button', { class: 'bp-link', type: 'button', onclick: () => clearInbox([i]) }, 'Clear')) : null);
+      };
+      const reminders = pt ? [] : data.reminders.map(r => h('li', { class: 'bp-pin' },
+        h('a', { class: 'bp-row', href: r.url, onclick: () => open(false) }, h('span', { class: 'bp-dot', 'aria-hidden': 'true' }), h('span', { class: 'bp-body' }, h('span', { class: 'bp-text' }, reminderText(r))))));
+      const action = pt ? null : !preview && data.unread ? h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all') }, 'Mark all read') : null;
+      const empty = pt ? 'Nothing new from clients.' : 'You’re all caught up.';
+      p.replaceChildren(
+        h('div', { class: 'bp-head' }, h('h2', {}, preview ? state.preview.name + '’s notifications' : 'Notifications'), action),
+        reminders.length || items.length ? h('ul', {}, ...reminders, ...items.map(row)) : h('p', { class: 'bp-empty' }, empty),
+        pt ? h('div', { class: 'bp-foot' }, h('a', { href: '#/command/inbox', onclick: () => open(false) }, data.items.length > items.length ? `See all ${data.items.length} in the Inbox` : 'Open the Inbox')) : null);
+    }
+
+    async function load() {
+      if (!state.me) return;
+      try {
+        data = isPt() ? await api('/admin/inbox')
+          : state.preview ? await api(base() + '/notifications?as=' + encodeURIComponent(state.preview.email))
+          : state.me.user.role === 'pt' ? null : await api('/notifications');
+        loadedAt = Date.now(); loadedFor = whose();
+      } catch { /* The bell never gets in the way of the page. */ }
+      paint();
+    }
+    async function markRead(ids) {
+      try { data = await api('/notifications/read', { method: 'POST', body: JSON.stringify(ids === 'all' ? { all: true } : { ids }) }); paint(); } catch (e) { showError(e.message); }
+    }
+    async function clearInbox(rows) {
+      try {
+        await api('/admin/inbox/clear', { method: 'POST', body: JSON.stringify({ items: rows.map(i => ({ backlog: i.backlog, eventIds: i.eventIds })) }) });
+        await load();
+        // The Inbox tab shows the same list, so it follows.
+        const badge = $('cc-inbox-count');
+        if (badge) badge.textContent = data && data.items.length ? String(data.items.length) : '';
+        if (command && /^#\/command\/inbox/.test(location.hash)) command.refresh();
+      } catch (e) { showError(e.message); }
+    }
+    function open(show) {
+      panel().hidden = !show;
+      $('bell').setAttribute('aria-expanded', String(show));
+      if (show) { drawPanel(); if (Date.now() - loadedAt > 15000) load(); }
+    }
+    $('bell').addEventListener('click', e => { e.stopPropagation(); open(!isOpen()); });
+    document.addEventListener('click', e => { if (isOpen() && !$('bell-wrap').contains(e.target)) open(false); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) { open(false); $('bell').focus(); } });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - loadedAt > 30000) load(); });
+    // The command center's Inbox tells the bell when it clears something.
+    window.addEventListener('hub-inbox-changed', () => { if (isPt()) load(); });
+    return {
+      start() {
+        // Positive Tribes previewing nobody in a client workspace still sees its own Inbox here.
+        $('bell-wrap').hidden = false;
+        load();
+        clearInterval(timer);
+        timer = setInterval(() => { if (!document.hidden) load(); }, 120000);
+      },
+      // After a route or preview change: the preview changes whose bell this is.
+      refresh(force = false) {
+        if (force || loadedFor !== whose()) { data = null; paint(); load(); }
+        else if (Date.now() - loadedAt > 30000) load();
+      }
+    };
+  })();
+
   $('switch').addEventListener('change', e => {
     location.hash = e.target.value === COMMAND ? '#/command' : '#/' + e.target.value + '/home';
   });
@@ -937,15 +1106,16 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     Object.assign(state, { editing: null, confirming: null, signing: null, ideaEditing: null });
     showError('');
     render();
+    bell.refresh(true);
   }
   $('preview').addEventListener('change', e => setPreview(e.target.value));
-  window.addEventListener('hashchange', () => state.me && route());
+  window.addEventListener('hashchange', () => { if (state.me) { route(); bell.refresh(); } });
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden || !state.client || state.editing || state.mode === COMMAND) return;
     try { state.items = (await api(base() + '/items')).items; render(); } catch {}
   });
   (async () => {
-    try { state.me = await api('/me'); await route(); }
+    try { state.me = await api('/me'); bell.start(); await route(); }
     catch (e) { $('main').replaceChildren(h('div', { class: 'card stack' }, h('h2', {}, 'We couldn’t open your workspace'), h('p', { class: 'muted' }, e.message))); }
   })();
 })();
