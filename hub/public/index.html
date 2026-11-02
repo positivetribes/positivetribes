@@ -173,6 +173,82 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 .admin-field{display:flex;align-items:center;gap:8px;font-weight:600}
 .admin-field select[hidden]{display:none}
 .admin-field:has(select[hidden]){display:none}
+/* Command center (Positive Tribes' home page). Scoped under .cc so it never changes a client workspace. */
+body.wide .shell{max-width:1240px}
+.badge:empty{display:none}
+.cc-bar{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:6px 0 22px}
+.cc-bar nav.tabs{margin:0;flex:1 1 auto}
+.cc-sync.late{color:var(--nice)}
+.cc{font-size:15px;line-height:1.55}
+.cc a{color:inherit}
+.cc h2{font-size:20px;margin-bottom:12px}
+.cc h2.greet{font-size:clamp(26px,4vw,34px);margin:0}
+.cc h3{font-family:var(--font);font-size:16px;font-weight:700;margin-top:16px}
+.cc .small{font-size:13px}
+.cc .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.cc button,.cc .button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 11px;text-decoration:none;display:inline-block;min-height:32px}
+.cc button:hover,.cc .button:hover{border-color:var(--ink)}
+.cc button.primary,.cc .button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.cc button.link{border:0;background:none;padding:2px 4px;color:var(--muted);text-decoration:underline;min-height:0}
+.cc button:disabled{opacity:.5;cursor:default}
+.cc .banner{padding:10px 14px;border-radius:10px;background:var(--nice-bg);color:var(--nice);margin-bottom:18px;font-size:14px}
+.cc .head{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:22px}
+.cc .head .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.cc .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;align-items:start}
+.cc .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.cc .count{font-size:13px;color:var(--muted);margin-left:6px}
+.cc ul.items{list-style:none;margin:0;padding:0}
+.cc ul.items li{padding:10px 0;border-top:1px solid var(--line)}
+.cc ul.items li:first-child{border-top:0;padding-top:0}
+.cc .step-actions{margin-top:6px}
+.cc .day{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--rust);font-weight:700;margin:16px 0 4px}
+.cc .day:first-child{margin-top:0}
+.cc .row{display:flex;gap:4px 8px;align-items:baseline;flex-wrap:wrap}
+.cc .row>*{flex:0 1 auto}
+.cc .row .grow{flex:1 1 200px;min-width:0}
+.cc .row h2.grow{margin:0}
+.cc .title{overflow-wrap:anywhere}
+.cc .title a{text-decoration:none}.cc .title a:hover{text-decoration:underline}
+.cc .chip{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 8px;border-radius:20px;background:var(--soft);color:var(--muted);max-width:100%}
+.cc .chip.warn{background:var(--nice-bg);color:var(--nice)}
+.cc .chip.claude{background:none;border:1px dashed var(--muted)}
+.cc .client-link{color:var(--rust);text-decoration:none;font-weight:600;font-size:13px}
+.cc .links{margin:-6px 0 12px}
+.cc .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px}
+.cc .card{display:flex;flex-direction:column;gap:10px;text-decoration:none}
+.cc .card:hover{border-color:var(--ink)}
+.cc .card.inactive{opacity:.7}
+.cc .stages{display:flex;flex-wrap:wrap;gap:6px}
+.cc .detail{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:22px;align-items:start}
+.cc .detail aside{display:grid;gap:18px}
+.cc .now{display:flex;align-items:center;gap:10px;color:var(--rust);font-weight:700;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;margin:18px 0}
+.cc .now:before,.cc .now:after{content:"";flex:1;height:2px;background:var(--rust)}
+.cc form.inline{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.cc form.inline input[type=text]{flex:1 1 180px;width:auto}
+.cc form.inline .err{flex-basis:100%;margin:0}
+.cc input[type=text],.cc input[type=date],.cc textarea{font-size:14px;padding:7px 9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
+.cc textarea{width:100%;min-height:64px}
+.cc label.check{display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-weight:400;font-size:inherit;margin:0}
+.cc label.check input{margin-top:4px}
+.cc details{margin-top:12px}
+.cc details summary{cursor:pointer;font-weight:600}
+.cc details[open] summary{margin-bottom:10px}
+.cc .note-save{margin:8px 0 0}
+.cc .empty{font-size:14px}
+.cc #meta p{margin:10px 0 4px}
+.cc .err{color:var(--rust);font-size:13px;min-height:1em}
+.cc .countdown{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px;text-decoration:none;border-left:6px solid var(--rust)}
+.cc .countdown:hover{border-color:var(--ink)}
+.cc .countdown .days{font-family:var(--display);font-size:40px;line-height:1}
+.cc .countdown.soon .days{color:var(--nice)}.cc .countdown.over .days{color:var(--rust)}
+.cc .nowcard{border-left:6px solid var(--rust);margin-bottom:22px}
+.cc .nowcard .label{margin:0 0 6px}
+.cc .nowcard h2{font-size:26px;margin-bottom:6px;overflow-wrap:anywhere}
+.cc .nowcard h2 a{text-decoration:none}.cc .nowcard h2 a:hover{text-decoration:underline}
+.cc .nowcard .why{margin:0 0 12px}
+.cc .nowcard .later{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+.cc .said{margin:6px 0 0;font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere;border-left:3px solid var(--line);padding-left:10px}
+@media (max-width:1000px){.cc .cols,.cc .detail{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:520px){.shell{padding-inline:14px}.who{display:none}.card{padding:16px}}
 @media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
 </style>
@@ -192,6 +268,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   <div id="error" class="error" role="alert" hidden></div>
   <main id="main" aria-live="polite"><p class="muted">Loading your workspace…</p></main>
 </div>
+<script src="/command.js"></script>
 <dialog id="shot-view" class="shot-view" aria-label="Screenshot"><div class="bar"><a class="btn small" id="shot-open" target="_blank" rel="noopener">Open full size</a><button class="btn small" type="button" id="shot-close">Close</button></div><img id="shot-img" alt=""></dialog>
 <script>
 (() => {
@@ -206,7 +283,9 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
   const STEPS = [['kickoff', 'Kickoff'], ['discovery', 'Discovery'], ['prototype', 'Prototype'], ['build', 'Build'], ['uat', 'Testing'], ['launch', 'Launch'], ['hypercare', 'Settling in'], ['support', 'Support']];
   const $ = id => document.getElementById(id);
-  const COMMAND_CENTER = 'https://positivetribes.org/admin/';
+  // Positive Tribes' home page: the command center, drawn by command.js under the same header.
+  const COMMAND = 'command';
+  let command = null;
   const LOOP = ['build', 'uat'];
   const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
@@ -281,10 +360,19 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 
   async function route() {
     showError('');
+    const ptUser = state.me.user.role === 'pt';
+    // Positive Tribes lands on the command center; #/command/inbox, #/command/clients, #/command/client/<id> are its views.
+    const cmd = location.hash.match(/^#\/command(?:\/(.*))?$/);
+    if (ptUser && (cmd || !location.hash.replace(/^#\/?/, ''))) { renderCommand(cmd ? cmd[1] || '' : ''); return; }
+    state.mode = 'client';
+    document.body.classList.remove('wide');
     const [, slug, view, id] = location.hash.match(/^#\/([a-z0-9-]*)\/?([a-z]*)\/?(\d*)/) || [];
-    const wanted = slug || (state.me.clients[0] && state.me.clients[0].slug);
+    const wanted = (slug !== COMMAND && slug) || (state.me.clients[0] && state.me.clients[0].slug);
     if (!wanted) { $('main').replaceChildren(h('div', { class: 'card' }, h('h2', {}, 'Welcome'), h('p', { class: 'muted' }, 'There are no workspaces for you yet. Positive Tribes will set one up.'))); return; }
     try { if (wanted !== state.slug) await loadClient(wanted); } catch (e) { showError(e.message); return; }
+    // Coming back from the command center to the same client restores its accent and title.
+    document.documentElement.style.setProperty('--client', state.client.accent);
+    document.title = state.client.name + ' | Positive Tribes';
     state.view = view === 'backlog' || view === 'problems' ? 'backlog' : view === 'ideas' ? 'ideas' : 'home';
     // #/uep/problems opens the test problems of the project being tested (the link in UAT scripts).
     if (view === 'problems') {
@@ -305,19 +393,20 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     }
   }
 
-  function render() {
-    if (!state.client) return;
-    const isPt = viewer().role === 'pt';
+  // The header and admin bar, the same on the command center and in every client workspace.
+  function renderBar() {
+    const inCommand = state.mode === COMMAND;
     const sw = $('switch');
     // A client's person only ever sees their own workspace, so the client switch hides during a preview.
     const ptUser = state.me.user.role === 'pt';
     sw.hidden = (state.me.clients.length < 2 && !ptUser) || Boolean(state.preview);
-    // Positive Tribes' own entry leaves the hub for the command center, where its own work lives.
+    // Positive Tribes' own entry is the command center, its home page here in the hub.
     sw.replaceChildren(
-      ...ptUser ? [h('option', { value: COMMAND_CENTER }, 'Positive Tribes (command center)'), h('option', { disabled: true }, '\u2500\u2500\u2500\u2500\u2500\u2500')] : [],
-      ...state.me.clients.map(c => h('option', { value: c.slug, ...(c.slug === state.slug ? { selected: true } : {}) }, c.name)));
+      ...ptUser ? [h('option', { value: COMMAND, ...(inCommand ? { selected: true } : {}) }, 'Positive Tribes (command center)'), h('option', { disabled: true }, '\u2500\u2500\u2500\u2500\u2500\u2500')] : [],
+      ...state.me.clients.map(c => h('option', { value: c.slug, ...(!inCommand && c.slug === state.slug ? { selected: true } : {}) }, c.name)));
     const pv = $('preview');
-    pv.hidden = state.me.user.role !== 'pt' || !state.people.length;
+    // Preview as is about one client's people, so it shows only inside a client workspace.
+    pv.hidden = !ptUser || inCommand || !state.people.length;
     pv.replaceChildren(h('option', { value: '' }, 'Off (your view)'), ...state.people.map(u =>
       h('option', { value: u.email, ...(state.preview && state.preview.email === u.email ? { selected: true } : {}) }, u.name + ' (' + ROLE_NAMES[u.role] + ')')));
     $('admin-bar').hidden = sw.hidden && pv.hidden && !state.preview;
@@ -327,6 +416,41 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('span', {}, 'Previewing as ', h('b', {}, state.preview.name), ' (' + ROLE_NAMES[state.preview.role] + ') \u00b7 read-only. They also need to be on the Access list to sign in.'),
       h('button', { type: 'button', onclick: () => setPreview('') }, 'Exit preview')] : []));
     $('who').textContent = viewer().name || viewer().email;
+  }
+
+  // ---- Command center (Positive Tribes only): Today, Inbox, Clients and each client's page ----
+  function renderCommand(sub) {
+    const first = state.mode !== COMMAND;
+    Object.assign(state, { mode: COMMAND, preview: null, editing: null, confirming: null, signing: null, ideaEditing: null });
+    document.body.classList.add('wide');
+    document.documentElement.style.setProperty('--client', 'var(--rust)');
+    renderBar();
+    command = command || window.CommandCenter({ api });
+    const { view } = command.viewOf(sub);
+    const tab = (key, href, label, extra) => h('a', { href, ...(view === key || (key === 'clients' && view === 'client') ? { 'aria-current': 'page' } : {}) }, label, extra);
+    const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
+    const keep = !first && $('cc') && $('cc-tabs');
+    if (keep) {
+      // Moving between command center views keeps the hero and tab row; only the view below changes.
+      $('cc-tabs').replaceChildren(tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', $('cc-inbox-count')), tab('clients', '#/command/clients', 'Clients'));
+      $('cc').replaceWith(box);
+    } else {
+      $('main').replaceChildren(
+        h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Command center'), h('h1', {}, 'Positive Tribes')),
+        h('div', { class: 'cc-bar' },
+          h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' },
+            tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', h('span', { class: 'badge', id: 'cc-inbox-count' })), tab('clients', '#/command/clients', 'Clients')),
+          h('span', { class: 'meta cc-sync', id: 'cc-sync' }),
+          h('button', { class: 'btn ghost small', type: 'button', onclick: () => command.refresh() }, 'Refresh')),
+        box);
+    }
+    command.show(box, sub);
+  }
+
+  function render() {
+    if (!state.client || state.mode === COMMAND) return;
+    const isPt = viewer().role === 'pt';
+    renderBar();
     const waiting = open(state.items).filter(i => i.kind === 'question').length;
     $('main').replaceChildren(
       h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Your workspace'), h('h1', {}, state.client.name)),
@@ -782,8 +906,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   }
 
   $('switch').addEventListener('change', e => {
-    if (e.target.value === COMMAND_CENTER) { e.target.value = state.slug; location.href = COMMAND_CENTER; return; }
-    location.hash = '#/' + e.target.value + '/home';
+    location.hash = e.target.value === COMMAND ? '#/command' : '#/' + e.target.value + '/home';
   });
   function setPreview(email) {
     state.preview = state.people.find(u => u.email === email) || null;
@@ -794,7 +917,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   $('preview').addEventListener('change', e => setPreview(e.target.value));
   window.addEventListener('hashchange', () => state.me && route());
   document.addEventListener('visibilitychange', async () => {
-    if (document.hidden || !state.client || state.editing) return;
+    if (document.hidden || !state.client || state.editing || state.mode === COMMAND) return;
     try { state.items = (await api(base() + '/items')).items; render(); } catch {}
   });
   (async () => {

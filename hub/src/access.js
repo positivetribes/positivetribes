@@ -18,10 +18,14 @@ async function signingKey(team, kid) {
   return keys.get(kid) || null;
 }
 
-// Returns { email } or null. HUB_DEV=1 on localhost trusts the x-dev-email header (never set in Cloudflare).
-export async function signedInEmail(request, env, url) {
+// Returns { email } for a person, { service } for an Access service token (the daily sync routine), or null.
+// HUB_DEV=1 on localhost trusts the x-dev-email and x-dev-service headers (never set in Cloudflare).
+export async function accessIdentity(request, env, url) {
   if (env.HUB_DEV === '1' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1')) {
-    return (request.headers.get('x-dev-email') || '').toLowerCase() || null;
+    const service = request.headers.get('x-dev-service');
+    if (service) return { service };
+    const email = (request.headers.get('x-dev-email') || '').toLowerCase();
+    return email ? { email } : null;
   }
   const team = env.ACCESS_TEAM_DOMAIN, aud = env.ACCESS_AUD;
   if (!team || !aud || !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(team)) return null;
@@ -39,9 +43,17 @@ export async function signedInEmail(request, env, url) {
     if (!(claims.exp > now) || (claims.nbf && claims.nbf > now + 60)) return null;
     if (claims.iss !== `https://${team}`) return null;
     if (!(Array.isArray(claims.aud) ? claims.aud : [claims.aud]).includes(aud)) return null;
-    return claims.email ? String(claims.email).toLowerCase() : null;
+    if (claims.email) return { email: String(claims.email).toLowerCase() };
+    // A service token has no email; Access puts its client ID in common_name.
+    if (claims.common_name) return { service: String(claims.common_name) };
+    return null;
   } catch (error) {
     console.error('hub_access_error', error.message);
     return null;
   }
+}
+
+export async function signedInEmail(request, env, url) {
+  const who = await accessIdentity(request, env, url);
+  return who && who.email || null;
 }
