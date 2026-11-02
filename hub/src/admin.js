@@ -67,11 +67,15 @@ async function body(request) {
 
 // ---- D1 ----
 
-const schemaReady = new WeakMap();
 // Once per isolate per database: running these on every request costs CPU the free plan does not have.
-function ensureSchema(db) {
-  if (!schemaReady.has(db)) {
-    const ready = db.batch([
+// Only a finished setup is remembered. A pending promise shared between requests hangs every later request when the
+// request that started it is cancelled (Workers cancels that request's database calls), so each request runs the setup
+// until one of them finishes it.
+const schemaDone = new WeakSet();
+async function ensureSchema(db) {
+  if (schemaDone.has(db)) return;
+  {
+    await db.batch([
       db.prepare("CREATE TABLE IF NOT EXISTS client_meta (account_id TEXT PRIMARY KEY, links_json TEXT NOT NULL DEFAULT '[]', match_json TEXT NOT NULL DEFAULT '{}', pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN (0,1)), hidden INTEGER NOT NULL DEFAULT 0 CHECK(hidden IN (0,1)))"),
       db.prepare("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, body TEXT NOT NULL, created_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"),
       db.prepare("CREATE TABLE IF NOT EXISTS next_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, title TEXT NOT NULL, due_date TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','dismissed')), source TEXT NOT NULL DEFAULT 'you' CHECK(source IN ('you','claude')), external_id TEXT UNIQUE, done_at TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), sf_task_id TEXT, owner TEXT NOT NULL DEFAULT '')"),
@@ -81,19 +85,17 @@ function ensureSchema(db) {
       db.prepare('CREATE INDEX IF NOT EXISTS notes_account ON notes(account_id)'),
       db.prepare('CREATE INDEX IF NOT EXISTS steps_account ON next_steps(account_id)'),
       db.prepare('CREATE INDEX IF NOT EXISTS activity_account ON activity(account_id, occurred_at)')
-    ]).then(async () => {
-      // Databases made before steps synced with Salesforce Tasks gain the two columns once.
-      const columns = (await db.prepare('PRAGMA table_info(next_steps)').all()).results.map(c => c.name);
-      if (!columns.includes('sf_task_id')) await db.batch([
-        db.prepare('ALTER TABLE next_steps ADD COLUMN sf_task_id TEXT'),
-        db.prepare("ALTER TABLE next_steps ADD COLUMN owner TEXT NOT NULL DEFAULT ''")
-      ]);
-      await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS steps_sf_task ON next_steps(sf_task_id)').run();
-    });
-    schemaReady.set(db, ready);
-    ready.catch(() => schemaReady.delete(db));
+    ]);
+    // Databases made before steps synced with Salesforce Tasks gain the two columns once.
+    const columns = (await db.prepare('PRAGMA table_info(next_steps)').all()).results.map(c => c.name);
+    const added = [['sf_task_id', 'ALTER TABLE next_steps ADD COLUMN sf_task_id TEXT'], ['owner', "ALTER TABLE next_steps ADD COLUMN owner TEXT NOT NULL DEFAULT ''"]];
+    for (const [name, sql] of added) {
+      // Two requests can both find the column missing; the second one's "duplicate column" error is harmless.
+      if (!columns.includes(name)) await db.prepare(sql).run().catch(error => { if (!/duplicate column/i.test(error.message)) throw error; });
+    }
+    await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS steps_sf_task ON next_steps(sf_task_id)').run();
   }
-  return schemaReady.get(db);
+  schemaDone.add(db);
 }
 
 const parse = (value, fallback) => { try { return JSON.parse(value); } catch { return fallback; } };
@@ -508,8 +510,8 @@ async function syncStep(env, db, before, after) {
 async function reconcileSteps(env, db, openTasks, accountIds) {
   const auth = await salesforce(env);
   const inView = new Set(accountIds);
-  const marks = accountIds.map(() => '?').join(',');
-  const rows = (await db.prepare(`SELECT * FROM next_steps WHERE account_id IN (${marks}) AND (sf_task_id IS NOT NULL OR (status = 'open' AND source = 'you'))`).bind(...accountIds).all()).results;
+  // The ids go in as one JSON value, not a ? each: D1 allows at most 100 bound values in a query.
+  const rows = (await db.prepare("SELECT * FROM next_steps WHERE account_id IN (SELECT value FROM json_each(?)) AND (sf_task_id IS NOT NULL OR (status = 'open' AND source = 'you'))").bind(JSON.stringify(accountIds)).all()).results;
   const byTask = new Map(rows.filter(r => realTaskId(r.sf_task_id)).map(r => [r.sf_task_id, r]));
   const open = new Set();
   const writes = [], fixes = [];
@@ -570,8 +572,8 @@ async function saveActivity(db, input) {
   const known = new Set();
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
-    const marks = chunk.map(() => '?').join(',');
-    const found = await db.prepare(`SELECT external_id FROM activity WHERE external_id IN (${marks}) UNION SELECT external_id FROM next_steps WHERE external_id IN (${marks})`).bind(...chunk, ...chunk).all();
+    // One JSON value used twice (?1): a ? per id, twice over, passed D1's limit of 100 bound values.
+    const found = await db.prepare('SELECT external_id FROM activity WHERE external_id IN (SELECT value FROM json_each(?1)) UNION SELECT external_id FROM next_steps WHERE external_id IN (SELECT value FROM json_each(?1))').bind(JSON.stringify(chunk)).all();
     for (const row of found.results) known.add(row.external_id);
   }
   const counts = { added: 0, updated: 0, removed: 0, steps: 0 };
