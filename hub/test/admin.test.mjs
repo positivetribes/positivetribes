@@ -18,8 +18,10 @@ const keys = await crypto.subtle.generateKey(algorithm, true, ['sign', 'verify']
 const strangerKeys = await crypto.subtle.generateKey(algorithm, true, ['sign', 'verify']);
 const publicJwk = { ...await crypto.subtle.exportKey('jwk', keys.publicKey), kid: 'key-1' };
 const realFetch = globalThis.fetch;
-globalThis.fetch = async (input) => {
+let fakeSalesforce = null;
+globalThis.fetch = async (input, init) => {
   if (String(input) === `https://${TEAM}/cdn-cgi/access/certs`) return Response.json({ keys: [publicJwk] });
+  if (fakeSalesforce && String(input).startsWith('https://sf.example')) return fakeSalesforce(String(input), init);
   throw new Error('Unexpected fetch ' + input);
 };
 test.after(() => { globalThis.fetch = realFetch; });
@@ -468,4 +470,109 @@ test('each client\'s latest hub visit is its most recent person\'s', () => {
     { slug: 'uep', last_seen_at: '2026-11-01T10:00:00Z' }, { slug: 'uep', last_seen_at: '2026-11-02T09:00:00Z' },
     { slug: 'uep', last_seen_at: null }, { slug: 'safe', last_seen_at: null }
   ]), { uep: '2026-11-02T09:00:00Z' });
+});
+
+// ---- Next steps and Salesforce Tasks, against a small fake Salesforce ----
+
+const ERIC_USER = '005ERIC00000001', GLENN_USER = '005GLEN00000001', UEP_OPP = '006UEP000000001';
+function fakeOrg() {
+  const org = { tasks: new Map(), next: 1, failWrites: false };
+  const task = (id, fields) => org.tasks.set(id, { Id: id, AccountId: UEP, CreatedDate: '2026-10-28T15:00:00.000+0000', ActivityDate: null, IsClosed: false, OwnerId: ERIC_USER, Owner: { Name: 'Eric Roberts' }, ...fields });
+  org.task = task;
+  fakeSalesforce = async (url, init = {}) => {
+    const { pathname, searchParams } = new URL(url);
+    if (pathname === '/services/oauth2/token') return Response.json({ access_token: 't', instance_url: 'https://sf.example' });
+    const path = pathname.replace('/services/data/v62.0', '');
+    if (path === '/query') {
+      const q = searchParams.get('q');
+      const rows = list => Response.json({ records: list });
+      if (/FROM Account WHERE Id/.test(q)) return rows([{ Id: UEP, Name: "Up Ending Parkinson's", Opportunities: { records: [{ Id: UEP_OPP, Name: 'Scheduler', StageName: 'Build', CloseDate: '2026-12-01', IsClosed: false }] } }]);
+      if (/FROM Opportunity WHERE AccountId/.test(q)) return rows([{ Id: UEP_OPP }]);
+      if (/FROM Task WHERE Id IN/.test(q)) { const ids = [...q.matchAll(/'([^']+)'/g)].map(m => m[1]); return rows([...org.tasks.values()].filter(t => ids.includes(t.Id))); }
+      if (/FROM Task WHERE AccountId =/.test(q)) return rows([...org.tasks.values()]);
+      return rows([]);
+    }
+    if (org.failWrites) return Response.json([{ errorCode: 'UNAVAILABLE' }], { status: 503 });
+    const body = init.body ? JSON.parse(init.body) : {};
+    if (path === '/sobjects/Task' && init.method === 'POST') {
+      const id = '00T' + String(org.next++).padStart(12, '0');
+      task(id, { ...body, IsClosed: body.Status === 'Completed', AccountId: UEP, Owner: { Name: 'Eric Roberts' } });
+      return Response.json({ id, success: true }, { status: 201 });
+    }
+    const one = path.match(/^\/sobjects\/Task\/(\w+)$/);
+    if (one) {
+      const t = org.tasks.get(one[1]);
+      if (!t) return Response.json([{ errorCode: 'NOT_FOUND' }], { status: 404 });
+      if (init.method === 'DELETE') { org.tasks.delete(t.Id); return new Response(null, { status: 204 }); }
+      Object.assign(t, body, body.Status ? { IsClosed: body.Status === 'Completed' } : {});
+      return new Response(null, { status: 204 });
+    }
+    throw new Error('Unexpected Salesforce call ' + path);
+  };
+  return org;
+}
+const SF = { SF_DOMAIN: 'https://sf.example', SF_CLIENT_ID: 'id', SF_CLIENT_SECRET: 'secret', SF_TASK_OWNER_ID: ERIC_USER, SF_TASK_SYNC_HOST: 'hub.positivetribes.org' };
+
+test('a preview on another host never writes Salesforce Tasks', async () => {
+  const org = fakeOrg();
+  const { db } = database();
+  const r = await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'Preview step' }, { env: { ...SF, SF_TASK_SYNC_HOST: 'other.example' } });
+  assert.equal(r.body.salesforce, 'off');
+  assert.equal(org.tasks.size, 0);
+  fakeSalesforce = null;
+});
+
+test('a step added in the hub becomes a Salesforce Task, and finishing or removing it follows', async () => {
+  const org = fakeOrg();
+  const { db, sqlite } = database();
+  const step = (await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'Send revised scope', dueDate: '2026-11-04' }, { env: SF })).body;
+  assert.equal(step.salesforce, 'ok');
+  const taskId = sqlite.prepare('SELECT sf_task_id FROM next_steps WHERE id = ?').get(step.id).sf_task_id;
+  assert.deepEqual(['Subject', 'ActivityDate', 'WhatId', 'Status', 'OwnerId'].map(k => org.tasks.get(taskId)[k]), ['Send revised scope', '2026-11-04', UEP_OPP, 'Not Started', ERIC_USER]);
+
+  await call(db, 'PATCH', `/api/admin/steps/${step.id}`, { status: 'done' }, { env: SF });
+  assert.equal(org.tasks.get(taskId).Status, 'Completed');
+
+  const other = (await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'Drop this' }, { env: SF })).body;
+  const otherTask = sqlite.prepare('SELECT sf_task_id FROM next_steps WHERE id = ?').get(other.id).sf_task_id;
+  await call(db, 'PATCH', `/api/admin/steps/${other.id}`, { status: 'dismissed' }, { env: SF });
+  assert.equal(org.tasks.has(otherTask), false);
+  fakeSalesforce = null;
+});
+
+test('the client page brings in open Tasks and follows what changed in Salesforce', async () => {
+  const org = fakeOrg();
+  const { db, sqlite } = database();
+  org.task('00TGLENN0000001', { Subject: 'Draft close-call talking points', OwnerId: GLENN_USER, Owner: { Name: 'Glenn Hadley' } });
+  org.task('00TMAIL00000001', { Subject: 'Email: Hello', IsClosed: true });
+  org.task('00TOPEN00000001', { Subject: 'Quote the fundraising pages', ActivityDate: '2026-11-04' });
+  const page = async () => (await call(db, 'GET', `/api/admin/clients/${UEP}`, undefined, { env: SF })).body;
+
+  let view = await page();
+  assert.deepEqual(view.steps.map(s => [s.title, s.owner]), [['Quote the fundraising pages', ''], ['Draft close-call talking points', 'Glenn Hadley']]);
+  assert.ok(view.steps.every(s => s.url.endsWith('/view')), 'each step links to its Task');
+  assert.equal([...view.future, ...view.past].filter(i => i.type === 'task').length, 0, 'a Task that is a step shows once');
+  assert.equal([...view.future, ...view.past].filter(i => i.type === 'email').length, 1);
+
+  // Closed and deleted in Salesforce; a suggestion stays in the hub; a step saved while Salesforce was down catches up.
+  org.tasks.get('00TOPEN00000001').IsClosed = true;
+  org.tasks.delete('00TGLENN0000001');
+  org.failWrites = true;
+  assert.equal((await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'Call Molly' }, { env: SF })).body.salesforce, 'error');
+  org.failWrites = false;
+  sqlite.prepare("INSERT INTO next_steps (account_id, title, source, external_id) VALUES (?, 'Suggested idea', 'claude', 'x:1')").run(UEP);
+  view = await page();
+  assert.deepEqual(view.steps.map(s => s.title).sort(), ['Call Molly', 'Suggested idea']);
+  assert.deepEqual(sqlite.prepare('SELECT title, status FROM next_steps WHERE sf_task_id LIKE ? ORDER BY title').all('00T%').map(r => [r.title, r.status]),
+    [['Call Molly', 'open'], ['Draft close-call talking points', 'dismissed'], ['Quote the fundraising pages', 'done']]);
+  assert.equal([...org.tasks.values()].filter(t => t.Subject === 'Suggested idea').length, 0, 'suggestions stay in the hub');
+
+  // Keeping a suggestion sends it; a second load creates nothing new.
+  const idea = sqlite.prepare("SELECT id FROM next_steps WHERE title = 'Suggested idea'").get().id;
+  await call(db, 'PATCH', `/api/admin/steps/${idea}`, { keep: true }, { env: SF });
+  const count = org.tasks.size;
+  await page();
+  assert.equal(org.tasks.size, count);
+  assert.equal([...org.tasks.values()].filter(t => t.Subject === 'Suggested idea').length, 1);
+  fakeSalesforce = null;
 });

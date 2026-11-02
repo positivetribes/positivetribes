@@ -1,4 +1,4 @@
-// Salesforce reads for the command center (same client-credentials flow as ../../donations.mjs on the main site).
+// Salesforce reads and Task writes for the command center (same client-credentials flow as ../../donations.mjs on the main site).
 // SF_DOMAIN, SF_CLIENT_ID and SF_CLIENT_SECRET are Worker secrets, never stored in files.
 export async function salesforceToken(env) {
   const response = await fetch(env.SF_DOMAIN.replace(/\/$/, '') + '/services/oauth2/token', {
@@ -11,7 +11,7 @@ export async function salesforceToken(env) {
   return data;
 }
 
-async function sf(auth, method, path, body) {
+export async function sf(auth, method, path, body) {
   const response = await fetch(auth.instance_url + '/services/data/v62.0' + path, {
     method, headers: { Authorization: 'Bearer ' + auth.access_token, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined
   });

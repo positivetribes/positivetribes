@@ -11,7 +11,12 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   let overview = null, inbox = null, current = { box: null, sub: '' };
 
   const api = (path, options = {}) => hubApi('/admin' + path, options);
-  const send = (path, method, data) => api(path, { method, body: JSON.stringify(data) });
+  // Step changes also go to Salesforce Tasks; the hub keeps the change when Salesforce cannot be reached and retries.
+  const send = async (path, method, data) => {
+    const result = await api(path, { method, body: JSON.stringify(data) });
+    if (result?.salesforce === 'error') alert('Saved here, but Salesforce could not be updated just now. It will catch up the next time this page loads.');
+    return result;
+  };
   const $ = id => document.getElementById(id);
 
   const dayName = day => {
@@ -251,9 +256,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   const lines = v => v.split('\n').map(s => s.trim()).filter(Boolean);
   function renderClient(box, data) {
     const c = data.client;
-    const stepRow = s => `<li><div class="row"><label class="check grow"><input type="checkbox" data-step-done="${s.id}"><span><span class="title">${esc(s.title)}</span>${s.dueDate ? `<span class="meta"> · ${esc(dayName(s.dueDate))}</span>` : ''}</span></label>
+    const stepRow = s => `<li><div class="row"><label class="check grow"><input type="checkbox" data-step-done="${s.id}"><span><span class="title">${esc(s.title)}</span>${s.dueDate ? `<span class="meta"> · ${esc(dayName(s.dueDate))}</span>` : ''}${s.owner ? `<span class="meta"> · ${esc(s.owner)}</span>` : ''}</span></label>
       ${s.source === 'claude' ? `<span class="chip claude">Suggested</span>` : ''}</div>
-      <div class="small">${s.source === 'claude' ? `<button class="link" data-step-keep="${s.id}">Keep</button>` : ''}<button class="link" data-step-dismiss="${s.id}">${s.source === 'claude' ? 'Dismiss' : 'Remove'}</button></div></li>`;
+      <div class="small">${s.source === 'claude' ? `<button class="link" data-step-keep="${s.id}">Keep</button>` : ''}<button class="link" data-step-dismiss="${s.id}"${s.url ? ' data-in-salesforce="1"' : ''}>${s.source === 'claude' ? 'Dismiss' : 'Remove'}</button>${s.url ? `<a class="link" href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener">Salesforce ↗</a>` : ''}</div></li>`;
     const opps = c.opportunities.map(o => `<li><div class="row"><div class="grow"><div class="title"><a href="${esc(safeUrl(o.url))}" target="_blank" rel="noopener">${esc(o.name)}</a></div><div class="meta">${o.open ? 'Target ' + esc(dayName(o.closeDate)) : o.won ? 'Won' : 'Closed'}${o.nextStep ? ' · Next: ' + esc(o.nextStep) : ''}</div></div><span class="chip">${esc(o.stage)}</span></div></li>`).join('');
     const contacts = c.contacts.map(p => `<li><div class="title"><a href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">${esc(p.name)}</a>${p.title ? ` <span class="muted small">${esc(p.title)}</span>` : ''}</div><div class="meta">${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}${p.phone ? ' · ' + esc(p.phone) : ''}</div></li>`).join('');
     const hubPeople = (c.hubPeople || []).map(p => `<li><div class="row"><div class="grow"><div class="title">${esc(p.name || p.email)} <span class="muted small">${esc(ROLE[p.role] || p.role)}</span></div><div class="meta">${p.last_seen_at ? 'Last in the hub ' + esc(seenAgo(p.last_seen_at)) : NOT_SEEN}</div></div></div></li>`).join('');
@@ -315,7 +320,10 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       try {
         if (t.dataset.stepDone) await send('/steps/' + t.dataset.stepDone, 'PATCH', { status: 'done' });
         else if (t.dataset.stepKeep) await send('/steps/' + t.dataset.stepKeep, 'PATCH', { keep: true });
-        else if (t.dataset.stepDismiss) await send('/steps/' + t.dataset.stepDismiss, 'PATCH', { status: 'dismissed' });
+        else if (t.dataset.stepDismiss) {
+          if (t.dataset.inSalesforce && !confirm('Remove this step? Its Salesforce Task is deleted too (it stays in the Salesforce Recycle Bin for 15 days).')) return;
+          await send('/steps/' + t.dataset.stepDismiss, 'PATCH', { status: 'dismissed' });
+        }
         else if (t.dataset.noteDelete) { if (!confirm('Delete this note?')) return; await api('/notes/' + t.dataset.noteDelete, { method: 'DELETE' }); }
         overview = null; again();
       } catch (error) { alert(error.message); }

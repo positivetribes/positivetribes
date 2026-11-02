@@ -3,7 +3,7 @@
 // notes, next steps, links and the activity a daily Claude routine posts from Gmail, Calendar and Fathom.
 // index.js decides who gets here: a signed-in pt user ({ email }) or the sync routine's service token ({ service }).
 
-import { salesforceToken, soql, quote } from './salesforce.js';
+import { salesforceToken, soql, quote, sf as sfRequest } from './salesforce.js';
 import { windowEnd } from './dates.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
@@ -74,14 +74,22 @@ function ensureSchema(db) {
     const ready = db.batch([
       db.prepare("CREATE TABLE IF NOT EXISTS client_meta (account_id TEXT PRIMARY KEY, links_json TEXT NOT NULL DEFAULT '[]', match_json TEXT NOT NULL DEFAULT '{}', pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN (0,1)), hidden INTEGER NOT NULL DEFAULT 0 CHECK(hidden IN (0,1)))"),
       db.prepare("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, body TEXT NOT NULL, created_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"),
-      db.prepare("CREATE TABLE IF NOT EXISTS next_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, title TEXT NOT NULL, due_date TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','dismissed')), source TEXT NOT NULL DEFAULT 'you' CHECK(source IN ('you','claude')), external_id TEXT UNIQUE, done_at TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"),
+      db.prepare("CREATE TABLE IF NOT EXISTS next_steps (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, title TEXT NOT NULL, due_date TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','done','dismissed')), source TEXT NOT NULL DEFAULT 'you' CHECK(source IN ('you','claude')), external_id TEXT UNIQUE, done_at TEXT, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), sf_task_id TEXT, owner TEXT NOT NULL DEFAULT '')"),
       db.prepare("CREATE TABLE IF NOT EXISTS activity (id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('email','meeting','calendar')), occurred_at TEXT NOT NULL, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')))"),
       db.prepare("CREATE TABLE IF NOT EXISTS backlog_cleared (backlog TEXT NOT NULL, event_id INTEGER NOT NULL, cleared_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), PRIMARY KEY (backlog, event_id))"),
       db.prepare("CREATE TABLE IF NOT EXISTS sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ran_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')), added INTEGER NOT NULL, updated INTEGER NOT NULL, removed INTEGER NOT NULL, steps INTEGER NOT NULL, note TEXT NOT NULL DEFAULT '')"),
       db.prepare('CREATE INDEX IF NOT EXISTS notes_account ON notes(account_id)'),
       db.prepare('CREATE INDEX IF NOT EXISTS steps_account ON next_steps(account_id)'),
       db.prepare('CREATE INDEX IF NOT EXISTS activity_account ON activity(account_id, occurred_at)')
-    ]);
+    ]).then(async () => {
+      // Databases made before steps synced with Salesforce Tasks gain the two columns once.
+      const columns = (await db.prepare('PRAGMA table_info(next_steps)').all()).results.map(c => c.name);
+      if (!columns.includes('sf_task_id')) await db.batch([
+        db.prepare('ALTER TABLE next_steps ADD COLUMN sf_task_id TEXT'),
+        db.prepare("ALTER TABLE next_steps ADD COLUMN owner TEXT NOT NULL DEFAULT ''")
+      ]);
+      await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS steps_sf_task ON next_steps(sf_task_id)').run();
+    });
     schemaReady.set(db, ready);
     ready.catch(() => schemaReady.delete(db));
   }
@@ -101,6 +109,7 @@ async function salesforce(env) {
   return tokenCache.auth;
 }
 const sfLink = (env, object, id) => env.SF_DOMAIN.replace(/\/$/, '') + '/lightning/r/' + object + '/' + id + '/view';
+const taskLink = (env, step) => env?.SF_DOMAIN && /^00T/.test(step.sf_task_id || '') ? sfLink(env, 'Task', step.sf_task_id) : undefined;
 const records = async (auth, q) => (await soql(auth, q)).records;
 
 let overviewCache = { at: 0, data: null };
@@ -110,7 +119,7 @@ async function salesforceOverview(env, refresh) {
   const auth = await salesforce(env);
   const [accounts, tasks, events, cases, leads] = await Promise.all([
     records(auth, 'SELECT Id, Name, Type, Website, (SELECT Id, Name, StageName, CloseDate, NextStep, IsClosed, IsWon FROM Opportunities ORDER BY CloseDate) FROM Account WHERE IsPersonAccount = false AND Name != ' + quote(OWN_ACCOUNT) + ' ORDER BY Name LIMIT 200'),
-    records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId, Who.Name FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
+    records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId, OwnerId, Owner.Name, Who.Name FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
     records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId != null AND IsChild = false AND (ActivityDate = LAST_N_DAYS:60 OR ActivityDate = NEXT_N_DAYS:30) ORDER BY ActivityDate LIMIT 300'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, AccountId FROM Case WHERE IsClosed = false ORDER BY CreatedDate DESC LIMIT 100'),
     records(auth, "SELECT Id, Name, Company, Status, Rating, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND (Rating = null OR Rating != 'Cold') ORDER BY CreatedDate DESC LIMIT 50")
@@ -124,7 +133,7 @@ async function salesforceClient(env, accountId) {
   const id = quote(accountId);
   const [accounts, tasks, events, cases, contacts, history] = await Promise.all([
     records(auth, 'SELECT Id, Name, Type, Website, Description, (SELECT Id, Name, StageName, CloseDate, NextStep, IsClosed, IsWon FROM Opportunities ORDER BY CloseDate) FROM Account WHERE Id = ' + id),
-    records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId, Who.Name FROM Task WHERE AccountId = ' + id + ' ORDER BY CreatedDate DESC LIMIT 300'),
+    records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId, OwnerId, Owner.Name, Who.Name FROM Task WHERE AccountId = ' + id + ' ORDER BY CreatedDate DESC LIMIT 300'),
     records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId = ' + id + ' AND IsChild = false ORDER BY ActivityDate DESC LIMIT 200'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, ClosedDate, IsClosed, AccountId FROM Case WHERE AccountId = ' + id + ' ORDER BY CreatedDate DESC LIMIT 100'),
     records(auth, 'SELECT Id, Name, Title, Email, Phone FROM Contact WHERE AccountId = ' + id + ' ORDER BY Name LIMIT 100'),
@@ -143,12 +152,14 @@ export function localDay(value, timeZone = TIME_ZONE) {
 export const addDays = (day, n) => new Date(Date.parse(day + 'T12:00:00Z') + n * 86400e3).toISOString().slice(0, 10);
 
 // Every dated thing about a client becomes one timeline item: { day, at, type, title, detail, accountId, url, source, open, ... }.
-function salesforceItems(env, { tasks = [], events = [], cases = [], history = [], accounts = [] }) {
+function salesforceItems(env, { tasks = [], events = [], cases = [], history = [], accounts = [] }, linked = new Set()) {
   const items = [];
   // Salesforce logs one email as one Task per recipient Contact, so Tasks for the same email (same account, subject and
   // logged time) become one item that names everyone it went to.
   const emails = new Map();
   for (const t of tasks) {
+    // A Task that is also a next step shows once, as the step.
+    if (linked.has(t.Id)) continue;
     const at = t.IsClosed ? (t.ActivityDate || t.CreatedDate) : (t.ActivityDate || null);
     if (!at) continue;
     const email = /^email:/i.test(t.Subject || '');
@@ -175,7 +186,7 @@ function salesforceItems(env, { tasks = [], events = [], cases = [], history = [
   return items;
 }
 
-function localItems({ activity = [], notes = [], steps = [] }) {
+function localItems(env, { activity = [], notes = [], steps = [] }) {
   const items = [];
   for (const a of activity) items.push({ type: a.kind, at: a.occurred_at, title: a.title, detail: a.summary, accountId: a.account_id, url: a.url, source: 'sync', id: a.id });
   for (const n of notes) items.push({ type: 'note', at: n.created_at, title: n.body, accountId: n.account_id, source: 'you', id: n.id });
@@ -183,13 +194,14 @@ function localItems({ activity = [], notes = [], steps = [] }) {
     if (s.status === 'dismissed') continue;
     const at = s.status === 'done' ? s.done_at : s.due_date;
     if (!at) continue;
-    items.push({ type: 'step', at, title: s.title, accountId: s.account_id, source: s.source, open: s.status === 'open', id: s.id });
+    items.push({ type: 'step', at, title: s.title, accountId: s.account_id, source: s.source, open: s.status === 'open', id: s.id, url: taskLink(env, s), detail: s.owner || undefined });
   }
   return items;
 }
 
 const opportunityView = (env, o) => ({ id: o.Id, name: o.Name, stage: o.StageName, closeDate: o.CloseDate, nextStep: o.NextStep || '', open: !o.IsClosed, won: !!o.IsWon, url: sfLink(env, 'Opportunity', o.Id) });
-const stepView = s => ({ id: s.id, accountId: s.account_id, title: s.title, dueDate: s.due_date, status: s.status, source: s.source });
+const stepView = (env, s) => ({ id: s.id, accountId: s.account_id, title: s.title, dueDate: s.due_date, status: s.status, source: s.source, owner: s.owner || '', url: taskLink(env, s) || '' });
+const linkedTasks = steps => new Set(steps.map(s => s.sf_task_id).filter(Boolean));
 // Things that count as being in touch: anything that already happened except a target close date.
 const isTouch = item => !['close', 'stage'].includes(item.type) && !(item.type === 'step' && item.open) && !(item.type === 'task' && item.open);
 
@@ -231,7 +243,7 @@ export function buildOverview(env, sf, local, today) {
   const meta = new Map(local.meta.map(m => [m.account_id, metaRow(m)]));
   const accounts = sf.accounts.filter(a => !meta.get(a.Id)?.hidden);
   const names = new Map(accounts.map(a => [a.Id, a.Name]));
-  const items = [...salesforceItems(env, { ...sf, accounts }), ...localItems(local)]
+  const items = [...salesforceItems(env, { ...sf, accounts }, linkedTasks(local.steps)), ...localItems(env, local)]
     .filter(i => !i.accountId || names.has(i.accountId))
     .map(i => ({ ...i, day: localDay(i.at), client: names.get(i.accountId) || '' }));
   const soon = addDays(today, WINDOW_DAYS), since = addDays(today, -WINDOW_DAYS), staleBefore = addDays(today, -STALE_DAYS);
@@ -247,7 +259,7 @@ export function buildOverview(env, sf, local, today) {
     return {
       id: a.Id, name: a.Name, type: a.Type || '', website: a.Website || '', url: sfLink(env, 'Account', a.Id),
       opportunities, active: opportunities.some(o => o.open), lastTouch: lastTouch.get(a.Id) || null,
-      nextStep: steps[0] ? stepView(steps[0]) : null, openSteps: steps.length, links: m.links, pinned: m.pinned
+      nextStep: steps[0] ? stepView(env, steps[0]) : null, openSteps: steps.length, links: m.links, pinned: m.pinned
     };
   }).sort((x, y) => (y.pinned - x.pinned) || (y.active - x.active) || x.name.localeCompare(y.name));
 
@@ -277,7 +289,7 @@ export function buildOverview(env, sf, local, today) {
 export function buildClient(env, sf, local, today) {
   const m = metaRow(local.meta);
   const account = sf.account;
-  const items = [...salesforceItems(env, { tasks: sf.tasks, events: sf.events, cases: sf.cases, history: sf.history, accounts: [account] }), ...localItems(local)]
+  const items = [...salesforceItems(env, { tasks: sf.tasks, events: sf.events, cases: sf.cases, history: sf.history, accounts: [account] }, linkedTasks(local.steps)), ...localItems(env, local)]
     .map(i => ({ ...i, day: localDay(i.at) }))
     .map(i => ({ ...i, future: i.day > today || (i.day === today && i.open !== false && !['note', 'email', 'stage', 'case'].includes(i.type)) }))
     .sort((x, y) => y.at.localeCompare(x.at));
@@ -289,7 +301,7 @@ export function buildClient(env, sf, local, today) {
       contacts: sf.contacts.map(c => ({ name: c.Name, title: c.Title || '', email: c.Email || '', phone: c.Phone || '', url: sfLink(env, 'Contact', c.Id) })),
       links: m.links, match: m.match, pinned: m.pinned, hidden: m.hidden
     },
-    steps: local.steps.filter(s => s.status === 'open').map(stepView).sort((x, y) => (x.dueDate || '9999').localeCompare(y.dueDate || '9999')),
+    steps: local.steps.filter(s => s.status === 'open').map(s => stepView(env, s)).sort((x, y) => (x.dueDate || '9999').localeCompare(y.dueDate || '9999')),
     future: items.filter(i => i.future).reverse(),
     past: items.filter(i => !i.future)
   };
@@ -444,6 +456,98 @@ function clearInput(input) {
   return pairs;
 }
 
+// ---- Next steps and Salesforce Tasks ----
+// Salesforce is the system of record, so a step Eric keeps is also an open Task there, and every open Task on a client
+// (his, or a teammate's) is a step here. The sync routine's suggestions stay in the hub until Eric keeps or finishes one.
+// Done and removed are final in the hub: a Task still open in Salesforce after either is closed or deleted again.
+const isEmailTask = t => /^email:/i.test(t.Subject || '');
+// Pull request previews share the Salesforce secrets but not the database, so only the configured host writes Tasks.
+const taskSyncOn = (env, url) => salesforceReady(env) && (!env.SF_TASK_SYNC_HOST || url.hostname === env.SF_TASK_SYNC_HOST);
+const realTaskId = id => /^00T/.test(id || '');
+const ownerOf = (env, t) => t.OwnerId && t.OwnerId !== env.SF_TASK_OWNER_ID ? t.Owner?.Name || '' : '';
+const ignoreGone = error => { if (!/^sf_404/.test(error.message)) throw error; };
+
+// Creates the step's Task once. Claiming the row first stops two requests from creating it twice.
+async function pushStep(env, db, auth, step, status = 'Not Started') {
+  const claim = await db.prepare('UPDATE next_steps SET sf_task_id = ? WHERE id = ? AND sf_task_id IS NULL').bind('pending:' + step.id, step.id).run();
+  if (!claim.meta.changes) return;
+  try {
+    // A Task belongs on the client's open opportunity when there is one, like the Tasks Eric adds in Salesforce.
+    const [opp] = await records(auth, 'SELECT Id FROM Opportunity WHERE AccountId = ' + quote(step.account_id) + ' AND IsClosed = false ORDER BY CloseDate LIMIT 1');
+    const task = { Subject: step.title.slice(0, 255), ActivityDate: step.due_date || null, WhatId: opp?.Id || step.account_id, Status: status, Description: 'Added from the Positive Tribes command center.' };
+    if (env.SF_TASK_OWNER_ID) task.OwnerId = env.SF_TASK_OWNER_ID;
+    const { id } = await sfRequest(auth, 'POST', '/sobjects/Task', task);
+    await db.prepare('UPDATE next_steps SET sf_task_id = ? WHERE id = ?').bind(id, step.id).run();
+  } catch (error) {
+    await db.prepare('UPDATE next_steps SET sf_task_id = NULL WHERE id = ?').bind(step.id).run();
+    throw error;
+  }
+}
+
+// After a step is added or changed in the hub.
+async function syncStep(env, db, before, after) {
+  if (!salesforceReady(env)) return;
+  const auth = await salesforce(env);
+  const id = after.sf_task_id;
+  if (!realTaskId(id)) {
+    if (id) return; // another request is creating its Task right now
+    if (after.status === 'done') await pushStep(env, db, auth, after, 'Completed');
+    else if (after.status === 'open' && after.source === 'you') await pushStep(env, db, auth, after);
+    return;
+  }
+  if (after.status === 'dismissed') return sfRequest(auth, 'DELETE', '/sobjects/Task/' + id).catch(ignoreGone);
+  const patch = {};
+  if (before && after.title !== before.title) patch.Subject = after.title.slice(0, 255);
+  if (before && after.due_date !== before.due_date) patch.ActivityDate = after.due_date || null;
+  if (after.status === 'done') patch.Status = 'Completed';
+  if (Object.keys(patch).length) await sfRequest(auth, 'PATCH', '/sobjects/Task/' + id, patch).catch(ignoreGone);
+}
+
+// On each page load: bring in open Tasks, follow what changed in Salesforce, and retry anything that did not reach it.
+// openTasks are the open Tasks Salesforce returned for the accounts in view; accountIds limits the steps looked at.
+async function reconcileSteps(env, db, openTasks, accountIds) {
+  const auth = await salesforce(env);
+  const inView = new Set(accountIds);
+  const marks = accountIds.map(() => '?').join(',');
+  const rows = (await db.prepare(`SELECT * FROM next_steps WHERE account_id IN (${marks}) AND (sf_task_id IS NOT NULL OR (status = 'open' AND source = 'you'))`).bind(...accountIds).all()).results;
+  const byTask = new Map(rows.filter(r => realTaskId(r.sf_task_id)).map(r => [r.sf_task_id, r]));
+  const open = new Set();
+  const writes = [], fixes = [];
+  for (const t of openTasks) {
+    if (t.IsClosed || isEmailTask(t) || !inView.has(t.AccountId)) continue;
+    open.add(t.Id);
+    const row = byTask.get(t.Id), owner = ownerOf(env, t), due = t.ActivityDate || null, title = t.Subject || 'Task';
+    if (!row) writes.push(db.prepare("INSERT OR IGNORE INTO next_steps (account_id, title, due_date, source, sf_task_id, owner) VALUES (?, ?, ?, 'you', ?, ?)").bind(t.AccountId, title, due, t.Id, owner));
+    else if (row.status === 'open') {
+      if (row.title !== title || row.due_date !== due || row.owner !== owner) writes.push(db.prepare('UPDATE next_steps SET title = ?, due_date = ?, owner = ? WHERE id = ?').bind(title, due, owner, row.id));
+    } else fixes.push(syncStep(env, db, null, row));
+  }
+  // Linked open steps whose Task is no longer open: closed there means done here; gone means removed.
+  const missing = rows.filter(r => r.status === 'open' && realTaskId(r.sf_task_id) && !open.has(r.sf_task_id));
+  for (let i = 0; i < missing.length; i += 100) {
+    const chunk = missing.slice(i, i + 100);
+    const found = new Map((await records(auth, 'SELECT Id, IsClosed FROM Task WHERE Id IN (' + chunk.map(r => quote(r.sf_task_id)).join(',') + ')')).map(t => [t.Id, t]));
+    for (const r of chunk) {
+      const t = found.get(r.sf_task_id);
+      if (!t) writes.push(db.prepare("UPDATE next_steps SET status = 'dismissed' WHERE id = ?").bind(r.id));
+      else if (t.IsClosed) writes.push(db.prepare("UPDATE next_steps SET status = 'done', done_at = ? WHERE id = ?").bind(new Date().toISOString(), r.id));
+    }
+  }
+  if (writes.length) await db.batch(writes);
+  // Steps Eric added while Salesforce could not be reached.
+  for (const r of rows.filter(r => r.status === 'open' && r.source === 'you' && !r.sf_task_id).slice(0, 10)) fixes.push(pushStep(env, db, auth, r));
+  const failed = (await Promise.allSettled(fixes)).filter(f => f.status === 'rejected');
+  for (const f of failed) console.error('admin_step_sync_failed', f.reason?.message);
+}
+
+// The step is saved either way; the page says when Salesforce did not take the change.
+async function stepToSalesforce(env, url, db, before, after) {
+  if (!taskSyncOn(env, url)) return 'off';
+  overviewCache.at = 0;
+  try { await syncStep(env, db, before, after); return 'ok'; }
+  catch (error) { console.error('admin_step_sync_failed', error.message); return 'error'; }
+}
+
 // ---- Writes ----
 
 async function saveActivity(db, input) {
@@ -566,6 +670,16 @@ export async function handleAdmin(request, env, url, who) {
     const today = localDay(Date.now());
 
     if (route === 'GET /api/admin/overview') {
+      let sf = { accounts: [], tasks: [], events: [], cases: [], leads: [] }, salesforceStatus = 'off';
+      if (salesforceReady(env)) {
+        try { sf = await salesforceOverview(env, url.searchParams.get('refresh') === '1'); salesforceStatus = 'ok'; }
+        catch (error) { console.error('admin_salesforce_failed', error.message); salesforceStatus = 'error'; }
+      }
+      if (salesforceStatus === 'ok' && taskSyncOn(env, url)) {
+        const hidden = new Set((await db.prepare('SELECT account_id FROM client_meta WHERE hidden = 1').all()).results.map(r => r.account_id));
+        const ids = sf.accounts.map(a => a.Id).filter(id => !hidden.has(id));
+        if (ids.length) await reconcileSteps(env, db, sf.tasks, ids).catch(error => console.error('admin_step_sync_failed', error.message));
+      }
       const [meta, steps, notes, activity, lastSync, inbox, testing, people] = await Promise.all([
         db.prepare('SELECT * FROM client_meta').all(),
         db.prepare("SELECT * FROM next_steps WHERE status = 'open' OR done_at >= ?").bind(addDays(today, -60)).all(),
@@ -577,11 +691,6 @@ export async function handleAdmin(request, env, url, who) {
         hubPeople(env)
       ]);
       const seen = lastSeenBy(people);
-      let sf = { accounts: [], tasks: [], events: [], cases: [], leads: [] }, salesforceStatus = 'off';
-      if (salesforceReady(env)) {
-        try { sf = await salesforceOverview(env, url.searchParams.get('refresh') === '1'); salesforceStatus = 'ok'; }
-        catch (error) { console.error('admin_salesforce_failed', error.message); salesforceStatus = 'error'; }
-      }
       const view = buildOverview(env, sf, { meta: meta.results, steps: steps.results, notes: notes.results, activity: activity.results }, today);
       view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id), hubSeen: seen[workspaceOf(c.id)] || null }));
       return json({ ...view, testing, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, user: who.email });
@@ -598,8 +707,9 @@ export async function handleAdmin(request, env, url, who) {
     if (client && method === 'GET' && !client[2]) {
       const accountId = accountIdOf(client[1]);
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
-      const [sf, meta, steps, notes, activity] = await Promise.all([
-        salesforceClient(env, accountId),
+      const sf = await salesforceClient(env, accountId);
+      if (taskSyncOn(env, url)) await reconcileSteps(env, db, sf.tasks, [accountId]).catch(error => console.error('admin_step_sync_failed', error.message));
+      const [meta, steps, notes, activity] = await Promise.all([
         db.prepare('SELECT * FROM client_meta WHERE account_id = ?').bind(accountId).first(),
         db.prepare('SELECT * FROM next_steps WHERE account_id = ?').bind(accountId).all(),
         db.prepare('SELECT * FROM notes WHERE account_id = ?').bind(accountId).all(),
@@ -637,7 +747,8 @@ export async function handleAdmin(request, env, url, who) {
       const accountId = accountIdOf(input.accountId);
       const title = text(input.title, 300, { required: true, label: 'Step' });
       const { meta } = await db.prepare('INSERT INTO next_steps (account_id, title, due_date) VALUES (?, ?, ?)').bind(accountId, title, dateOf(input.dueDate, 'Due date')).run();
-      return json({ ok: true, id: meta.last_row_id }, 201);
+      const step = await db.prepare('SELECT * FROM next_steps WHERE id = ?').bind(meta.last_row_id).first();
+      return json({ ok: true, id: meta.last_row_id, salesforce: await stepToSalesforce(env, url, db, null, step) }, 201);
     }
     const stepId = path.match(/^\/api\/admin\/steps\/(\d+)$/);
     if (stepId && method === 'PATCH') {
@@ -656,7 +767,8 @@ export async function handleAdmin(request, env, url, who) {
       // Editing or keeping a suggestion makes it Eric's own step.
       const source = 'title' in input || 'dueDate' in input || input.keep === true ? 'you' : step.source;
       await db.prepare('UPDATE next_steps SET title = ?, due_date = ?, status = ?, done_at = ?, source = ? WHERE id = ?').bind(title, due, status, doneAt, source, id).run();
-      return json({ ok: true });
+      const after = await db.prepare('SELECT * FROM next_steps WHERE id = ?').bind(id).first();
+      return json({ ok: true, salesforce: await stepToSalesforce(env, url, db, step, after) });
     }
 
     const docId = path.match(/^\/api\/admin\/documents(?:\/(\d+))?$/);
