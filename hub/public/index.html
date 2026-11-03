@@ -310,7 +310,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 <script>
 (() => {
   const TIER_NAMES = {
-    question: [['must', 'Answer first', 'The plan changes depending on the answer.'], ['nice', 'Answer before the full build', 'Needed before the real build, not for the prototype.'], ['idea', 'Can wait', 'Worth asking eventually. Nothing depends on it yet.']],
+    question: [['must', 'Need an answer soon', 'The plan changes depending on the answer.'], ['nice', 'Need it before we build', 'Not needed for the prototype, but needed before the real build.'], ['idea', 'No rush', 'Nothing depends on it yet.']],
     change: [['must', 'Must have', 'It does not work for its purpose without it.'], ['nice', 'Nice to have', 'Makes it better. In the first release if there is room.'], ['idea', 'Idea for now', 'Worth remembering. Not decided, not promised.']],
     problem: [['must', 'Stops sign-off', 'The phase cannot be accepted until it is fixed.'], ['nice', 'Fix before launch', 'Works, but is confusing or looks wrong.'], ['idea', 'Minor', 'Small polish. Fine to fix later.']],
     request: [['must', 'Urgent', 'Something is stopping your team from working.'], ['nice', 'Soon', 'Important, but you can work around it.'], ['idea', 'When there is time', 'Nice to have.']]
@@ -719,7 +719,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('h2', {}, verb[0]),
       h('div', {}, h('label', { for: 'f-title' }, verb[1]), title),
       h('div', {}, h('label', { for: 'f-details' }, 'More detail (optional)'), details),
-      h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, 'How much does it matter?'), tier),
+      h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier),
         (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner)),
       h('div', {}, h('button', { class: 'btn', type: 'submit' }, verb[2])));
   }
