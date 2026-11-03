@@ -8,7 +8,7 @@ import { windowEnd } from './dates.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
 const TIME_ZONE = 'America/Denver';
-const STALE_DAYS = 21, WINDOW_DAYS = 14;
+const STALE_DAYS = 21, WINDOW_DAYS = 14, LEAD_STALE_DAYS = 7;
 const ACTIVITY_KINDS = ['email', 'meeting', 'calendar'];
 const STEP_STATUSES = ['open', 'done', 'dismissed'];
 // Shared mail providers say nothing about which client a message is from, so only exact addresses match them.
@@ -124,7 +124,7 @@ async function salesforceOverview(env, refresh) {
     records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId, OwnerId, Owner.Name, Who.Name FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
     records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId != null AND IsChild = false AND (ActivityDate = LAST_N_DAYS:60 OR ActivityDate = NEXT_N_DAYS:30) ORDER BY ActivityDate LIMIT 300'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, AccountId FROM Case WHERE IsClosed = false ORDER BY CreatedDate DESC LIMIT 100'),
-    records(auth, "SELECT Id, Name, Company, Status, Rating, LeadSource, CreatedDate FROM Lead WHERE IsConverted = false AND (Rating = null OR Rating != 'Cold') ORDER BY CreatedDate DESC LIMIT 50")
+    records(auth, "SELECT Id, Name, Company, Status, Rating, LeadSource, CreatedDate, LastActivityDate FROM Lead WHERE IsConverted = false AND (Rating = null OR Rating != 'Cold') ORDER BY CreatedDate DESC LIMIT 50")
   ]);
   overviewCache = { at: Date.now(), data: { accounts, tasks, events, cases, leads } };
   return overviewCache.data;
@@ -201,6 +201,20 @@ function localItems(env, { activity = [], notes = [], steps = [] }) {
   return items;
 }
 
+// The same meeting can arrive twice: as a Salesforce Event and as a synced calendar or meeting record. Same client, same
+// title and same start time make it one item: the Salesforce one stays, and takes the synced one's summary.
+const meetingKey = i => ['meeting', 'calendar'].includes(i.type) && i.accountId && i.at?.length > 10 && !isNaN(Date.parse(i.at)) ? [i.accountId, (i.title || '').trim().toLowerCase(), Math.floor(Date.parse(i.at) / 60e3)].join('|') : null;
+function mergeMeetings(items) {
+  const sfMeetings = new Map();
+  for (const i of items) if (i.source === 'salesforce' && meetingKey(i)) sfMeetings.set(meetingKey(i), i);
+  return items.filter(i => {
+    const twin = i.source === 'sync' && sfMeetings.get(meetingKey(i));
+    if (!twin) return true;
+    if (i.detail && !twin.detail) twin.detail = i.detail;
+    return false;
+  });
+}
+
 const opportunityView = (env, o) => ({ id: o.Id, name: o.Name, stage: o.StageName, closeDate: o.CloseDate, nextStep: o.NextStep || '', open: !o.IsClosed, won: !!o.IsWon, url: sfLink(env, 'Opportunity', o.Id) });
 const stepView = (env, s) => ({ id: s.id, accountId: s.account_id, title: s.title, dueDate: s.due_date, status: s.status, source: s.source, owner: s.owner || '', url: taskLink(env, s) || '' });
 const linkedTasks = steps => new Set(steps.map(s => s.sf_task_id).filter(Boolean));
@@ -245,7 +259,7 @@ export function buildOverview(env, sf, local, today) {
   const meta = new Map(local.meta.map(m => [m.account_id, metaRow(m)]));
   const accounts = sf.accounts.filter(a => !meta.get(a.Id)?.hidden);
   const names = new Map(accounts.map(a => [a.Id, a.Name]));
-  const items = [...salesforceItems(env, { ...sf, accounts }, linkedTasks(local.steps)), ...localItems(env, local)]
+  const items = mergeMeetings([...salesforceItems(env, { ...sf, accounts }, linkedTasks(local.steps)), ...localItems(env, local)])
     .filter(i => !i.accountId || names.has(i.accountId))
     .map(i => ({ ...i, day: localDay(i.at), client: names.get(i.accountId) || '' }));
   const soon = addDays(today, WINDOW_DAYS), since = addDays(today, -WINDOW_DAYS), staleBefore = addDays(today, -STALE_DAYS);
@@ -280,7 +294,13 @@ export function buildOverview(env, sf, local, today) {
     if (!c.nextStep && !c.opportunities.some(o => o.open && o.nextStep)) reasons.push('No next step');
     if (reasons.length) attention.push({ reason: reasons.join(' · '), type: 'stale', title: c.name, accountId: c.id, day: c.lastTouch || '', url: c.url });
   }
-  for (const l of sf.leads) attention.push({ reason: l.Rating ? `${l.Rating} lead` : 'Unrated lead', type: 'lead', rating: l.Rating || '', title: l.Company && l.Company !== '[not provided]' ? `${l.Name} (${l.Company})` : l.Name, detail: [l.LeadSource, l.Status].filter(Boolean).join(' · '), day: localDay(l.CreatedDate), url: sfLink(env, 'Lead', l.Id), source: 'salesforce' });
+  // A lead only needs attention when nobody has been in touch for a week (last logged activity, else the day it was created).
+  for (const l of sf.leads) {
+    const touched = l.LastActivityDate || localDay(l.CreatedDate), quiet = daysBetween(touched, today);
+    if (quiet < LEAD_STALE_DAYS) continue;
+    const age = `${quiet} days with no contact logged${l.LastActivityDate ? '' : ' since it came in'}`;
+    attention.push({ reason: l.Rating ? `${l.Rating} lead` : 'Unrated lead', type: 'lead', rating: l.Rating || '', title: l.Company && l.Company !== '[not provided]' ? `${l.Name} (${l.Company})` : l.Name, detail: [age, l.LeadSource, l.Status, 'follow up, or rate it Cold'].filter(Boolean).join(' · '), day: touched, url: sfLink(env, 'Lead', l.Id), source: 'salesforce' });
+  }
 
   // Today's items sit under "Coming up" with the rest of the next two weeks; "Recent" ends yesterday.
   const upcoming = items.filter(i => i.day >= today && i.day <= soon && i.open !== false && !['note', 'stage', 'email'].includes(i.type)).sort((x, y) => x.at.localeCompare(y.at));
@@ -291,7 +311,7 @@ export function buildOverview(env, sf, local, today) {
 export function buildClient(env, sf, local, today) {
   const m = metaRow(local.meta);
   const account = sf.account;
-  const items = [...salesforceItems(env, { tasks: sf.tasks, events: sf.events, cases: sf.cases, history: sf.history, accounts: [account] }, linkedTasks(local.steps)), ...localItems(env, local)]
+  const items = mergeMeetings([...salesforceItems(env, { tasks: sf.tasks, events: sf.events, cases: sf.cases, history: sf.history, accounts: [account] }, linkedTasks(local.steps)), ...localItems(env, local)])
     .map(i => ({ ...i, day: localDay(i.at) }))
     .map(i => ({ ...i, future: i.day > today || (i.day === today && i.open !== false && !['note', 'email', 'stage', 'case'].includes(i.type)) }))
     .sort((x, y) => y.at.localeCompare(x.at));
