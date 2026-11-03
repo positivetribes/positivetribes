@@ -247,7 +247,8 @@ const sf = {
   leads: [
     { Id: '00Q1', Name: 'Pat Doe', Company: '[not provided]', Status: 'Open', Rating: null, LeadSource: 'Web', CreatedDate: '2026-10-27T12:00:00.000+0000' },
     { Id: '00Q2', Name: 'Sam Hot', Company: 'Mountain Rescue', Status: 'Qualified', Rating: 'Hot', LeadSource: 'Referral', CreatedDate: '2026-10-20T12:00:00.000+0000' },
-    { Id: '00Q3', Name: 'Wendy Warm', Company: 'Trail Club', Status: 'Qualified', Rating: 'Warm', LeadSource: 'Web', CreatedDate: '2026-10-22T12:00:00.000+0000' }
+    { Id: '00Q3', Name: 'Wendy Warm', Company: 'Trail Club', Status: 'Qualified', Rating: 'Warm', LeadSource: 'Web', CreatedDate: '2026-10-22T12:00:00.000+0000' },
+    { Id: '00Q4', Name: 'Kent Touched', Company: '[not provided]', Status: 'Working', Rating: 'Warm', LeadSource: 'Word of mouth', CreatedDate: '2026-10-04T12:00:00.000+0000', LastActivityDate: '2026-10-27' }
   ]
 };
 const local = {
@@ -277,9 +278,10 @@ test('Today shows what needs attention, what is coming and what just happened', 
     'Overdue Salesforce task: Call Duke',
     'Overdue step: Send revised scope',
     'Past target close date: Opp 006B',
-    'Unrated lead: Pat Doe',
     'Warm lead: Wendy Warm (Trail Club)'
   ]);
+  const wendy = view.attention.find(a => a.title.startsWith('Wendy'));
+  assert.match(wendy.detail, /^7 days with no contact logged since it came in · Web · Qualified · follow up/);
   assert.deepEqual(view.upcoming.map(i => i.title), ['Prep demo', 'UEP review', 'Opp 006A']);
   assert.deepEqual(view.recent.map(i => i.title), ['Molly likes it', 'Proposal for signing']);
   assert.ok(view.attention.every(a => a.accountId !== '001Pr0000111WhXIAU'));
@@ -292,12 +294,21 @@ test('Now puts satisfaction first, then Hot and Warm leads, then revenue and qui
     'Send revised scope: Hard deadline missed 2 days ago',
     'Sam Hot (Mountain Rescue): Hot lead: fits Positive Tribes and is a high priority',
     'Wendy Warm (Trail Club): Warm lead: a good fit, follow up',
-    'Pat Doe: Unrated lead: rate it in Salesforce (Hot, Warm or Cold)'
+    'Opp 006B: Revenue: past its target close date'
   ]);
   assert.equal(rankNow(view.attention, view.upcoming, today, Date.now(), 20).at(-1).title, 'SAFE', 'quiet clients rank last');
   const meeting = { type: 'meeting', title: 'Standup', at: '2026-10-29T15:00:00Z', day: today };
   assert.equal(rankNow([], [meeting], today, Date.parse('2026-10-29T15:30:00Z'))[0].why, 'Fixed time today');
   assert.deepEqual(rankNow([], [meeting], today, Date.parse('2026-10-29T17:00:00Z')), [], 'a meeting that is over drops out');
+});
+
+test('a meeting in Salesforce and in the synced calendar shows once, with the summary', () => {
+  const synced = { id: 9, account_id: UEP, kind: 'calendar', occurred_at: '2026-11-04T17:00:00Z', title: 'UEP review', summary: 'Talk budget', url: '' };
+  const view = buildOverview(SF_ENV, sf, { ...local, activity: [...local.activity, synced] }, today);
+  const meetings = view.upcoming.filter(i => i.title === 'UEP review');
+  assert.equal(meetings.length, 1);
+  assert.equal(meetings[0].detail, 'Talk budget');
+  assert.equal(meetings[0].source, 'salesforce');
 });
 
 test('a client page splits the timeline at now', () => {

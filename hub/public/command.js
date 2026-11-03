@@ -162,7 +162,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     box.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h2 class="greet">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}</h2></div></div>
     ${nowCard(data)}${countdowns(data)}
     <div class="cols">
-      <section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2>${attention.length ? `<ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale', showClient: i.type !== 'stale', controls: doneControl })).join('')}</ul>` : '<p class="empty">All clear.</p>'}</section>
+      <section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2>${attention.length ? `<ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', controls: doneControl })).join('')}</ul>` : '<p class="empty">All clear.</p>'}</section>
       <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { controls: doneControl })}</section>
       <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${byDay(data.recent)}</section>
     </div>`;
