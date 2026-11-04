@@ -735,7 +735,7 @@ const pageUrl=pg=>'climb.upendingparkinsons.org/f/'+pg.slug;
 const matchFields=(who,upTo,pre)=>`<div class="card"><h3>Is someone matching your gifts? <span class="muted small">(optional)</span></h3>
     <label class="f" for="${pre}who">Who is matching<input type="text" id="${pre}who" data-bind="${pre==='g'?'g.matchWho':'fe.matchWho'}" value="${esc(who||'')}" placeholder="Name or company"></label>
     <label class="f" for="${pre}up">Up to how much<input type="number" id="${pre}up" min="0" inputmode="numeric" data-bind="${pre==='g'?'g.matchUpTo':'fe.matchUpTo'}" value="${esc(upTo||'')}" placeholder="$"></label></div>`;
-const matchNote=pg=>pg.matchWho&&+pg.matchUpTo>0?`<div class="notice info"><b>${esc(pg.matchWho)} is matching gifts up to ${usd(+pg.matchUpTo)}</b>Your gift can go twice as far.</div>`:'';
+const matchNote=pg=>pg.matchWho&&+pg.matchUpTo>0?`<div class="notice info"><b>${esc(pg.matchWho)} is matching gifts up to ${usd(+pg.matchUpTo)}</b>This is the fundraiser's pledge. UEP does not collect the match.</div>`:'';
 function giveFlow(){
   const G=state.give;
   if(G.step===1)return `
