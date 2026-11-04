@@ -301,8 +301,10 @@ function at(days, time){
 }
 function ago(days){ return new Date(Date.now() - days * DAY).toISOString(); }
 
-var AGREEMENT_VERSION = 'Host agreement v0.1 (sample)';
-var SITE_WAIVER_VERSION = 'Host site waiver v0.1 (sample)';
+var MIN_LEAD_DAYS = 14;      // hosts submit events at least two weeks ahead (Duke, Nov 3)
+var PEERS_PER_ATTENDEES = 10; // one peer on site for every 10 attendees (Duke, Nov 3)
+var AGREEMENT_VERSION = 'Host agreement v0.2 (sample)';
+var SITE_WAIVER_VERSION = 'Host site waiver v0.2 (sample)';
 
 var MODULES = [
   {id:'m1', title:'The SAFE model', short:'SAFE model',
@@ -323,7 +325,7 @@ var MODULES = [
     ]},
   {id:'m3', title:'Peer support and crisis response', short:'Peer support',
     intro:'Hosts and peers are there to connect, not to treat. Knowing when and how to get help is part of the job.',
-    points:['Peers share lived experience and connect people to support. They do not diagnose or give clinical advice.','For an overdose or medical emergency, call 911 and venue medical right away. Use naloxone if you are trained and it is available.','If someone talks about harming themselves, stay with them and call or text 988. Call 911 if there is immediate danger.','Afterward, tell your chapter lead and file an incident note [SAFE to supply form].'],
+    points:['Peers share lived experience and connect people to support. They do not diagnose or give clinical advice.','For an overdose or medical emergency, call 911 and venue medical right away. Use naloxone if you are trained and it is available.','If someone talks about harming themselves, stay with them and call or text 988. Call 911 if there is immediate danger.','Afterward, complete SAFE\'s standard incident report and tell your chapter lead. Serious incidents are also reported to SAFE leadership.'],
     quiz:[
       {q:'What is a peer\'s role at an event?', o:['Diagnose and treat','Share lived experience and connect people to support','Enforce venue rules'], a:1},
       {q:'Someone collapses and may have overdosed. What do you do first?', o:['Call 911 and venue medical, and give naloxone if trained and available','Wait to see if they wake up','Drive them to a hospital yourself'], a:0},
@@ -331,11 +333,11 @@ var MODULES = [
     ]},
   {id:'m4', title:'Planning an event', short:'Planning',
     intro:'Every host event follows the same path: plan it, submit it, get the venue\'s signature, get approved, then promote it.',
-    points:['Pick a venue that will sign SAFE\'s host site waiver and agree to a substance-free section.','Set capacity and the number of peers on site using SAFE\'s staffing guidance [SAFE to confirm ratio].','Tickets are a link to your team\'s own website. Donations go to SAFE\'s Venmo, Colorado Gives account or credit card account, never a personal account.','Submit the event at least [3 weeks, SAFE to confirm] ahead. It is published once it is approved and the venue has signed.'],
+    points:['Pick a venue that will sign SAFE\'s host site waiver and agree to a substance-free section.','Set capacity and the number of peers on site at SAFE\'s ratio of one peer for every 10 attendees.','Tickets are a link to your team\'s own website. Donations go to SAFE\'s Venmo, Colorado Gives account or credit card account, never a personal account.','Submit the event at least two weeks ahead. If you need to go sooner, ask SAFE first. It is published once it is approved and the venue has signed.'],
     quiz:[
       {q:'When does a host\'s event go public?', o:['As soon as it is submitted','After it is approved and the host site has signed the waiver','When the venue posts it'], a:1},
       {q:'Where should donations for SAFE go?', o:['SAFE\'s Venmo, Colorado Gives account or credit card account','The host\'s personal Venmo','Cash at the door, kept by the host'], a:0},
-      {q:'How many peers should be on site?', o:['One, always','As many as show up','Follow SAFE\'s staffing guidance for expected attendance'], a:2}
+      {q:'How many peers should be on site?', o:['One, always','As many as show up','One peer for every 10 attendees'], a:2}
     ]},
   {id:'m5', title:'Brand, communications and consent', short:'Brand and consent',
     intro:'Recovery is personal. How we talk about events, and who appears in photos, matters.',
@@ -376,22 +378,22 @@ function seed(){
         recovery:'In recovery', why:'I run a weekly run club and half of us are sober. I\'d love to host sober watch parties for Nuggets games.'}
     ],
     events: [
-      {id:'e-ttu', title:'Texas Tech Red Raiders vs. Colorado Buffaloes', type:EVENT_TYPES[0], start:'2026-10-03T13:00', venue:'Folsom Field', city:'Boulder, CO', chapterId:'boulder', capacity:60, peers:5, hostId:null, status:'approved', createdAt:ago(60),
+      {id:'e-ttu', title:'Texas Tech Red Raiders vs. Colorado Buffaloes', type:EVENT_TYPES[0], start:'2026-10-03T13:00', venue:'Folsom Field', city:'Boulder, CO', chapterId:'boulder', capacity:60, peers:6, hostId:null, status:'approved', createdAt:ago(60),
         site:{contactName:'Venue partnerships', email:'venue@example.org', waiver:'signed', signer:signed('Venue representative', 'Events manager', 'Sample venue', 55)}},
       {id:'e-cmu', title:'Colorado Mesa vs. Colorado School of Mines', type:EVENT_TYPES[0], start:'2026-10-16T19:00', venue:'Community Hospital Unity Field', city:'Grand Junction, CO', chapterId:'mesa', capacity:40, peers:4, hostId:null, status:'approved', createdAt:ago(60),
         site:{contactName:'Venue partnerships', email:'venue@example.org', waiver:'signed', signer:signed('Venue representative', 'Events manager', 'Sample venue', 50)}},
-      {id:'e-brunch', title:'Sunday Sober Brunch and Board Games', type:'Sober social', start:at(12, '11:00'), venue:'Sample café', city:'Boulder, CO', chapterId:'boulder', capacity:30, peers:2, hostId:'p-sam', status:'approved', createdAt:ago(20),
+      {id:'e-brunch', title:'Sunday Sober Brunch and Board Games', type:'Sober social', start:at(12, '11:00'), venue:'Sample café', city:'Boulder, CO', chapterId:'boulder', capacity:30, peers:3, hostId:'p-sam', status:'approved', createdAt:ago(20),
         site:{contactName:'Jamie Fox', email:'jamie@example.com', waiver:'signed', signer:signed('Jamie Fox', 'Owner', 'Sample café', 16)}},
-      {id:'e-indie', title:'Sober Section: Local Indie Night', type:'Concert sober section', start:at(18, '19:30'), venue:'Sample music hall', city:'Denver, CO', chapterId:'denver', capacity:40, peers:3, hostId:'p-alex', status:'approved', createdAt:ago(25),
+      {id:'e-indie', title:'Sober Section: Local Indie Night', type:'Concert sober section', start:at(18, '19:30'), venue:'Sample music hall', city:'Denver, CO', chapterId:'denver', capacity:40, peers:4, hostId:'p-alex', status:'approved', createdAt:ago(25),
         site:{contactName:'Robin Hale', email:'robin@example.com', waiver:'signed', signer:signed('Robin Hale', 'Talent buyer', 'Sample music hall', 21)}},
-      {id:'e-hoops', title:'Sober Section: College Basketball Night', type:EVENT_TYPES[0], start:at(26, '18:00'), venue:'Sample arena', city:'Grand Junction, CO', chapterId:'mesa', capacity:50, peers:4, hostId:'p-dana', status:'approved', createdAt:ago(14),
+      {id:'e-hoops', title:'Sober Section: College Basketball Night', type:EVENT_TYPES[0], start:at(26, '18:00'), venue:'Sample arena', city:'Grand Junction, CO', chapterId:'mesa', capacity:50, peers:5, hostId:'p-dana', status:'approved', createdAt:ago(14),
         site:{contactName:'Lee Park', email:'lee@example.com', waiver:'signed', signer:signed('Lee Park', 'Event services', 'Sample arena', 10)}},
-      {id:'e-trivia', title:'Sober Trivia Night', type:'Sober social', start:at(33, '19:00'), venue:'Sample community hall', city:'Boulder, CO', chapterId:'boulder', capacity:60, peers:3, hostId:'p-sam', status:'pending', createdAt:ago(3),
+      {id:'e-trivia', title:'Sober Trivia Night', type:'Sober social', start:at(33, '19:00'), venue:'Sample community hall', city:'Boulder, CO', chapterId:'boulder', capacity:60, peers:6, hostId:'p-sam', status:'pending', createdAt:ago(3),
         site:{contactName:'Casey Grant', email:'casey@example.com', waiver:'sent'}},
-      {id:'e-holiday', title:'Holiday Sober Social', type:'Sober social', start:at(40, '18:30'), venue:'Sample rec center', city:'Denver, CO', chapterId:'denver', capacity:80, peers:4, hostId:'p-morgan', status:'pending', createdAt:ago(4),
+      {id:'e-holiday', title:'Holiday Sober Social', type:'Sober social', start:at(40, '18:30'), venue:'Sample rec center', city:'Denver, CO', chapterId:'denver', capacity:80, peers:8, hostId:'p-morgan', status:'pending', createdAt:ago(4),
         site:{contactName:'Avery Lane', email:'avery@example.com', waiver:'signed', signer:signed('Avery Lane', 'Facility coordinator', 'Sample rec center', 2)}},
-      {id:'e-nye', title:'New Year\'s Eve Sober Countdown', type:'Sober social', start:at(55, '21:00'), venue:'Sample event space', city:'Boulder, CO', chapterId:'boulder', capacity:120, peers:3, hostId:'p-sam', status:'changes', createdAt:ago(6),
-        note:'Please plan for at least 5 peers at 120 people, and confirm the venue\'s exit plan for a late-night crowd.',
+      {id:'e-nye', title:'New Year\'s Eve Sober Countdown', type:'Sober social', start:at(55, '21:00'), venue:'Sample event space', city:'Boulder, CO', chapterId:'boulder', capacity:120, peers:12, hostId:'p-sam', status:'changes', createdAt:ago(6),
+        note:'Please plan for at least 12 peers at 120 people (one for every 10), and confirm the venue\'s exit plan for a late-night crowd.',
         site:{contactName:'Drew Silva', email:'drew@example.com', waiver:'sent'}}
     ],
     requests: [
@@ -497,12 +499,12 @@ function agreementTerms(){
   return '<div class="terms" tabindex="0" role="region" aria-label="Host agreement terms">' +
     '<h3>1. Code of conduct</h3><p>I will treat every guest, peer, venue partner and staff member with respect, and I will not attend or host a SAFE event under the influence of alcohol or drugs.</p>' +
     '<h3>2. Substance-free events</h3><p>Events I host under the Sober AF name will include a substance-free section, and I will work with each venue to keep it that way.</p>' +
-    '<h3>3. Safety and emergencies</h3><p>I will follow SAFE\'s safety and crisis-response training, call emergency services when needed, and report incidents to my chapter lead within 24 hours.</p>' +
+    '<h3>3. Safety and emergencies</h3><p>I will follow SAFE\'s safety and crisis-response training, call emergency services when needed, and complete SAFE\'s incident report within 24 hours and tell my chapter lead. Serious incidents are also reported to SAFE leadership.</p>' +
     '<h3>4. Approval and the Sober AF name</h3><p>I will only promote events SAFE or my chapter lead has approved, and I will use the Sober AF name and logo only for those events, such as on fliers and banners.</p>' +
     '<h3>5. Money</h3><p>Tickets are a link to the team\'s own website. Donations go to SAFE\'s Venmo, Colorado Gives account or credit card account. I will not collect money for SAFE events personally.</p>' +
     '<h3>6. Privacy and photos</h3><p>I will keep guests\' recovery status confidential and will not photograph or post anyone without their consent.</p>' +
     '<h3>7. Volunteer status and release</h3><p>I host as a volunteer, not an employee. I understand the risks of organizing public events and release SAFE from claims arising from my own conduct [release wording, SAFE counsel to supply].</p>' +
-    '<h3>8. Background check and renewal</h3><p>[Background check requirement, SAFE to confirm.] Certification renews every [12 months, SAFE to confirm] with a short refresher.</p>' +
+    '<h3>8. Background check and renewal</h3><p>I will sign this code of conduct and complete SAFE\'s training. A background check is required only where the law requires it or where I would work with minors. Peer recovery coaches do not need to recertify [renewal for other hosts, SAFE to confirm].</p>' +
     '</div>';
 }
 function siteTerms(e){
@@ -511,10 +513,10 @@ function siteTerms(e){
     '<h3>Parties and event</h3><p>This agreement is between Sober AF Entertainment ("SAFE") and the organization signing below (the "Host Site") for <b>' + h(e.title) + '</b> at ' + h(e.venue) + ', ' + h(e.city) + ', organized by SAFE certified host ' + h(host) + '.</p>' +
     '<h3>1. Substance-free section</h3><p>The Host Site will provide a clearly marked area for the sober section and will not serve or sell alcohol inside it [handling of nearby sales, SAFE to confirm].</p>' +
     '<h3>2. Safety and access</h3><p>The Host Site will share its emergency plan, exits and first-aid location with the host before doors open, name an on-site staff contact, and keep the section accessible.</p>' +
-    '<h3>3. Insurance</h3><p>The Host Site keeps general liability insurance of at least [amount, SAFE to confirm] and will name SAFE as additional insured on request.</p>' +
-    '<h3>4. Release and hold harmless</h3><p>Each party is responsible for its own acts and those of its staff and volunteers, and will hold the other harmless from claims arising from them [mutual indemnity wording, SAFE counsel to supply].</p>' +
+    '<h3>3. Insurance</h3><p>The Host Site keeps commercial general liability insurance of at least $1,000,000 per occurrence and $2,000,000 aggregate, covering bodily injury, property damage and personal injury arising from its premises and operations. It names SAFE, its officers, directors, employees and authorized representatives as additional insureds, and provides a certificate of insurance and endorsement on request.</p>' +
+    '<h3>4. Release and hold harmless</h3><p>To the fullest extent permitted by law, the Host Site will indemnify and hold harmless SAFE, its officers, directors, employees and authorized representatives from third-party claims, damages, liabilities and reasonable legal expenses arising from the Host Site\'s negligence, willful misconduct or breach of this agreement, except to the extent caused by the negligence or wrongful conduct of SAFE or its representatives [SAFE counsel to review].</p>' +
     '<h3>5. Photography and promotion</h3><p>Either party may name the other when promoting the event. Neither will photograph or post guests in the sober section without their consent.</p>' +
-    '<h3>6. Cancellation</h3><p>Either party may cancel with [7 days, SAFE to confirm] notice, or at any time for safety reasons.</p>' +
+    '<h3>6. Cancellation</h3><p>Either party may cancel with at least 14 calendar days\' written notice. Either party may cancel or suspend the event immediately for safety, legal or facility reasons. In an emergency, severe weather or a closure, the affected party gives notice as soon as practical. Any cancellation costs must be agreed in writing.</p>' +
     '</div>';
 }
 
@@ -576,14 +578,15 @@ views.apply = function(params){
       '<div class="field"><label for="a-ch">Chapter</label><select id="a-ch" name="chapterId">' + chapterOptions(pre, true) + '</select></div>' +
       '<div class="field"><label for="a-city">City and state</label><span class="hint" id="a-city-hint">Only needed if your city isn\'t listed.</span><input id="a-city" name="city" type="text" aria-describedby="a-city-hint" autocomplete="address-level2"></div>' +
       '<div class="field"><label for="a-rec">Your connection to recovery</label><span class="hint" id="a-rec-hint">Optional. This stays private to SAFE staff.</span><select id="a-rec" name="recovery" aria-describedby="a-rec-hint"><option value="">Prefer not to say</option><option>In recovery</option><option>Family member or friend of someone in recovery</option><option>Ally or supporter</option></select></div>' +
+      '<div class="field"><label for="a-peer">Have you completed a peer-support training?</label><span class="hint" id="a-peer-hint">Decides whether you take the 3-hour host extension or the 10-hour peer training first.</span><select id="a-peer" name="peerTrained" aria-describedby="a-peer-hint"><option value="no">Not yet</option><option value="yes">Yes</option></select></div>' +
       '<div class="field"><label for="a-why">Why do you want to host?</label><textarea id="a-why" name="why" required></textarea></div>' +
       '<label class="check"><input type="checkbox" name="conduct" required> I agree to follow SAFE\'s code of conduct and keep events substance-free.</label>' +
       '<p class="error" role="alert"></p>' +
       '<button class="btn btn-solid" type="submit">Submit application</button>' +
     '</form></div></div>' +
     '<aside class="panel stack"><h2>What happens next</h2>' +
-      '<p>SAFE reviews your application, usually within [a week, SAFE to confirm].</p>' +
-      '<p>Once approved, you get access to five short training modules. Most people finish them in about [2 hours, SAFE to confirm].</p>' +
+      '<p>SAFE reviews your application, usually within a week (five business days once your application is complete).</p>' +
+      '<p>Once approved, you get access to five short training modules. If you have already completed a peer-support training, add a three-hour host extension. If not, the 10-hour peer training comes first, about 13 hours in all.</p>' +
       '<p>Then you sign the host agreement and shadow one event with an experienced host before you\'re certified.</p>' +
     '</aside></div>';
 };
@@ -715,7 +718,7 @@ function certificateView(p, own){
     '<p class="lede">You can now submit events for the ' + h(c ? c.name : '') + ' chapter. Each goes live once it\'s approved and the venue signs the host site waiver.</p></div>' +
     '<div class="cert" style="max-width:720px"><span class="led">Sober AF Entertainment</span><h2>Certified host</h2><div class="who">' + h(p.name) + '</div>' +
     '<dl><div><dt>Chapter</dt><dd>' + h(c ? c.name + ', ' + c.region : 'Unassigned') + '</dd></div><div><dt>Certified</dt><dd>' + h(shortDate(p.certifiedAt)) + '</dd></div>' +
-    '<div><dt>Certificate</dt><dd>' + h(p.certId) + '</dd></div><div><dt>Renews</dt><dd>[Yearly, SAFE to confirm]</dd></div></dl></div>' +
+    '<div><dt>Certificate</dt><dd>' + h(p.certId) + '</dd></div><div><dt>Renews</dt><dd>[Peer recovery coaches: not needed. Other hosts: SAFE to confirm]</dd></div></dl></div>' +
     (own ? '<div class="btns" style="margin-top:32px"><button type="button" class="btn btn-solid" data-act="become-host">Go to my host dashboard</button></div>' : '');
 }
 
@@ -731,7 +734,7 @@ views.host = function(){
     if (e.status === 'changes') out += '<button type="button" class="btn btn-solid btn-sm" data-act="resubmit" data-id="' + e.id + '">I made the changes, resubmit</button>';
     return out;
   };
-  var today = new Date(Date.now() + DAY);
+  var today = new Date(Date.now() + MIN_LEAD_DAYS * DAY);
   var minDate = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
   return '<div class="split"><div class="page-head"><span class="eyebrow">' + h(p.name) + ' · ' + h(c ? c.name : '') + ' chapter</span><h1>Host dashboard</h1>' +
       '<p class="lede">Submit events for review. Each one needs an approval and a signed host site waiver before it goes public.</p></div>' +
@@ -755,7 +758,7 @@ views.host = function(){
       '<p class="error" role="alert"></p><button class="btn btn-solid" type="submit">Submit for review</button>' +
     '</form></div></div><aside class="panel stack"><h2>Before you submit</h2>' +
       '<p>Walk the space with the venue and confirm exits, first aid and an on-site staff contact.</p>' +
-      '<p>Plan peers using SAFE\'s staffing guidance [SAFE to confirm ratio].</p>' +
+      '<p>Plan one peer for every 10 attendees, and submit at least two weeks ahead. Need to go sooner? Ask SAFE first.</p>' +
       '<p><b>Money:</b> tickets link to your team\'s website. Donations go to SAFE\'s Venmo, Colorado Gives account or credit card account.</p>' +
       '<p><b>Brand:</b> use the SAFE logo on fliers and banners for approved events. <button type="button" class="tlink small" data-act="swag">Request the logo and swag</button></p>' +
       '<p>Your chapter lead' + (c && c.leadId && c.leadId !== p.id ? ' (' + h(person(c.leadId).name) + ')' : ' or SAFE') + ' reviews it. It can\'t be approved until the venue signs.</p></aside></div></section>';
@@ -998,7 +1001,7 @@ var forms = {
   apply: function(f, fd){
     if (!f.checkValidity()) return fail(f, 'Please fill in your name, a valid email, why you want to host, and agree to the code of conduct.');
     if (!fd.get('chapterId') && !val(fd, 'city')) { f.querySelector('#a-city').focus(); return fail(f, 'Tell us your city and state, since it isn\'t listed.'); }
-    var p = {id:nextId('p-'), name:val(fd, 'name'), email:val(fd, 'email'), chapterId:fd.get('chapterId') || null, city:val(fd, 'city'), recovery:val(fd, 'recovery'), why:val(fd, 'why'), status:'applied', scores:{}, agreement:null, appliedAt:new Date().toISOString()};
+    var p = {id:nextId('p-'), name:val(fd, 'name'), email:val(fd, 'email'), chapterId:fd.get('chapterId') || null, city:val(fd, 'city'), recovery:val(fd, 'recovery'), peerTrained:val(fd, 'peerTrained') === 'yes', why:val(fd, 'why'), status:'applied', scores:{}, agreement:null, appliedAt:new Date().toISOString()};
     S.people.push(p); S.me.applicant = p.id; S.viewer = 'applicant';
     save(); go('#/training'); toast('Application submitted.');
   },
@@ -1029,6 +1032,9 @@ var forms = {
     if (!f.checkValidity()) return fail(f, 'Please complete every field. Contact email must be valid.');
     var start = val(fd, 'date') + 'T' + val(fd, 'time');
     if (new Date(start).getTime() <= Date.now()) { f.querySelector('#e-date').focus(); return fail(f, 'Pick a date in the future.'); }
+    if (new Date(start).getTime() < Date.now() + (MIN_LEAD_DAYS - 1) * DAY) { f.querySelector('#e-date').focus(); return fail(f, 'Submit events at least ' + MIN_LEAD_DAYS + ' days ahead. For an earlier date, ask SAFE first.'); }
+    var needPeers = Math.ceil(Number(fd.get('capacity')) / PEERS_PER_ATTENDEES);
+    if (Number(fd.get('peers')) < needPeers) { f.querySelector('#e-peers').focus(); return fail(f, 'SAFE asks for one peer for every ' + PEERS_PER_ATTENDEES + ' attendees. For ' + Number(fd.get('capacity')) + ' seats, plan at least ' + needPeers + ' peers.'); }
     var tix = val(fd, 'ticketUrl');
     if (tix && !/^https?:\/\//i.test(tix)) { f.querySelector('#e-tix').focus(); return fail(f, 'The ticket link must start with http:// or https://.'); }
     var p = me();
