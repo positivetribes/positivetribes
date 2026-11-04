@@ -381,7 +381,7 @@ const state={
   // Fundraising pages, keyed by the person's account. Having a page is what makes someone a fundraiser.
   fund:{
     pages:{
-      'ruth@example.org':{slug:'ruth-alvarez',goal:500,team:'gol',matchWho:'Golden Gate Climbing Co.',matchUpTo:500,aff:'Climber',story:'Climbing every Wednesday has given me strength and friends I never expected. I\'m climbing on April 3 so more people with Parkinson\'s can find their way to the wall.',
+      'ruth@example.org':{slug:'ruth-alvarez',goal:500,team:'gol',matchWho:'Movement Golden',matchUpTo:500,aff:'Climber',story:'Climbing every Wednesday has given me strength and friends I never expected. I\'m climbing on April 3 so more people with Parkinson\'s can find their way to the wall.',
         gifts:[FG('Luis Alvarez',100,'Go Mom!'),FG('Anonymous',50),FG('Maria Lopez',25,'See you on the wall'),FG('Golden neighbors',60)]},
       'jamie@example.org':{slug:'jamie-ortiz',goal:500,team:'tim',aff:'Volunteer',story:'I belay at Timonium on Sundays. These climbers are the bravest people I know.',
         gifts:[FG('Chris Ortiz',100),FG('Anonymous',40),FG('Pat Greene',50,'Proud of you')]}
@@ -870,7 +870,7 @@ const NOTES={
     b:['What someone sees comes from what they are. A page makes someone a fundraiser; a signed waiver makes someone a climber. There is still no role picker.','In the full build the server checks this too: a fundraising-only account cannot open booking or waiver pages, and never gets climbing reminders or waiver texts.','Donors don\'t need an account. They give from the public page.','Every gift goes to Virtuous with the donor\'s name.'],
     t:'Open Share, then "See my page as a donor," and give $50.',r:'Volunteers'},
   fund:{h:'One account, two parts',p:'A climber or lead who fundraises keeps the scheduler and gets a Fundraising tab beside it.',
-    b:['The page starts with their name and home gym\'s team filled in.','Goal presets and a default goal are set by UEP for each campaign.','Donations and thank-yous are in one list.','At UEP\'s t-shirt level (a sample $250 here), the page asks for a size and mailing address.','Every page shows the overall total against UEP\'s goal.','Molly sees every page, team and gift, and can turn the climber prompt off after the event.'],
+    b:['The page starts with their name and home gym\'s team filled in.','Goal presets and a default goal are set by UEP for each campaign.','Donations and thank-yous are in one list.','At UEP\'s t-shirt level (a sample $250 here), the page asks for a size and mailing address.','Every page shows the overall total against UEP\'s goal.','A fundraiser can say who is matching their gifts and up to how much; it shows as a banner on the page.','Molly sees every page, team and gift, and can turn the climber prompt off after the event.'],
     t:'Say thanks to a donor, then see the page as a donor.',r:'Fundraising'},
   out:{h:'One sign-in, no role picker',p:'Climbers, care partners, lead volunteers and staff all sign in the same way. The system looks up the account and opens the right view.',
     b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two or more leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
