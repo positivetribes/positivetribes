@@ -381,7 +381,7 @@ const state={
   // Fundraising pages, keyed by the person's account. Having a page is what makes someone a fundraiser.
   fund:{
     pages:{
-      'ruth@example.org':{slug:'ruth-alvarez',goal:500,team:'gol',aff:'Climber',story:'Climbing every Wednesday has given me strength and friends I never expected. I\'m climbing on April 3 so more people with Parkinson\'s can find their way to the wall.',
+      'ruth@example.org':{slug:'ruth-alvarez',goal:500,team:'gol',matchWho:'Golden Gate Climbing Co.',matchUpTo:500,aff:'Climber',story:'Climbing every Wednesday has given me strength and friends I never expected. I\'m climbing on April 3 so more people with Parkinson\'s can find their way to the wall.',
         gifts:[FG('Luis Alvarez',100,'Go Mom!'),FG('Anonymous',50),FG('Maria Lopez',25,'See you on the wall'),FG('Golden neighbors',60)]},
       'jamie@example.org':{slug:'jamie-ortiz',goal:500,team:'tim',aff:'Volunteer',story:'I belay at Timonium on Sundays. These climbers are the bravest people I know.',
         gifts:[FG('Chris Ortiz',100),FG('Anonymous',40),FG('Pat Greene',50,'Proud of you')]}
@@ -731,6 +731,11 @@ const teamName=id=>id?site(id).city+' team':'No team';
 const teamTotal=id=>allFundraisers().filter(f=>f.team===id).reduce((t,f)=>t+f.raised,0);
 const pageUrl=pg=>'climb.upendingparkinsons.org/f/'+pg.slug;
 // Sign-up from the plain link: no waiver, birthday, address or emergency contact.
+// Optional match (Tammie, Nov 4): a fundraiser says who will match their gifts and up to how much. It shows on their page; UEP does not collect the match.
+const matchFields=(who,upTo,pre)=>`<div class="card"><h3>Is someone matching your gifts? <span class="muted small">(optional)</span></h3>
+    <label class="f" for="${pre}who">Who is matching<input type="text" id="${pre}who" data-bind="${pre==='g'?'g.matchWho':'fe.matchWho'}" value="${esc(who||'')}" placeholder="Name or company"></label>
+    <label class="f" for="${pre}up">Up to how much<input type="number" id="${pre}up" min="0" inputmode="numeric" data-bind="${pre==='g'?'g.matchUpTo':'fe.matchUpTo'}" value="${esc(upTo||'')}" placeholder="$"></label></div>`;
+const matchNote=pg=>pg.matchWho&&+pg.matchUpTo>0?`<div class="notice info"><b>${esc(pg.matchWho)} is matching gifts up to ${usd(+pg.matchUpTo)}</b>Your gift can go twice as far.</div>`:'';
 function giveFlow(){
   const G=state.give;
   if(G.step===1)return `
@@ -744,6 +749,7 @@ function giveFlow(){
     <div><div class="small" style="font-weight:700;margin-bottom:6px">My goal</div>
       <div class="chips" role="group" aria-label="My goal">${CAMPAIGN.goals.map(g=>`<button class="chip" data-act="ggoal" data-v="${g}" aria-pressed="${G.goal===g}">${usd(g)}</button>`).join('')}</div></div>
     <label class="f" for="gstory">Why I'm climbing <span class="muted small">(optional)</span><textarea id="gstory" data-bind="g.story" rows="3">${esc(G.story)}</textarea></label>
+    ${matchFields(G.matchWho,G.matchUpTo,'g')}
     <p class="muted small">Step 1 of 2. Next we email you a code to confirm it's you, then your page is created.</p>
     <button class="btn full" data-act="gsend" ${giveReady()?'':'disabled'}>Next: confirm my email</button>
     <button class="linkbtn" data-act="giveback">Back to sign-in</button>`;
@@ -762,12 +768,14 @@ function fundMyPage(){
       <div class="chips" role="group" aria-label="My goal">${CAMPAIGN.goals.map(g=>`<button class="chip" data-act="fgoal" data-v="${g}" aria-pressed="${pg.goal===g}">${usd(g)}</button>`).join('')}</div></div>
     <label class="f" for="fteam">Team<select id="fteam" data-bind="fe.team"><option value="" ${pg.team?'':'selected'}>No team</option>${SITES.map(s=>`<option value="${s.id}" ${pg.team===s.id?'selected':''}>${esc(s.city)}</option>`).join('')}</select></label>
     <label class="f" for="fstory">Why I'm climbing<textarea id="fstory" data-bind="fe.story" rows="5">${esc(pg.story)}</textarea></label>
+    ${matchFields(pg.matchWho,pg.matchUpTo,'f')}
     <button class="btn full" data-act="fdone">Save</button>`;
   return `<div class="hero"><span class="small">${daysTo()} days to the ${esc(CAMPAIGN.name)}</span>${goalBar(pg,true)}
       <div class="row" style="justify-content:flex-start"><button class="btn" data-act="fview" data-v="${esc(state.user)}">See my page</button><button class="btn ghost" data-act="fedit">Edit</button></div></div>
     ${shirtCard(pg)}
     ${overallBar()}
     <div class="card"><h3>${esc(teamName(pg.team))}</h3>${pg.team?`<p class="small">Your team has raised <b>${usd(teamTotal(pg.team))}</b> so far, from ${allFundraisers().filter(f=>f.team===pg.team).length} fundraisers.</p>`:'<p class="small">Join your gym\'s team under Edit to raise money together.</p>'}</div>
+    ${matchNote(pg)}
     <div class="card"><h3>Your page says</h3><p class="small">${esc(pg.story||'Add a few words about why you\'re climbing. Pages with a story raise more.')}</p></div>`;
 }
 function fundDonations(){
@@ -798,6 +806,7 @@ function fundPublic(){
     <div class="row"><button class="btn ghost" data-act="gstep" data-v="1">Back</button><button class="btn" style="flex:1" data-act="gpay">Give ${usd(amt)}</button></div>`;
   return top+`<div class="row" style="justify-content:flex-start;flex-wrap:nowrap;gap:14px"><span class="avatar" aria-hidden="true">${esc(ini)}</span><div style="min-width:0"><span class="req">${esc(CAMPAIGN.name)} · April 3, 2027</span><h2 style="margin-top:4px">${esc(p.name)}</h2><div class="muted small">${esc(teamName(pg.team))}</div></div></div>
     ${goalBar(pg)}
+    ${matchNote(pg)}
     <p>${esc(pg.story||'I\'m climbing to raise money for Up ENDing Parkinson\'s.')}</p>
     ${overallBar()}
     <div class="card"><h3>Give to ${esc(p.name.split(' ')[0])}'s climb</h3>
@@ -917,6 +926,8 @@ function notesHtml(r,n){
 }
 let lastKey='';
 // Small "Built by Positive Tribes" credit, shown only on the sign-in and climber home screens.
+// Donate link in the app bar: UEP's own donation page (sample address here; UEP supplies the real one, including its recurring-gift option).
+const DONATE='https://upendingparkinsons.org/donate';
 const PTAG='<p class="ptag">Built by <a href="https://positivetribes.org/" target="_blank" rel="noopener">Positive Tribes</a></p>';
 // "Get help" link for lead volunteers and staff only, so app problems reach Positive Tribes support directly.
 const GETHELP='<p class="ptag">Something not working? <a href="https://positivetribes.org/support" target="_blank" rel="noopener">Get help ↗</a></p>';
@@ -943,7 +954,7 @@ function render(){
   $('#main').innerHTML=`<div class="stage ${wide?'wide':''}">
     <div class="device" id="device">
       <div class="appbar"><div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l6-9 4 5 3-4 5 8z"/><circle cx="16" cy="5" r="1.6"/></svg></span><b>UEP Climb</b></div>
-        <div class="who">${sw}${p?`<span>${esc(p.name)}</span><button class="linkbtn" data-act="signout">Sign out</button>`:'<span>Signed out</span>'}</div></div>
+        <div class="who">${sw}<a class="linkbtn" href="${DONATE}" target="_blank" rel="noopener">Donate to UEP ↗</a>${p?`<span>${esc(p.name)}</span><button class="linkbtn" data-act="signout">Sign out</button>`:'<span>Signed out</span>'}</div></div>
       <div id="screen">${body}</div>${tabs}
     </div>${notes}</div>`;
   const ns=$('#screen');if(ns&&!wide)ns.scrollTop=top;
@@ -1032,7 +1043,7 @@ document.addEventListener('click',e=>{
 // Creates the page, joining an existing account when the email already has one.
 function giveCreate(){
   const G=state.give,k=G.email.trim().toLowerCase(),p=state.people[k];
-  const pg={slug:slugOf(G.name),goal:G.goal,team:G.team,aff:G.aff,story:G.story.trim(),gifts:[]};
+  const pg={slug:slugOf(G.name),goal:G.goal,team:G.team,aff:G.aff,story:G.story.trim(),matchWho:(G.matchWho||'').trim(),matchUpTo:G.matchUpTo||'',gifts:[]};
   if(p){if(!pageOf(k))state.fund.pages[k]=pg}
   else{state.people[k]={name:G.name.trim(),roles:['fundraiser'],home:null,waiver:null,wl:[],standing:[],once:[],missed:[]};state.fund.pages[k]=pg}
   state.give=null;state.user=k;state.mode=null;state.fund.tab='page';state.fund.edit=false;
