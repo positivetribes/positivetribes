@@ -744,10 +744,11 @@ function giveFlow(){
     <div><div class="small" style="font-weight:700;margin-bottom:6px">My goal</div>
       <div class="chips" role="group" aria-label="My goal">${CAMPAIGN.goals.map(g=>`<button class="chip" data-act="ggoal" data-v="${g}" aria-pressed="${G.goal===g}">${usd(g)}</button>`).join('')}</div></div>
     <label class="f" for="gstory">Why I'm climbing <span class="muted small">(optional)</span><textarea id="gstory" data-bind="g.story" rows="3">${esc(G.story)}</textarea></label>
-    <button class="btn full" data-act="gsend" ${giveReady()?'':'disabled'}>Send me a code</button>
+    <p class="muted small">Step 1 of 2. Next we email you a code to confirm it's you, then your page is created.</p>
+    <button class="btn full" data-act="gsend" ${giveReady()?'':'disabled'}>Next: confirm my email</button>
     <button class="linkbtn" data-act="giveback">Back to sign-in</button>`;
   return `
-    <div class="stack" style="gap:6px"><h2>Check your messages</h2><p class="muted">We sent a 6-digit code to <b>${esc(G.email)}</b>. It works for 10 minutes.</p></div>
+    <div class="stack" style="gap:6px"><h2>Step 2 of 2: confirm and create your page</h2><p class="muted">We sent a 6-digit code to <b>${esc(G.email)}</b>. It works for 10 minutes.</p></div>
     <label class="f" for="gcode">Code<input type="text" id="gcode" class="code" inputmode="numeric" maxlength="6" value="123456" readonly></label>
     <p class="muted small">In this prototype the code is filled in for you.</p>
     <button class="btn full" data-act="gcreate">Create my page</button>
