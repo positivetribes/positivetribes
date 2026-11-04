@@ -19,7 +19,7 @@ if (!['off', 'preview', 'on'].includes(donations)) throw new Error('DONATIONS mu
 
 
 await mkdir('public', { recursive: true });
-const pages = ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html', 'support.html'];
+const pages = ['index.html', 'about.html', 'projects.html', 'contact.html', 'volunteer.html', 'privacy.html', 'support.html', 'care.html'];
 if (donations !== 'off') pages.push('donate.html');
 for (const page of pages) {
   let html = await readFile(page, 'utf8');

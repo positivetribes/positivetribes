@@ -55,7 +55,7 @@ Sizes: small change 1 credit, medium 2, large 4. Wording, label, typo and image 
 - Fixes are always free.
 - You see the cost before any work starts.
 - Unused credits roll over for one month.
-- Running out never blocks you. Extra requests wait for next month at no cost, or you can add an optional boost pack (8 credits for $200, good for 12 months).
+- Running out never blocks you. Extra requests wait for next month at no cost, or you can add an optional boost pack (8 credits for $300, good for 12 months).
 
 **Included / Not included**
 
