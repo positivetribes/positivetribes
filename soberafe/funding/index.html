@@ -241,7 +241,8 @@ footer{background:var(--denim);color:var(--paper);padding:64px 0 36px}
 }
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
 /* funding additions */
-.cells b{font-size:clamp(26px,3vw,44px);white-space:nowrap}
+.cells{container-type:inline-size}
+.cells b{font-size:clamp(22px,5cqw,44px);white-space:nowrap}
 .cells div{min-width:0;padding-left:4px;padding-right:4px}
 .cells{grid-template-columns:repeat(auto-fit,minmax(96px,1fr))}
 .tiles{display:grid;grid-template-columns:repeat(11,minmax(0,1fr));gap:5px;max-width:760px}
