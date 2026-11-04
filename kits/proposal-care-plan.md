@@ -7,6 +7,7 @@ Rules when using it:
 - Sell only what exists. Until the hub's self-serve requests ship (roadmap P1–P4), say the request workflow is "rolling out in 2027". Today the Tribe Guide applies the same rules by hand in *Questions & changes*.
 - Always include "Included / Not included". It is what keeps this a software team and not an IT department.
 - Use made-up or the client's own examples. Never name another client's tools or people.
+- The plan goes live in the client's hub only after the project is signed off, completed and released. Say so in the proposal.
 - Update the pricing experiments table in the Productization Strategy doc each time this offer goes out and when it's won or lost.
 
 ---
@@ -72,6 +73,7 @@ Sizes: small change 1 credit, medium 2, large 4. Wording, label, typo and image 
 
 Replace the older "up to N hours a month, unused hours do not carry over" wording with:
 
+- The Care plan starts when the project is signed off, completed and released. It appears in {client name}'s hub at that point, not before.
 - The plan includes {credits} credits a month. One credit is about 30 minutes of work. Each improvement's size (small 1, medium 2, large 4) is shown before work starts and only used once {client name} confirms it.
 - Fixes to problems in Positive Tribes' own code, and tweaks needed to deliver what was confirmed, never use credits.
 - Courtesy edits (wording, labels, typos, images; no change to logic or data) are free, up to 5 a month. After that, every 5 count as 1 credit.
