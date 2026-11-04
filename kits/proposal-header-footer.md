@@ -2,7 +2,7 @@
 
 Every proposal (Google Doc and the PDF sent to the client) carries the same header and footer. Copy them from the UEP Climb Scheduler proposal PDF.
 
-**Header (every page):** the client's logo on the left, the Positive Tribes logo (with tagline) on the right, and a thin terracotta rule underneath. For UEP it is one image: `brand/proposal-header-uep.png`, served at https://positivetribes.org/brand/proposal-header-uep.png. For a new client, make the same image with their logo and `brand/positive-tribes-logo-horizontal.png`, and save it as `brand/proposal-header-{client}.png`.
+**Header (every page):** the client's logo on the left, the Positive Tribes logo (with tagline) on the right, and a thin terracotta rule underneath. For UEP it is one image: `brand/proposal-header-uep.png` (rebuilt from the real logo files, not a screenshot crop), served at https://positivetribes.org/brand/proposal-header-uep.png. For a new client, make the same image with their logo and `brand/positive-tribes-logo-horizontal.png`, and save it as `brand/proposal-header-{client}.png`.
 
 **Footer (every page):** small gray text, a thin rule above it:
 `Positive Tribes · Technology for healthier communities · positivetribes.org · eric@positivetribes.org` on the left, and `Page X of N` on the right.
