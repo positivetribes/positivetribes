@@ -64,8 +64,9 @@ Sizes: small change 1 credit, medium 2, large 4. Wording, label, typo and image 
 | The tools Positive Tribes built, with hosting, backups and monitoring | Laptops, phones, printers and Wi-Fi |
 | Their connections (your CRM, texting, email) | Email accounts, passwords, Microsoft 365 or Google Workspace admin |
 | The data inside those tools, kept separate for {client name} | Security for systems Positive Tribes doesn't run |
-| A help desk for questions about those tools | Other vendors' software |
+| A help desk for questions about those tools | Salesforce licenses and Salesforce's own support; other vendors' software |
 | Fixes, courtesy edits and monthly improvements | |
+| Salesforce Nonprofit Cloud setup and improvements for clients on Salesforce, sized and paid in credits (Eric is a Salesforce Certified Platform Administrator I and II, Platform App Builder, and Agentforce Sales and Service Consultant) | |
 
 ---
 
