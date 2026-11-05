@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tribe-status",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-27",
+  // Public, read-only status pages at status.positivetribes.org/<client>. They show only check names and up/down.
+  "workers_dev": false,
+  "routes": [{ "pattern": "status.positivetribes.org", "custom_domain": true }],
+  // Probe every minute.
+  "triggers": { "crons": ["* * * * *"] },
+  "d1_databases": [
+    // database_id is filled in by `wrangler d1 create status-db`.
+    { "binding": "DB", "database_name": "status-db", "database_id": "a78b0558-de89-453d-99a0-27bdfe5e36d7", "migrations_dir": "migrations" }
+  ]
+}
