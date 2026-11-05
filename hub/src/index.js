@@ -149,6 +149,26 @@ function changeOf(item, next) {
   return edited.length ? ['edited', 'Changed ' + edited.map(key => FIELD_NAMES[key]).join(', ')] : null;
 }
 
+// The slug is [a-z0-9-] only (the route pattern), so it is safe in the URL. A client with no checks, an unset STATUS_URL or
+// an unreachable status Worker all give an empty answer, so the hub never fails because of it.
+export async function clientStatus(env, slug) {
+  const empty = { checks: [], overall: null, page_url: null };
+  if (!env.STATUS_URL) return empty;
+  try {
+    const res = await fetch(env.STATUS_URL + '/' + slug + '.json', { signal: AbortSignal.timeout(4000), headers: { accept: 'application/json' } });
+    if (!res.ok) return empty;
+    const body = await res.json();
+    const checks = (Array.isArray(body.checks) ? body.checks : []).slice(0, 20).map(c => ({
+      name: String(c.name || '').slice(0, 80),
+      state: ['up', 'down', 'unknown'].includes(c.state) ? c.state : 'unknown',
+      pct: typeof c.pct === 'number' ? c.pct : null
+    }));
+    return { checks, overall: ['up', 'down', 'unknown'].includes(body.overall) ? body.overall : 'unknown', page_url: env.STATUS_URL + '/' + slug };
+  } catch {
+    return empty;
+  }
+}
+
 // A null item id means the item was just inserted in the same batch.
 const logEvent = (db, clientId, itemId, action, item, detail, user) => db.prepare(
   `INSERT INTO events (client_id, item_id, action, item_title, item_kind, detail, actor_email, actor_name)
@@ -297,7 +317,7 @@ export default {
         return json({ error: 'Not found.' }, 404);
       }
 
-      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications)(?:\/(\d+))?(?:\/(move|signoff))?$/);
+      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications|status)(?:\/(\d+))?(?:\/(move|signoff))?$/);
       if (!match) return json({ error: 'Not found.' }, 404);
       const [, slug, resource, rawId, action] = match;
       const client = await scope(db, user, slug);
@@ -319,6 +339,10 @@ export default {
         if (!person) throw new InputError('Choose one of this client\'s people.', 404);
         return json(await listForClient(db, person, client));
       }
+
+      // Live system status for the client's page, read from the status Worker's public JSON view (names and up/down only).
+      // scope() above already limited this to the signed-in person's own client (or Positive Tribes).
+      if (resource === 'status' && !rawId && method === 'GET') return json(await clientStatus(env, client.slug));
 
       if (resource === 'projects' && !rawId && method === 'GET') {
         const { results } = await db.prepare(

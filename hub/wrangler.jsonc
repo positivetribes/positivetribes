@@ -17,7 +17,9 @@
     // Next steps sync with Salesforce Tasks: new Tasks are owned by this Salesforce user (Eric), and only this host
     // writes them, so pull request previews (own database, same Salesforce) never touch real Tasks.
     "SF_TASK_OWNER_ID": "005Hu00000QcVdBIAV",
-    "SF_TASK_SYNC_HOST": "hub.positivetribes.org"
+    "SF_TASK_SYNC_HOST": "hub.positivetribes.org",
+    // Public status pages (the tribe-status Worker); the hub shows each client's checks on their home page.
+    "STATUS_URL": "https://status.positivetribes.org"
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "hub-db", "database_id": "bfa66ad3-605c-4b6c-923e-2329f17e89bf", "migrations_dir": "migrations" },

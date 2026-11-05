@@ -60,10 +60,14 @@ async function loadCheck(env, client, checkId, now) {
   return { days, state, pct: results.length ? (up / results.length) * 100 : null };
 }
 
+function overallOf(data) {
+  const states = data.map((d) => d.state);
+  return states.includes("down") ? "down" : states.includes("unknown") ? "unknown" : "up";
+}
+
 function renderPage(slug, cfg, data, now) {
   const todayIdx = Math.floor(now / DAY);
-  const states = data.map((d) => d.state);
-  const overall = states.includes("down") ? "down" : states.includes("unknown") ? "unknown" : "up";
+  const overall = overallOf(data);
   const headline = { up: "All systems running", down: "A system is having problems", unknown: "Status unavailable right now" }[overall];
   const rows = cfg.checks.map((c, i) => {
     const d = data[i];
@@ -101,10 +105,17 @@ const HEADERS = {
 
 export async function handle(request, env, now = Math.floor(Date.now() / 1000)) {
   if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
-  const slug = new URL(request.url).pathname.replace(/^\/+|\/+$/g, "");
+  let slug = new URL(request.url).pathname.replace(/^\/+|\/+$/g, "");
+  const wantsJson = slug.endsWith(".json");
+  if (wantsJson) slug = slug.slice(0, -5);
   if (!Object.prototype.hasOwnProperty.call(CLIENTS, slug)) return new Response("Not found", { status: 404, headers: { "content-type": "text/plain", "x-content-type-options": "nosniff" } });
   const cfg = CLIENTS[slug];
   const data = await Promise.all(cfg.checks.map((c) => loadCheck(env, slug, c.id, now)));
+  if (wantsJson) {
+    // Public, read-only summary for other Positive Tribes tools (the hub). Names and states only, never URLs.
+    const body = { name: cfg.name, overall: overallOf(data), updated: now, checks: cfg.checks.map((c, i) => ({ name: c.name, state: data[i].state, pct: data[i].pct === null ? null : Math.round(data[i].pct * 100) / 100 })) };
+    return new Response(JSON.stringify(body), { headers: { "content-type": "application/json", "cache-control": "public, max-age=30", "x-content-type-options": "nosniff" } });
+  }
   return new Response(renderPage(slug, cfg, data, now), { headers: HEADERS });
 }
 

@@ -299,3 +299,30 @@ test('opening the hub records when each person was last seen', async () => {
   await call('molly@uep.org', '/api/me');
   assert.equal(seen(), before);
 });
+
+test('system status: scoped to the client, states only, safe when the status Worker is down', async () => {
+  const { call, env } = setup();
+  env.STATUS_URL = 'https://status.test';
+  const seen = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    seen.push(String(url));
+    return String(url).endsWith('/uep.json')
+      ? new Response(JSON.stringify({ overall: 'up', checks: [{ name: 'Climb Scheduler', state: 'up', pct: 99.9, url: 'https://secret.example' }] }))
+      : new Response('nope', { status: 404 });
+  };
+  try {
+    const molly = await (await call('molly@uep.org', '/api/c/uep/status')).json();
+    assert.deepEqual(molly, { checks: [{ name: 'Climb Scheduler', state: 'up', pct: 99.9 }], overall: 'up', page_url: 'https://status.test/uep' });
+    // Another client's person cannot read it, and no outside request is made for them.
+    assert.equal((await call('dana@safe.org', '/api/c/uep/status')).status, 404);
+    assert.equal((await call(null, '/api/c/uep/status')).status, 401);
+    // A client with no checks, then an unreachable status Worker: empty, never an error.
+    assert.deepEqual((await (await call('dana@safe.org', '/api/c/safe/status')).json()).checks, []);
+    globalThis.fetch = async () => { throw new Error('down'); };
+    assert.deepEqual((await (await call('molly@uep.org', '/api/c/uep/status')).json()).checks, []);
+    env.STATUS_URL = '';
+    assert.deepEqual((await (await call('molly@uep.org', '/api/c/uep/status')).json()).checks, []);
+  } finally { globalThis.fetch = realFetch; }
+  assert.deepEqual(seen.filter(u => u.includes('safe') === false && u.includes('uep.json')).length, 1);
+});

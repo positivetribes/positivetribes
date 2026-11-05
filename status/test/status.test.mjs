@@ -49,4 +49,18 @@ test("page: down and stale states", async () => {
   assert.match(await (await handle(new Request("https://s.test/uep"), env, now + 3600)).text(), /unavailable/);
 });
 
+test("json view: states only, no URLs, same slug rules", async () => {
+  const env = { DB: fakeDb() };
+  const now = 1_800_000_000;
+  await runChecks(env, now, res(200, '"database":"ready"'));
+  const r = await handle(new Request("https://s.test/uep.json"), env, now + 10);
+  assert.equal(r.status, 200);
+  const body = await r.json();
+  assert.equal(body.overall, "up");
+  assert.deepEqual(body.checks, [{ name: "Climb Scheduler", state: "up", pct: 100 }]);
+  assert.doesNotMatch(JSON.stringify(body), /https?:/);
+  assert.equal((await handle(new Request("https://s.test/nope.json"), env, now)).status, 404);
+  assert.equal((await handle(new Request("https://s.test/__proto__.json"), env, now)).status, 404);
+});
+
 test("esc escapes html", () => assert.equal(esc(`<a href="x">'&`), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;"));
