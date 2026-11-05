@@ -377,7 +377,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   }
   async function act(path, options) {
     showError('');
-    try { const data = await api(path, options); if (data.items) state.items = data.items; render(); }
+    try { const data = await api(path, options); if (data.items) state.items = data.items; if (data.care) state.care = data.care; render(); }
     catch (e) { showError(e.message); }
   }
   const base = () => '/c/' + state.slug;
@@ -388,8 +388,8 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   const link = (view, id) => '#/' + state.slug + '/' + view + (id ? '/' + id : '');
 
   async function loadClient(slug) {
-    const [p, i, d, st] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items'), api('/ideas').catch(() => ({ ideas: [] })), api('/c/' + slug + '/status').catch(() => null)]);
-    Object.assign(state, { status: st, slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
+    const [p, i, d, st, care] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items'), api('/ideas').catch(() => ({ ideas: [] })), api('/c/' + slug + '/status').catch(() => null), api('/c/' + slug + '/care').catch(() => null)]);
+    Object.assign(state, { care, status: st, slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
     if (state.me.user.role === 'pt') { try { state.people = (await api('/c/' + slug + '/people')).people; } catch {} }
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
@@ -465,7 +465,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const { view } = command.viewOf(sub);
     const tab = (key, href, label, extra) => h('a', { href, ...(view === key || (key === 'clients' && view === 'client') ? { 'aria-current': 'page' } : {}) }, label, extra);
     const tabs = inboxBadge => [tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', inboxBadge), tab('clients', '#/command/clients', 'Clients'),
-      tab('documents', '#/command/documents', 'Documents'), tab('ideas', '#/command/ideas', 'Improve this hub', h('span', { class: 'badge', id: 'cc-ideas-count' }))];
+      tab('care', '#/command/care', 'Care plans'), tab('documents', '#/command/documents', 'Documents'), tab('ideas', '#/command/ideas', 'Improve this hub', h('span', { class: 'badge', id: 'cc-ideas-count' }))];
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {
@@ -529,7 +529,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
           h('h2', {}, 'Nothing is waiting on you right now.'),
           h('p', { class: 'muted' }, 'We’ll tell you here, and by email, as soon as we need something from you.'),
           h('div', {}, h('a', { class: 'btn ghost', href: link('backlog') }, 'Suggest a change or ask a question')));
-    return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero,
+    return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero, carePlan(),
       h('div', { class: 'grid' }, state.projects.map(p => {
         const at = STEPS.findIndex(s => s[0] === p.phase);
         const counts = open(state.items.filter(i => i.project_id === p.id));
@@ -570,6 +570,68 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       documents(),
       mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
         h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
+  }
+
+  // ---- Care plan: the strip on the home page, and the care request controls on each request ----
+  // The server decides who sees the balance (the director and one named contact); staff get status, size and cost only.
+  const CARE_HISTORY = { grant: 'Monthly credits', boost: 'Boost pack', spend: 'Used', refund: 'Returned', courtesy: 'Courtesy edit' };
+  const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+  function carePlan() {
+    const c = state.care;
+    if (!c || !c.plan) return null;
+    const b = c.balance;
+    const startRequest = () => { state.kind = 'request'; if (c.live[0]) state.project = c.live[0].id; };
+    return h('div', { class: 'card', id: 'care-plan' },
+      h('div', { class: 'label' }, 'Care plan'),
+      h('h2', {}, c.plan.name + ' plan'),
+      h('p', { class: 'muted' }, plural(c.shippedThisMonth || 0, 'improvement') + ' shipped this month. Fixes are always free.'),
+      b && h('p', {}, h('b', {}, plural(b.available, 'credit') + ' available'),
+        h('span', { class: 'muted' }, b.boost ? ' (' + b.monthly + ' monthly, ' + b.boost + ' from a boost pack)' : ''),
+        b.expiringSoon ? h('span', { class: 'meta' }, ' · ' + plural(b.expiringSoon, 'rolled-over credit') + ' end this month') : null),
+      c.history && c.history.length > 0 && h('details', {}, h('summary', {}, 'Credit history'),
+        h('ul', { class: 'docs' }, c.history.slice(0, 30).map(r => h('li', {},
+          h('div', { class: 'doc-title' }, h('b', {}, CARE_HISTORY[r.kind] || r.kind), h('span', { class: 'meta' }, (r.note || '') + ' · ' + r.at.slice(0, 10))),
+          h('span', { class: 'pill doc' }, (r.credits > 0 ? '+' : '') + r.credits))))),
+      c.live.length > 0 && h('div', {}, h('a', { class: 'btn', href: link('backlog'), onclick: startRequest }, 'Request an improvement')));
+  }
+  const careOf = item => state.care && state.care.requests ? state.care.requests.find(r => r.item_id === item.id) : null;
+  async function careAct(item, action, payload) {
+    showError('');
+    try {
+      const data = await api(base() + '/care/' + item.id + '/' + action, post(payload || {}));
+      state.care = data.care;
+      state.items = (await api(base() + '/items')).items;
+      if (data.waiting) showError('There are not enough credits right now. This request will wait for next month at no cost, or a boost pack can start it sooner.');
+      render();
+    } catch (e) { showError(e.message); }
+  }
+  function careBlock(item, isPt) {
+    const r = careOf(item);
+    if (!r) return null;
+    const mayConfirm = state.care.canConfirm && viewer().role !== 'pt';
+    const nodes = [h('div', { class: 'actions' }, h('span', { class: 'pill stage' }, r.status_name), r.cost && h('span', { class: 'meta' }, r.cost))];
+    if (r.triage_note) nodes.push(h('p', { class: 'muted' }, r.triage_note));
+    if (mayConfirm && ['awaiting_confirm', 'waiting_credits'].includes(r.status)) {
+      nodes.push(h('div', { class: 'actions' },
+        h('button', { class: 'btn small', type: 'button', onclick: () => careAct(item, 'confirm') }, r.status === 'waiting_credits' ? 'Try again' : 'Yes, go ahead (' + plural(r.credits, 'credit') + ')'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => careAct(item, 'decline') }, 'Not now')));
+    } else if (r.status === 'awaiting_confirm' && !isPt) {
+      nodes.push(h('p', { class: 'meta' }, 'Your director decides whether to go ahead.'));
+    }
+    if (isPt && viewer().role === 'pt' && !state.preview) {
+      if (['new', 'awaiting_confirm', 'waiting_credits'].includes(r.status) && r.type !== 'courtesy') {
+        const type = h('select', { 'aria-label': 'Kind of request' }, [['fix', 'Fix (free)'], ['courtesy', 'Courtesy edit'], ['improvement', 'Improvement'], ['project', 'New project']].map(([k, l]) => h('option', { value: k, ...(r.type === k ? { selected: true } : {}) }, l)));
+        const size = h('select', { 'aria-label': 'Size' }, [['S', 'Small · 1'], ['M', 'Medium · 2'], ['L', 'Large · 4']].map(([k, l]) => h('option', { value: k, ...(r.size === k ? { selected: true } : {}) }, l)));
+        const note = h('input', { type: 'text', maxlength: 500, placeholder: 'Note for the client (optional)', 'aria-label': 'Note' });
+        const sync = () => { size.hidden = type.value !== 'improvement'; };
+        type.onchange = sync; sync();
+        nodes.push(h('div', { class: 'actions' }, type, size, note, h('button', { class: 'btn small', type: 'button', onclick: () => careAct(item, 'triage', { type: type.value, size: type.value === 'improvement' ? size.value : undefined, note: note.value }) }, 'Sort it')));
+      }
+      if (r.status === 'queued') nodes.push(h('div', { class: 'actions' },
+        h('button', { class: 'btn small', type: 'button', onclick: () => careAct(item, 'ship') }, 'Mark shipped'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => careAct(item, 'cancel') }, 'Cancel and return credits')));
+    }
+    return h('div', { class: 'stack' }, nodes);
   }
 
   // ---- System status: live up/down for the client's apps, from the status Worker ----
@@ -682,7 +744,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       return h('button', { type: 'button', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; render(); } }, label + ' (' + n + ')');
     })));
     nodes.push(h('ul', { class: 'legend card' }, tiers.map(([key, label, meaning]) => h('li', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'muted' }, meaning)))));
-    nodes.push(addForm());
+    nodes.push(kind === 'request' && state.care && state.care.plan ? careForm() : addForm());
     if (kind !== 'problem' && kind !== 'request') {
       nodes.push(h('div', { class: 'filters', role: 'group', 'aria-label': 'Show by phase' }, h('span', { class: 'meta' }, 'Show:'),
         [['all', 'All'], ...PHASES].map(([key, label]) => {
@@ -738,6 +800,26 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('div', {}, h('button', { class: 'btn', type: 'submit' }, verb[2])));
   }
 
+  // "Request an improvement": for tools that are live on an active care plan. Other tools keep the plain help request.
+  function careForm() {
+    const live = state.care.live.some(p => p.id === state.project);
+    if (!live) return addForm();
+    const title = h('input', { type: 'text', maxlength: 160, required: true, id: 'c-title' });
+    const details = h('textarea', { maxlength: 2000, id: 'c-details' });
+    return h('form', { class: 'card stack', onsubmit: async e => {
+      e.preventDefault(); showError('');
+      try {
+        const data = await api(base() + '/items', post({ care: true, kind: 'request', project_id: state.project, title: title.value, details: details.value }));
+        state.items = data.items; state.care = data.care; render();
+      } catch (err) { showError(err.message); }
+    } },
+      h('h2', {}, 'Request an improvement'),
+      h('p', { class: 'muted' }, 'Tell us what you want in plain words. We will tell you whether it is a fix (always free) or an improvement, with its size and cost, before any work starts.'),
+      h('div', {}, h('label', { for: 'c-title' }, 'What would you like?'), title),
+      h('div', {}, h('label', { for: 'c-details' }, 'More detail (optional)'), details),
+      h('div', {}, h('button', { class: 'btn', type: 'submit' }, 'Send request')));
+  }
+
   function card(item, group, isPt) {
     if (state.editing === item.id) return editor(item);
     const tiers = TIER_NAMES[item.kind];
@@ -752,6 +834,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
       item.answer && h('div', { class: 'answer' }, h('b', {}, item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), h('p', {}, item.answer)),
+      careBlock(item, isPt),
       h('div', { class: 'meta' }, (item.owner ? (item.kind === 'problem' ? item.owner : 'For ' + item.owner) + ' · ' : '') + (item.added_by || 'Someone') + ' · ' + date),
       !item.done && !phaseless && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'When:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Phase for ' + item.title },
         PHASES.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.phase === k), onclick: () => item.phase !== k && act(base() + '/items/' + item.id, patch({ phase: k })) }, l)))),
@@ -1019,10 +1102,15 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         case 'live': return `${i.title} is live`;
         case 'shared': return `New ${DOC_WORD[i.detail] || 'document'} shared with you: ${q(i.title)}`;
         case 'idea_status': return `Positive Tribes replied to your hub idea ${q(i.title)}`;
+        case 'triaged': return `${who} sorted your request ${q(i.title)}`;
+        case 'confirmed': return `${who} confirmed ${q(i.title)}`;
+        case 'declined': return `${who} chose not to go ahead with ${q(i.title)}`;
+        case 'shipped': return `${q(i.title)} is live`;
+        case 'cancelled': return `${who} cancelled ${q(i.title)}`;
         default: return q(i.title);
       }
     }
-    const clientDetail = i => ['answered', 'idea_status'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
+    const clientDetail = i => ['answered', 'idea_status', 'triaged', 'confirmed', 'shipped', 'cancelled'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
     // Inbox rows, for Positive Tribes.
     function ptText(i) {
       const who = i.actor || 'Someone';
@@ -1030,7 +1118,9 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         added: i.kind === 'idea' ? `suggested a hub idea ${q(i.title)}` : i.kind === 'question' ? `asked ${q(i.title)}` : `added a ${KIND_WORD[i.kind] || 'item'} ${q(i.title)}`,
         answered: `answered ${q(i.title)}`, done: `marked ${q(i.title)} ${done(i)}`, reopened: `reopened ${q(i.title)}`,
         signed_off: `signed off ${i.title}`, edited: `edited ${q(i.title)}`, tier: `changed the priority of ${q(i.title)}`,
-        phase: `moved ${q(i.title)}`, deleted: `deleted ${q(i.title)}`
+        phase: `moved ${q(i.title)}`, deleted: `deleted ${q(i.title)}`,
+        triaged: `sorted the care request ${q(i.title)}`, confirmed: `confirmed ${q(i.title)}`, declined: `chose not to go ahead with ${q(i.title)}`,
+        shipped: `shipped ${q(i.title)}`, cancelled: `cancelled ${q(i.title)}`
       }[i.action] || `changed ${q(i.title)}`;
       return `${who} ${verb}` + (i.eventIds.length > 1 ? ` (${i.eventIds.length} changes)` : '');
     }

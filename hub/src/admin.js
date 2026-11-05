@@ -5,6 +5,7 @@
 
 import { salesforceToken, soql, quote, sf as sfRequest } from './salesforce.js';
 import { windowEnd } from './dates.js';
+import { TIERS, BOOST, planFor, ensureGrants, ledgerOf, balanceOf, careRequests, todayUtc, monthOf, addYearsMonths } from './care.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
 const TIME_ZONE = 'America/Denver';
@@ -823,6 +824,9 @@ export async function handleAdmin(request, env, url, who) {
       return json({ error: 'Not found.' }, 404);
     }
 
+    const care = await careAdmin(request, env, url, route, path, method, who);
+    if (care) return care;
+
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
       const auth = await salesforce(env);
@@ -845,4 +849,151 @@ export async function handleAdmin(request, env, url, who) {
     console.error('admin_failed', route, error.message);
     return json({ error: 'Something went wrong. Please try again.' }, 500);
   }
+}
+
+// ---- Care plans (hub database) ----
+
+const opportunityIdOf = value => {
+  if (value === '' || value == null) return '';
+  if (typeof value !== 'string' || !/^006[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/.test(value)) throw new InputError('That does not look like a Salesforce Opportunity id (it starts with 006).');
+  return value;
+};
+// Salesforce ids are 15 characters, case-sensitive, with 3 more for the 18-character form; the first 15 decide.
+const sameSfId = (a, b) => Boolean(a && b) && a.slice(0, 15) === b.slice(0, 15);
+
+// What still stands between a plan and going live in the client's hub.
+export function careChecklist(plan, projects) {
+  return [
+    { key: 'plan', label: 'Plan chosen and start date set', done: Boolean(plan?.tier && plan?.starts_on) },
+    { key: 'live', label: 'A tool sold (Opportunity closed-won) and released (phase support)', done: projects.some(p => p.phase === 'support' && p.opportunity_won) },
+    { key: 'repo', label: 'Repository', done: Boolean(plan?.repo_url) },
+    { key: 'test_db', label: 'Test database', done: Boolean(plan?.test_db) },
+    { key: 'signins', label: 'Test sign-ins work', done: Boolean(plan?.test_signins_ok) },
+    { key: 'rules', label: 'Rules version', done: Boolean(plan?.rules_version) },
+    { key: 'contact', label: 'Who sees balances (the director, plus one named contact)', done: Boolean(plan?.balance_contact_user_id) }
+  ];
+}
+
+async function careClient(hub, clientId) {
+  const id = Number(clientId);
+  const client = Number.isSafeInteger(id) && id > 0 && await hub.prepare('SELECT * FROM clients WHERE id = ?').bind(id).first();
+  if (!client) throw new InputError('That client is not in the hub.', 404);
+  return client;
+}
+
+async function careOverview(hub, today) {
+  const month = monthOf(today);
+  const [{ results: clients }, { results: projects }, { results: people }] = await Promise.all([
+    hub.prepare("SELECT id, slug, name, salesforce_account_id, status FROM clients ORDER BY name").all(),
+    hub.prepare('SELECT id, client_id, name, phase, salesforce_opportunity_id, opportunity_won, opportunity_checked_at FROM projects ORDER BY position, id').all(),
+    hub.prepare("SELECT id, client_id, name, email, role FROM users WHERE client_id IS NOT NULL ORDER BY CASE role WHEN 'ed' THEN 0 ELSE 1 END, name").all()
+  ]);
+  const rows = await Promise.all(clients.map(async c => {
+    const plan = await planFor(hub, c.id);
+    const own = projects.filter(p => p.client_id === c.id).map(({ client_id, ...p }) => ({ ...p, opportunity_won: Boolean(p.opportunity_won) }));
+    const row = {
+      client: { id: c.id, slug: c.slug, name: c.name, accountId: c.salesforce_account_id }, projects: own,
+      people: people.filter(p => p.client_id === c.id).map(({ client_id, ...p }) => p),
+      plan: plan ? { ...plan, test_signins_ok: Boolean(plan.test_signins_ok), tierName: TIERS[plan.tier]?.name, price: TIERS[plan.tier]?.price } : null,
+      checklist: careChecklist(plan, own), balance: null, requests: {}, shippedThisMonth: 0, flags: []
+    };
+    if (plan) {
+      await ensureGrants(hub, plan, today);
+      const [ledger, requests] = await Promise.all([ledgerOf(hub, plan), careRequests(hub, c.id)]);
+      const { drawn, ...balance } = balanceOf(ledger, today);
+      row.balance = balance;
+      for (const r of requests) row.requests[r.status] = (row.requests[r.status] || 0) + 1;
+      row.shippedThisMonth = requests.filter(r => r.status === 'shipped' && (r.shipped_at || '').slice(0, 7) === month).length;
+      if (plan.status === 'active') {
+        if (row.requests.waiting_credits || row.balance.available === 0) row.flags.push('Out of credits');
+        if (row.balance.expiringSoon) row.flags.push(`${row.balance.expiringSoon} rolled-over credit${row.balance.expiringSoon === 1 ? '' : 's'} end this month`);
+        if (Number(today.slice(8)) >= 20 && !row.balance.usedThisMonth) row.flags.push('No credits used this month');
+        if (row.balance.courtesyThisMonth > 5) row.flags.push('Past the free courtesy edits');
+        if (row.requests.new) row.flags.push(`${row.requests.new} to sort`);
+      }
+    }
+    return row;
+  }));
+  return { today, tiers: TIERS, boost: BOOST, clients: rows };
+}
+
+async function careAdmin(request, env, url, route, path, method, who) {
+  const isCare = route === 'GET /api/admin/care' || /^\/api\/admin\/care\/\d+(\/boost)?$/.test(path) || /^\/api\/admin\/projects\/\d+\/opportunity$/.test(path);
+  if (!isCare) return null;
+  if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
+  const hub = env.DB, today = todayUtc();
+
+  if (route === 'GET /api/admin/care') return json(await careOverview(hub, today));
+
+  const opp = path.match(/^\/api\/admin\/projects\/(\d+)\/opportunity$/);
+  if (opp && method === 'PUT') {
+    const id = Number(opp[1]);
+    const project = await hub.prepare('SELECT p.*, c.salesforce_account_id FROM projects p JOIN clients c ON c.id = p.client_id WHERE p.id = ?').bind(id).first();
+    if (!project) throw new InputError('That project is not in the hub.', 404);
+    const oppId = opportunityIdOf((await body(request)).opportunityId);
+    if (!oppId) {
+      await hub.prepare("UPDATE projects SET salesforce_opportunity_id = '', opportunity_won = 0, opportunity_checked_at = CURRENT_TIMESTAMP WHERE id = ?").bind(id).run();
+      return json({ ok: true, ...await careOverview(hub, today) });
+    }
+    if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
+    const [found] = await records(await salesforce(env), 'SELECT Id, AccountId, IsWon, StageName FROM Opportunity WHERE Id = ' + quote(oppId) + ' LIMIT 1');
+    if (!found) throw new InputError('No Opportunity with that id in Salesforce.', 404);
+    // A tool may only be linked to a deal on its own client's Account.
+    if (!sameSfId(found.AccountId, project.salesforce_account_id)) throw new InputError('That Opportunity belongs to a different Salesforce Account than this client.', 409);
+    await hub.prepare('UPDATE projects SET salesforce_opportunity_id = ?, opportunity_won = ?, opportunity_checked_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(found.Id, found.IsWon ? 1 : 0, id).run();
+    return json({ ok: true, stage: found.StageName, won: Boolean(found.IsWon), ...await careOverview(hub, today) });
+  }
+
+  const planPath = path.match(/^\/api\/admin\/care\/(\d+)(\/boost)?$/);
+  if (planPath && method === 'PUT' && !planPath[2]) {
+    const client = await careClient(hub, planPath[1]);
+    const input = await body(request);
+    const current = await planFor(hub, client.id);
+    if (!Object.hasOwn(TIERS, input.tier)) throw new InputError('Choose Essentials, Care or Growth.');
+    const status = input.status ?? current?.status ?? 'setup';
+    if (!['setup', 'active', 'paused', 'ended'].includes(status)) throw new InputError('Choose setup, active, paused or ended.');
+    let startsOn = dateOf(input.startsOn, 'Start date') || '';
+    // Credits are granted from starts_on, so a plan never earns for months before it went active: turning a plan on
+    // (from setup, paused or ended) starts it today at the earliest, and an active plan keeps its start date.
+    if (status === 'active' && current?.status !== 'active') startsOn = today > startsOn ? today : startsOn;
+    else if (status === 'active') startsOn = current.starts_on;
+    const repoUrl = urlOf(input.repoUrl, 'Repository');
+    const testDb = text(input.testDb, 120, { label: 'Test database' });
+    if (input.testSigninsOk != null && typeof input.testSigninsOk !== 'boolean') throw new InputError('Test sign-ins must be yes or no.');
+    const rulesVersion = text(input.rulesVersion, 40, { label: 'Rules version' });
+    let contactId = null;
+    const contactEmail = text(input.balanceContactEmail, 254, { label: 'Balance contact' }).toLowerCase();
+    if (contactEmail) {
+      const person = await hub.prepare('SELECT id FROM users WHERE email = ? AND client_id = ?').bind(contactEmail, client.id).first();
+      if (!person) throw new InputError('The balance contact must be one of this client\'s hub people.');
+      contactId = person.id;
+    }
+    const values = { tier: input.tier, starts_on: startsOn, repo_url: repoUrl, test_db: testDb, test_signins_ok: input.testSigninsOk ? 1 : 0, rules_version: rulesVersion, balance_contact_user_id: contactId };
+    if (status === 'active') {
+      const { results: projects } = await hub.prepare('SELECT phase, opportunity_won FROM projects WHERE client_id = ?').bind(client.id).all();
+      const missing = careChecklist(values, projects).filter(c => !c.done).map(c => c.label);
+      if (missing.length) throw new InputError('Finish the checklist first: ' + missing.join('; ') + '.', 409);
+    }
+    await hub.prepare(
+      `INSERT INTO care_plans (client_id, tier, monthly_credits, starts_on, status, repo_url, test_db, test_signins_ok, rules_version, balance_contact_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(client_id) DO UPDATE SET tier = excluded.tier, monthly_credits = excluded.monthly_credits, starts_on = excluded.starts_on,
+         status = excluded.status, repo_url = excluded.repo_url, test_db = excluded.test_db, test_signins_ok = excluded.test_signins_ok,
+         rules_version = excluded.rules_version, balance_contact_user_id = excluded.balance_contact_user_id, updated_at = CURRENT_TIMESTAMP`
+    ).bind(client.id, values.tier, TIERS[values.tier].credits, startsOn, status, repoUrl, testDb, values.test_signins_ok, rulesVersion, contactId).run();
+    return json({ ok: true, ...await careOverview(hub, today) });
+  }
+
+  if (planPath && method === 'POST' && planPath[2]) {
+    const client = await careClient(hub, planPath[1]);
+    const plan = await planFor(hub, client.id);
+    if (!plan || plan.status !== 'active') throw new InputError('Boost packs are for an active care plan.', 409);
+    const note = text((await body(request)).note, 200, { label: 'Note' }) || `Boost pack (${BOOST.credits} credits, $${BOOST.price})`;
+    await hub.prepare(
+      `INSERT INTO credit_ledger (client_id, care_plan_id, kind, credits, month, expires_on, note, actor_email) VALUES (?, ?, 'boost', ?, ?, ?, ?, ?)`
+    ).bind(client.id, plan.id, BOOST.credits, monthOf(today), addYearsMonths(today, BOOST.months), note, who.email || '').run();
+    return json({ ok: true, ...await careOverview(hub, today) }, 201);
+  }
+  return json({ error: 'Not found.' }, 404);
 }

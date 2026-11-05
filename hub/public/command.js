@@ -409,10 +409,71 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     };
   }
 
+  // ---- Care plans: every client's credits, rollover, boost and checklist (screen 6) ----
+  const TIER_OPTIONS = { essentials: 'Essentials ($300, 2 credits)', care: 'Care ($500, 6 credits)', growth: 'Growth ($750, 12 credits)' };
+  const PLAN_STATUS = { setup: 'Setting up', active: 'Active', paused: 'Paused', ended: 'Ended' };
+  const REQUEST_STATUS = { new: 'to sort', awaiting_confirm: 'waiting for the client', waiting_credits: 'waiting for credits', queued: 'in the queue', shipped: 'shipped', declined: 'declined' };
+  const selectOptions = (map, chosen) => Object.entries(map).map(([k, v]) => `<option value="${esc(k)}"${k === chosen ? ' selected' : ''}>${esc(v)}</option>`).join('');
+
+  function careRow(c) {
+    const p = c.plan, b = c.balance;
+    const numbers = b ? `<div class="small"><b>${b.available}</b> available · ${b.monthly} monthly · ${b.boost} boost · ${b.grantedThisMonth} granted and ${b.usedThisMonth} used this month · ${b.courtesyThisMonth} courtesy edit${b.courtesyThisMonth === 1 ? '' : 's'} · ${c.shippedThisMonth} shipped</div>` : '';
+    const waiting = Object.entries(c.requests).map(([k, n]) => `${n} ${REQUEST_STATUS[k] || k}`).join(' · ');
+    const flags = c.flags.map(f => `<span class="chip warn">${esc(f)}</span>`).join(' ');
+    const checks = c.checklist.map(x => `<li>${x.done ? '✓' : '○'} ${esc(x.label)}</li>`).join('');
+    const projects = c.projects.map(pr => `<li><div class="row"><div class="grow"><b>${esc(pr.name)}</b> <span class="meta">${esc(pr.phase)}${pr.opportunity_won ? ' · Opportunity closed-won' : pr.salesforce_opportunity_id ? ' · Opportunity not won yet' : ''}</span></div>
+      <form class="row" data-opp="${pr.id}"><input type="text" name="opp" value="${esc(pr.salesforce_opportunity_id)}" maxlength="18" placeholder="Opportunity id (006…)" aria-label="Opportunity for ${esc(pr.name)}"><button>Link</button></form></div></li>`).join('');
+    const contacts = '<option value="">Choose a person</option>' + c.people.map(x => `<option value="${esc(x.email)}"${p && x.email === (c.people.find(y => y.id === p.balance_contact_user_id) || {}).email ? ' selected' : ''}>${esc(x.name || x.email)}</option>`).join('');
+    const form = `<form class="fields" data-plan="${c.client.id}">
+      <label>Plan<select name="tier">${selectOptions(TIER_OPTIONS, p && p.tier)}</select></label>
+      <label>Status<select name="status">${selectOptions(PLAN_STATUS, p ? p.status : 'setup')}</select></label>
+      <label>Starts on<input type="date" name="startsOn" value="${esc(p ? p.starts_on : '')}"></label>
+      <label>Rules version<input type="text" name="rulesVersion" value="${esc(p ? p.rules_version : '')}" maxlength="40" placeholder="v1"></label>
+      <label class="wide">Repository<input type="url" name="repoUrl" value="${esc(p ? p.repo_url : '')}" maxlength="1000" placeholder="https://github.com/…"></label>
+      <label>Test database<input type="text" name="testDb" value="${esc(p ? p.test_db : '')}" maxlength="120"></label>
+      <label>Who sees balances (besides the director)<select name="balanceContactEmail">${contacts}</select></label>
+      <label class="check wide"><input type="checkbox" name="testSigninsOk"${p && p.test_signins_ok ? ' checked' : ''}><span>Test sign-ins work</span></label>
+      <p class="actions wide"><button class="primary">${p ? 'Save plan' : 'Create plan'}</button>${p && p.status === 'active' ? ' <button type="button" data-boost="' + c.client.id + '">Add boost pack (8 credits)</button>' : ''}</p></form>`;
+    return `<section class="panel"><div class="row"><h2 class="grow">${esc(c.client.name)}</h2>${p ? `<span class="chip">${esc(p.tierName || p.tier)} · ${esc(PLAN_STATUS[p.status])}</span>` : '<span class="chip">No plan yet</span>'} <a class="client-link" href="#/${esc(c.client.slug)}/home">Open workspace</a></div>
+      ${numbers}${waiting ? `<div class="small muted">Requests: ${esc(waiting)}</div>` : ''}${flags ? `<div class="small">${flags}</div>` : ''}
+      <details${p && p.status === 'active' ? '' : ' open'}><summary>Setup checklist and plan</summary><ul class="small">${checks}</ul>${form}</details>
+      <details><summary>Tools and Salesforce Opportunities</summary><ul class="items">${projects || '<li class="muted small">No tools yet.</li>'}</ul></details>
+      <p class="err" data-err="${c.client.id}"></p></section>`;
+  }
+
+  function renderCare(box, data) {
+    const active = data.clients.filter(c => c.plan && c.plan.status === 'active');
+    const credits = active.reduce((n, c) => n + (c.balance ? c.balance.available : 0), 0);
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Care plans</h2><p class="muted small">${active.length} active · ${credits} credits available across clients · $${active.reduce((n, c) => n + (c.plan.price || 0), 0)} a month</p></div></div>
+      ${data.clients.map(careRow).join('') || '<p class="empty">No clients yet.</p>'}`;
+    const fail = (id, error) => { const el = box.querySelector(`[data-err="${id}"]`); if (el) el.textContent = error.message; };
+    box.onsubmit = async e => {
+      e.preventDefault();
+      const f = e.target;
+      const id = f.dataset.plan || f.closest('section').querySelector('[data-plan]').dataset.plan;
+      try {
+        if (f.dataset.opp) {
+          const result = await api('/projects/' + f.dataset.opp + '/opportunity', { method: 'PUT', body: JSON.stringify({ opportunityId: f.opp.value.trim() }) });
+          renderCare(box, result);
+        } else {
+          const result = await api('/care/' + f.dataset.plan, { method: 'PUT', body: JSON.stringify({
+            tier: f.tier.value, status: f.status.value, startsOn: f.startsOn.value, repoUrl: f.repoUrl.value, testDb: f.testDb.value,
+            testSigninsOk: f.testSigninsOk.checked, rulesVersion: f.rulesVersion.value, balanceContactEmail: f.balanceContactEmail.value }) });
+          renderCare(box, result);
+        }
+      } catch (error) { fail(id, error); }
+    };
+    box.onclick = async e => {
+      const t = e.target.closest('[data-boost]');
+      if (!t || !confirm('Add a boost pack of 8 credits (valid 12 months)? Record the $300 payment separately.')) return;
+      try { renderCare(box, await api('/care/' + t.dataset.boost + '/boost', { method: 'POST', body: JSON.stringify({}) })); } catch (error) { fail(t.dataset.boost, error); }
+    };
+  }
+
   // sub is what follows #/command: '', 'inbox', 'clients', 'documents' or 'client/<Salesforce account id>'.
   const viewOf = sub => {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
-    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients', 'documents', 'ideas'].includes(sub) ? sub : 'today' };
+    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients', 'care', 'documents', 'ideas'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
@@ -432,6 +493,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         if (current.box !== box) return;
         document.title = 'Documents | Command center';
         renderDocuments(box, data);
+      } else if (view === 'care') {
+        const data = await api('/care');
+        if (current.box !== box) return;
+        document.title = 'Care plans | Command center';
+        renderCare(box, data);
       } else if (view === 'inbox') {
         const data = await api('/inbox');
         if (current.box !== box) return;
