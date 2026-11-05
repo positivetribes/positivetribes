@@ -57,7 +57,7 @@ test('documents: clients see their own shown documents; Positive Tribes sees hid
   const molly = await (await call('molly@uep.org', '/api/c/uep/projects')).json();
   assert.deepEqual(molly.documents.map(d => [d.title, d.status, d.visible]), [['Scheduler proposal', 'signed', true]]);
   const eric = await (await call('eric@positivetribes.org', '/api/c/uep/projects')).json();
-  assert.deepEqual(eric.documents.map(d => [d.title, d.visible]), [['Scheduler proposal', true], ['Fundraising proposal', false]]);
+  assert.deepEqual(eric.documents.map(d => [d.title, d.visible]), [['Fundraising proposal', false], ['Scheduler proposal', true]]); // newest first
   // Another client's documents never leak.
   assert.equal((await call('dana@safe.org', '/api/c/uep/projects')).status, 404);
   assert.deepEqual((await (await call('dana@safe.org', '/api/c/safe/projects')).json()).documents.map(d => d.title), ['Sober AF proposal']);

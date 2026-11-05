@@ -470,7 +470,7 @@ test('documents: Positive Tribes keeps its own and every client\'s; clients see 
   // Edit moves a document and shows it; delete removes it.
   const designs = list.documents.find(d => d.title === 'Draft designs').id;
   assert.equal((await as('eric@positivetribes.org', 'PUT', 'admin/documents/' + designs, { client: 'uep', project_id: 1, kind: 'design', title: 'Designs', url: 'https://figma.com/x', visible: true })).status, 200);
-  assert.deepEqual((await (await as('molly@uep.org', 'GET', 'c/uep/projects')).json()).documents.map(d => d.title), ['Phase 3 proposal', 'Designs']);
+  assert.deepEqual((await (await as('molly@uep.org', 'GET', 'c/uep/projects')).json()).documents.map(d => d.title), ['Designs', 'Phase 3 proposal']); // newest first
   assert.equal((await as('eric@positivetribes.org', 'DELETE', 'admin/documents/' + designs)).status, 200);
   assert.equal((await as('eric@positivetribes.org', 'DELETE', 'admin/documents/' + designs)).status, 404);
   assert.equal(h.sqlite.prepare('SELECT COUNT(*) AS n FROM documents').get().n, 3);
