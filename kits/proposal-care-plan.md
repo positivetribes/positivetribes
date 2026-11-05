@@ -4,7 +4,7 @@ Reusable section for every Positive Tribes proposal. Copy it in after the build 
 
 Rules when using it:
 - Open with the client's own result (the Monday-to-Friday story), then the cost comparison as proof.
-- Sell only what exists. Until the hub's self-serve requests ship (roadmap P1–P4), say the request workflow is "rolling out in 2027". Today the Tribe Guide applies the same rules by hand in *Questions & changes*.
+- Sell only what exists. Live in the hub since Nov 5, 2026 (roadmap P1): "Request an improvement" on released tools, each request's size and cost shown before work, confirm-before-work by the director or one named contact, the credit balance and history, and the "shipped this month" count. Still done by hand: the Tribe Guide sorts each request, posts the preview link and test script, and adds boost packs on request (invoiced). Don't promise AI triage or self-serve boost checkout yet, and don't give dates for them.
 - Always include "Included / Not included". It is what keeps this a software team and not an IT department.
 - Use made-up or the client's own examples. Never name another client's tools or people.
 - The plan goes live in the client's hub only after the project is signed off, completed and released. Say so in the proposal.
