@@ -189,6 +189,11 @@ section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wra
 .item p{white-space:pre-wrap;overflow-wrap:anywhere}.item.flash{outline:3px solid var(--client);outline-offset:3px}
 .item.is-done h3{color:var(--muted)}
 .answer{background:var(--ok-bg);border-radius:10px;padding:10px 14px}
+.care-meter{display:grid;grid-template-columns:repeat(auto-fill,minmax(18px,1fr));gap:5px;max-width:420px}
+.care-meter i{height:14px;border-radius:4px;background:var(--soft)}
+.care-meter i.used{background:var(--ok)}.care-meter i.roll{background:var(--idea-bg);outline:1.5px dashed var(--idea);outline-offset:-1.5px}
+.care-note{background:var(--soft);border-radius:10px;padding:10px 12px;font-size:14px}
+.care-steps{margin:0;padding-left:20px;font-size:14px;display:grid;gap:4px}
 .answer b{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ok)}
 .actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.spacer{flex:1}
 .confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--must-bg);border-radius:10px;padding:8px 12px}
@@ -588,11 +593,24 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       b && h('p', {}, h('b', {}, plural(b.available, 'credit') + ' available'),
         h('span', { class: 'muted' }, b.boost ? ' (' + b.monthly + ' monthly, ' + b.boost + ' from a boost pack)' : ''),
         b.expiringSoon ? h('span', { class: 'meta' }, ' · ' + plural(b.expiringSoon, 'rolled-over credit') + ' end this month') : null),
+      b && careMeter(b),
       c.history && c.history.length > 0 && h('details', {}, h('summary', {}, 'Credit history'),
         h('ul', { class: 'docs' }, c.history.slice(0, 30).map(r => h('li', {},
           h('div', { class: 'doc-title' }, h('b', {}, CARE_HISTORY[r.kind] || r.kind), h('span', { class: 'meta' }, (r.note || '') + ' · ' + r.at.slice(0, 10))),
           h('span', { class: 'pill doc' }, (r.credits > 0 ? '+' : '') + r.credits))))),
       c.live.length > 0 && h('div', {}, h('a', { class: 'btn', href: link('backlog'), onclick: startRequest }, 'Request an improvement')));
+  }
+  // One square per credit this month: used (filled), rolled-over credits still left (dashed), then the rest.
+  function careMeter(b) {
+    const used = Math.min(b.usedThisMonth || 0, 24), left = Math.min(b.available, 24 - used), roll = Math.min(b.expiringSoon || 0, left);
+    if (!used && !left) return null;
+    const squares = [...Array(used)].map(() => h('i', { class: 'used' }))
+      .concat([...Array(roll)].map(() => h('i', { class: 'roll' })), [...Array(left - roll)].map(() => h('i', {})));
+    const next = new Date(); next.setUTCDate(1); next.setUTCMonth(next.getUTCMonth() + 1);
+    return h('div', { class: 'stack' },
+      h('div', { class: 'care-meter', role: 'img', 'aria-label': plural(used, 'credit') + ' used this month, ' + plural(b.available, 'credit') + ' left' + (roll ? ', ' + roll + ' rolled over from last month' : '') }, squares),
+      h('p', { class: 'meta' }, plural(used, 'credit') + ' used, ' + b.available + ' left' + (roll ? ', including ' + roll + ' rolled over' : '') +
+        ' · new credits ' + next.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })));
   }
   const careOf = item => state.care && state.care.requests ? state.care.requests.find(r => r.item_id === item.id) : null;
   async function careAct(item, action, payload) {
@@ -601,7 +619,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       const data = await api(base() + '/care/' + item.id + '/' + action, post(payload || {}));
       state.care = data.care;
       state.items = (await api(base() + '/items')).items;
-      if (data.waiting) showError('There are not enough credits right now. This request will wait for next month at no cost, or a boost pack can start it sooner.');
+      if (data.waiting) showError('There are not enough credits right now. Your request is saved and will start when next month\'s credits arrive, at no extra cost. Want it sooner? Ask your Tribe Guide for a boost pack: 8 credits for $300, good for 12 months.');
       render();
     } catch (e) { showError(e.message); }
   }
@@ -612,6 +630,10 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const nodes = [h('div', { class: 'actions' }, h('span', { class: 'pill stage' }, r.status_name), r.cost && h('span', { class: 'meta' }, r.cost))];
     if (r.triage_note) nodes.push(h('p', { class: 'muted' }, r.triage_note));
     if (mayConfirm && ['awaiting_confirm', 'waiting_credits'].includes(r.status)) {
+      const b = state.care.balance;
+      if (b) nodes.push(h('p', { class: 'meta' }, b.available >= r.credits
+        ? 'You\'ll have ' + plural(b.available - r.credits, 'credit') + ' left after this.'
+        : 'You have ' + plural(b.available, 'credit') + ' right now. It will wait for next month\'s credits at no cost, or a boost pack can start it sooner.'));
       nodes.push(h('div', { class: 'actions' },
         h('button', { class: 'btn small', type: 'button', onclick: () => careAct(item, 'confirm') }, r.status === 'waiting_credits' ? 'Try again' : 'Yes, go ahead (' + plural(r.credits, 'credit') + ')'),
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => careAct(item, 'decline') }, 'Not now')));
@@ -802,21 +824,38 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 
   // "Request an improvement": for tools that are live on an active care plan. Other tools keep the plain help request.
   function careForm() {
-    const live = state.care.live.some(p => p.id === state.project);
-    if (!live) return addForm();
+    const c = state.care;
+    if (!c.live.some(p => p.id === state.project)) return addForm();
+    let tool = state.project;
     const title = h('input', { type: 'text', maxlength: 160, required: true, id: 'c-title' });
-    const details = h('textarea', { maxlength: 2000, id: 'c-details' });
+    const why = h('textarea', { maxlength: 2000, id: 'c-why', placeholder: 'Who it helps and what it saves them' });
+    // Which tool: only tools that are live on the plan. The server checks this again.
+    const chips = c.live.length > 1 ? h('div', { class: 'actions', role: 'group', 'aria-label': 'Which tool?' }, c.live.map(p =>
+      h('button', { type: 'button', class: 'btn small' + (p.id === tool ? '' : ' ghost'), 'aria-pressed': String(p.id === tool), onclick: e => {
+        tool = p.id;
+        for (const b of e.currentTarget.parentNode.children) { const on = b === e.currentTarget; b.classList.toggle('ghost', !on); b.setAttribute('aria-pressed', String(on)); }
+      } }, p.name))) : null;
+    const b = c.balance;
     return h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
       try {
-        const data = await api(base() + '/items', post({ care: true, kind: 'request', project_id: state.project, title: title.value, details: details.value }));
-        state.items = data.items; state.care = data.care; render();
+        const data = await api(base() + '/items', post({ care: true, kind: 'request', project_id: tool, title: title.value, details: why.value }));
+        state.items = data.items; state.care = data.care; state.project = tool; render();
       } catch (err) { showError(err.message); }
     } },
       h('h2', {}, 'Request an improvement'),
-      h('p', { class: 'muted' }, 'Tell us what you want in plain words. We will tell you whether it is a fix (always free) or an improvement, with its size and cost, before any work starts.'),
+      chips && h('div', {}, h('div', { class: 'label' }, 'Which tool?'), chips),
       h('div', {}, h('label', { for: 'c-title' }, 'What would you like?'), title),
-      h('div', {}, h('label', { for: 'c-details' }, 'More detail (optional)'), details),
+      h('div', {}, h('label', { for: 'c-why' }, 'Why does it help?'), why),
+      h('div', { class: 'care-note' },
+        h('b', {}, 'What happens next'),
+        h('ol', { class: 'care-steps' },
+          h('li', {}, 'Your Tribe Guide sorts it within a day.'),
+          h('li', {}, 'You see the size and cost before any work starts.'),
+          h('li', {}, 'You test it on a safe copy, then sign off.')),
+        b ? h('p', { class: 'meta' }, 'This month: ' + plural(b.available, 'credit') + ' left') : null),
+      h('p', { class: 'muted' }, h('b', {}, 'Something broken? '), 'Report it as a problem instead. Fixes are always free. ',
+        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { state.kind = 'problem'; state.filter = 'all'; render(); } }, 'Report a problem')),
       h('div', {}, h('button', { class: 'btn', type: 'submit' }, 'Send request')));
   }
 
