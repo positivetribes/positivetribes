@@ -3,7 +3,9 @@
 import { windowEnd } from './dates.js';
 
 // What a client person hears about. Edits, priority changes, deletes and reordering are left out as noise.
-export const CLIENT_ACTIONS = ['added', 'answered', 'done', 'reopened', 'phase', 'signed_off', 'uat_started', 'live', 'shared', 'idea_status'];
+export const CLIENT_ACTIONS = ['added', 'answered', 'done', 'reopened', 'phase', 'signed_off', 'uat_started', 'live', 'shared', 'idea_status',
+  // Care requests: sorted, confirmed or declined, shipped, cancelled (details carry the cost, never a balance).
+  'triaged', 'confirmed', 'declined', 'shipped', 'cancelled'];
 export const NOTIFY_DAYS = 30;
 // The bell went live here; what was logged before (including history imported from the old backlog sites) is not
 // news. A person invited later starts from the day they were invited.

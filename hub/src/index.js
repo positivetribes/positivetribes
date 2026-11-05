@@ -4,7 +4,15 @@ import { accessIdentity } from './access.js';
 import { handleAdmin } from './admin.js';
 import { windowEnd } from './dates.js';
 import { listForClient, markRead } from './notifications.js';
+import {
+  SIZES, TYPE_NAMES, courtesyCost, costLabel, planFor, ensureGrants, ledgerOf, balanceOf, canConfirm, isLive,
+  careView, todayUtc, monthOf, endOfMonth, ROLLOVER_MONTHS
+} from './care.js';
 export { windowEnd };
+
+const CARE_TYPES = ['fix', 'courtesy', 'improvement', 'project'];
+// Credit routes take JSON only (the Origin check for every client write is in fetch below).
+const isJson = request => (request.headers.get('content-type') || '').startsWith('application/json');
 
 const TIERS = ['must', 'nice', 'idea'];
 const PHASES = ['review', 'prototype', 'full', 'later'];
@@ -175,6 +183,145 @@ const logEvent = (db, clientId, itemId, action, item, detail, user) => db.prepar
    VALUES (?, COALESCE(?, last_insert_rowid()), ?, ?, ?, ?, ?, ?)`
 ).bind(clientId, itemId, action, item.title, item.kind || '', detail, user.email, user.name);
 
+// Care requests: the Tribe Guide sorts each one (fix, courtesy edit, improvement with a size, or a new project), the
+// director or named contact confirms improvements before any credit is used, and Positive Tribes ships it.
+// Event details say what happened and what it costs, never a balance, so the bell shows nothing staff may not see.
+const PENDING = "('awaiting_confirm', 'waiting_credits')";
+async function careRoute({ request, db, user, client, rawId, action, method }) {
+  if (!rawId && !action && method === 'GET') return json(await careView(db, client, user));
+  if (!rawId || method !== 'POST' || !action || action === 'move' || action === 'signoff') return json({ error: 'Not found.' }, 404);
+  if (!isJson(request)) throw new InputError('Send JSON.', 415);
+  const plan = await planFor(db, client.id);
+  if (!plan || plan.status !== 'active') throw new InputError('This client has no active care plan.', 409);
+  const item = await requireItem(db, client.id, rawId);
+  const care = await db.prepare('SELECT * FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id).first();
+  if (!care) throw new InputError('That is not a care request.', 404);
+  const b = await body(request);
+  const today = todayUtc(), month = monthOf(today);
+  const who = user.name || user.email;
+  const done = async () => json({ ok: true, care: await careView(db, client, user, today) });
+  const event = (name, detail) => logEvent(db, client.id, item.id, name, { title: item.title, kind: item.kind }, detail, user);
+  // An event written only while the request is still in the given state, so a losing double click logs nothing.
+  const eventIf = (name, detail, statuses, credits) => db.prepare(
+    `INSERT INTO events (client_id, item_id, action, item_title, item_kind, detail, actor_email, actor_name)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM care_requests WHERE item_id = ? AND client_id = ? AND status IN ${statuses} AND credits = ?)`
+  ).bind(client.id, item.id, name, item.title, item.kind || '', detail, user.email, user.name, item.id, client.id, credits);
+  const closeItem = db.prepare('UPDATE items SET done = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND client_id = ?').bind(item.id, client.id);
+  const balanceNow = async () => { await ensureGrants(db, plan, today); return balanceOf(await ledgerOf(db, plan), today); };
+
+  if (action === 'triage') {
+    if (user.role !== 'pt') throw new InputError('Only Positive Tribes sorts requests.', 403);
+    if (!['new', 'awaiting_confirm', 'waiting_credits'].includes(care.status)) throw new InputError('This request has already been decided.', 409);
+    if (care.type === 'courtesy') throw new InputError('This courtesy edit is already counted.', 409);
+    const type = oneOf(CARE_TYPES, 'Choose fix, courtesy, improvement or project.')(b.type);
+    const size = type === 'improvement' ? oneOf(Object.keys(SIZES), 'Choose a size: S, M or L.')(b.size) : null;
+    const note = text(b.note, 500, { label: 'Note' });
+    const withNote = detail => detail + (note ? ': ' + clip(note, 200) : '');
+    const set = (status, credits) => db.prepare(
+      `UPDATE care_requests SET type = ?, size = ?, credits = ?, status = ?, triage_note = ?, triaged_by = ?, triaged_at = CURRENT_TIMESTAMP
+       WHERE item_id = ? AND client_id = ? AND status IN ('new', 'awaiting_confirm', 'waiting_credits')`
+    ).bind(type, size, credits, status, note, who, item.id, client.id);
+    if (type === 'fix') {
+      await db.batch([set('queued', 0), event('triaged', withNote('Fix · free'))]);
+    } else if (type === 'project') {
+      await db.batch([set('declined', 0), closeItem, event('triaged', withNote('New project · quoted separately, no credits used'))]);
+    } else if (type === 'improvement') {
+      const credits = SIZES[size];
+      await db.batch([set('awaiting_confirm', credits), event('triaged', withNote(`${costLabel({ type, size, credits })} · waiting for your OK`))]);
+    } else {
+      // Courtesy edits are counted when sorted. The count row goes in first (once per request), and its place among this
+      // month's count rows decides its cost, so two edits sorted at the same moment can never get the same number.
+      await db.prepare(
+        `INSERT OR IGNORE INTO credit_ledger (client_id, care_plan_id, kind, credits, month, item_id, note, actor_email) VALUES (?, ?, 'courtesy', 0, ?, ?, 'Courtesy edit', ?)`
+      ).bind(client.id, plan.id, month, item.id, user.email).run();
+      const mine = await db.prepare("SELECT id, month FROM credit_ledger WHERE item_id = ? AND client_id = ? AND kind = 'courtesy'").bind(item.id, client.id).first();
+      const n = (await db.prepare("SELECT COUNT(*) AS n FROM credit_ledger WHERE care_plan_id = ? AND client_id = ? AND kind = 'courtesy' AND month = ? AND id <= ?")
+        .bind(plan.id, client.id, mine.month, mine.id).first()).n;
+      const cost = courtesyCost(n);
+      if (!cost) {
+        await db.batch([set('queued', 0), event('triaged', withNote(`Courtesy edit ${n} this month · free`))]);
+      } else if ((await balanceNow()).available >= cost) {
+        await db.batch([spendRow(db, client, plan, item, cost, month, `Courtesy edit ${n} this month`, user), set('queued', cost),
+          event('triaged', `Courtesy edit ${n} this month · 1 credit (past the free 5)`)]);
+      } else {
+        await db.batch([set('waiting_credits', cost), event('triaged', `Courtesy edit ${n} this month · 1 credit (past the free 5) · waiting for credits`)]);
+      }
+    }
+    return done();
+  }
+
+  if (action === 'confirm' || action === 'decline') {
+    if (!canConfirm(user, plan)) throw new InputError('Only the director or the named care plan contact can decide this.', 403);
+    if (!['awaiting_confirm', 'waiting_credits'].includes(care.status)) throw new InputError('This request is not waiting for a decision.', 409);
+    if (action === 'decline') {
+      await db.batch([
+        eventIf('declined', 'Not now · no credits used', PENDING, care.credits),
+        db.prepare(`UPDATE care_requests SET status = 'declined' WHERE item_id = ? AND client_id = ? AND status IN ${PENDING}`).bind(item.id, client.id),
+        closeItem
+      ]);
+      return done();
+    }
+    // Running out never blocks: the request waits for next month's credits at no cost.
+    if ((await balanceNow()).available < care.credits) {
+      await db.prepare("UPDATE care_requests SET status = 'waiting_credits' WHERE item_id = ? AND client_id = ? AND status = 'awaiting_confirm'").bind(item.id, client.id).run();
+      return json({ ok: true, waiting: true, care: await careView(db, client, user, today) });
+    }
+    // The spend and the event go in only while the request still waits for a decision at the size the client saw (a
+    // re-sort to another size in the meantime makes this a no-op), and the unique index allows one spend per request.
+    let moved;
+    try {
+      [, , moved] = await db.batch([
+        spendRow(db, client, plan, item, care.credits, month, `${costLabel(care)} confirmed by ${who}`, user, care.credits),
+        eventIf('confirmed', `${costLabel(care)} · confirmed`, PENDING, care.credits),
+        db.prepare(
+          `UPDATE care_requests SET status = 'queued', confirmed_by = ?, confirmed_at = CURRENT_TIMESTAMP
+           WHERE item_id = ? AND client_id = ? AND status IN ${PENDING} AND credits = ?`
+        ).bind(who, item.id, client.id, care.credits)
+      ]);
+    } catch (error) {
+      if (/UNIQUE/i.test(error.message)) throw new InputError('This request was already confirmed.', 409);
+      throw error;
+    }
+    if (!moved.meta.changes) throw new InputError('This request changed or was already decided. Please look again.', 409);
+    return done();
+  }
+
+  if (user.role !== 'pt') throw new InputError('Only Positive Tribes can do that.', 403);
+  if (care.status !== 'queued') throw new InputError('Only a request in the queue can be ' + (action === 'ship' ? 'shipped.' : 'cancelled.'), 409);
+  if (action === 'ship') {
+    await db.batch([
+      db.prepare("UPDATE care_requests SET status = 'shipped', shipped_at = CURRENT_TIMESTAMP WHERE item_id = ? AND client_id = ? AND status = 'queued'").bind(item.id, client.id),
+      closeItem,
+      event('shipped', `${TYPE_NAMES[care.type] || 'Request'} is live`)
+    ]);
+    return done();
+  }
+  if (action === 'cancel') {
+    const spent = await db.prepare("SELECT id, -credits AS n FROM credit_ledger WHERE item_id = ? AND client_id = ? AND kind = 'spend'").bind(item.id, client.id).first();
+    // Credits come back with the latest end date of what they were taken from, so returned boost credits keep their year.
+    const back = spent && balanceOf(await ledgerOf(db, plan), today).drawn[spent.id];
+    const expires = [endOfMonth(month, ROLLOVER_MONTHS), ...(back || []).map(d => d.expires)].sort().at(-1);
+    await db.batch([
+      db.prepare("UPDATE care_requests SET status = 'declined' WHERE item_id = ? AND client_id = ? AND status = 'queued'").bind(item.id, client.id),
+      closeItem,
+      ...spent ? [db.prepare(
+        `INSERT INTO credit_ledger (client_id, care_plan_id, kind, credits, month, expires_on, item_id, note, actor_email)
+         VALUES (?, ?, 'refund', ?, ?, ?, ?, ?, ?)`
+      ).bind(client.id, plan.id, spent.n, month, expires, item.id, 'Cancelled before work, credits returned', user.email)] : [],
+      event('cancelled', spent ? `Cancelled · ${spent.n} credit${spent.n === 1 ? '' : 's'} returned` : 'Cancelled')
+    ]);
+    return done();
+  }
+  return json({ error: 'Not found.' }, 404);
+}
+
+// One spend for a request. With guardCredits, only while the request still waits for a decision at that size.
+const spendRow = (db, client, plan, item, credits, month, note, user, guardCredits = null) => db.prepare(
+  `INSERT INTO credit_ledger (client_id, care_plan_id, kind, credits, month, item_id, note, actor_email)
+   SELECT ?, ?, 'spend', ?, ?, ?, ?, ?
+   WHERE ? IS NULL OR EXISTS (SELECT 1 FROM care_requests WHERE item_id = ? AND client_id = ? AND status IN ${PENDING} AND credits = ?)`
+).bind(client.id, plan.id, -credits, month, item.id, clip(note, 200), user.email, guardCredits, item.id, client.id, guardCredits);
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -200,6 +347,8 @@ export default {
       // Signed in through Access but not invited to any workspace.
       if (!user) return json({ error: 'This email has not been invited yet. Please ask Positive Tribes.' }, 403);
       const method = request.method;
+      // Every browser write must come from the hub's own page, so another site cannot make changes as a signed-in person.
+      if (method !== 'GET' && method !== 'HEAD' && request.headers.get('Origin') !== url.origin) throw new InputError('Not allowed.', 403);
 
       if (url.pathname === '/api/me' && method === 'GET') {
         await markSeen(db, user);
@@ -317,10 +466,12 @@ export default {
         return json({ error: 'Not found.' }, 404);
       }
 
-      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications|status)(?:\/(\d+))?(?:\/(move|signoff))?$/);
+      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications|status|care)(?:\/(\d+))?(?:\/(move|signoff|triage|confirm|decline|ship|cancel))?$/);
       if (!match) return json({ error: 'Not found.' }, 404);
       const [, slug, resource, rawId, action] = match;
       const client = await scope(db, user, slug);
+
+      if (resource === 'care') return await careRoute({ request, db, user, client, rawId, action, method });
 
       // The client's people, for Positive Tribes' "Preview as" menu. Clients never see this list.
       if (resource === 'people' && !rawId && method === 'GET') {
@@ -395,6 +546,23 @@ export default {
         const phase = b.phase === undefined ? (kind === 'problem' ? 'full' : 'review') : phaseOf(b.phase);
         const owner = text(b.owner, 60, { label: 'Who answers' });
         const project = await requireProject(db, client.id, b.project_id);
+        if (b.care !== undefined && b.care !== false) {
+          // "Request an improvement": a backlog item plus its care request, only on a live tool with an active plan.
+          if (b.care !== true) throw new InputError('care must be true or false.');
+          if (!isJson(request)) throw new InputError('Send JSON.', 415);
+          const plan = await planFor(db, client.id);
+          if (!isLive(project, plan)) throw new InputError('Requests open once this tool is live and the care plan has started.', 409);
+          await db.batch([
+            db.prepare(
+              `INSERT INTO items (client_id, project_id, kind, title, details, owner, tier, phase, position, added_by)
+               VALUES (?, ?, 'request', ?, ?, '', 'nice', 'review', (SELECT COALESCE(MAX(position), 0) + 1 FROM items WHERE client_id = ? AND project_id = ? AND kind = 'request' AND tier = 'nice'), ?)`
+            ).bind(client.id, project.id, title, details, client.id, project.id, user.name || user.email),
+            // care_requests.item_id is its rowid, so last_insert_rowid() still names the item for the event below.
+            db.prepare('INSERT INTO care_requests (item_id, client_id, care_plan_id) VALUES (last_insert_rowid(), ?, ?)').bind(client.id, plan.id),
+            logEvent(db, client.id, null, 'added', { title, kind: 'request' }, clip(details), user)
+          ]);
+          return json({ ok: true, items: await listItems(db, client.id), care: await careView(db, client, user) }, 201);
+        }
         await db.batch([
           db.prepare(
             `INSERT INTO items (client_id, project_id, kind, title, details, owner, tier, phase, position, added_by)
@@ -437,6 +605,12 @@ export default {
         const owner = b.owner === undefined ? item.owner : text(b.owner, 60, { label: 'Who answers' });
         const answer = b.answer === undefined ? item.answer : text(b.answer, 2000, { label: 'Answer' });
         const projectId = b.project_id === undefined ? item.project_id : (await requireProject(db, client.id, b.project_id)).id;
+        // A care request finishes through its own steps (ship, cancel, decline) and stays on the tool it was asked for,
+        // so its credits and the "shipped this month" meter always match what really happened.
+        if (done !== item.done || projectId !== item.project_id) {
+          const care = await db.prepare('SELECT 1 FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id).first();
+          if (care) throw new InputError('This is a care request: it closes when it ships or is cancelled, and stays on its tool.', 409);
+        }
         const position = tier === item.tier && projectId === item.project_id ? item.position : await nextPosition(db, client.id, projectId, item.kind, tier);
         const change = changeOf(item, { title, details, owner, answer, done, tier, phase, project_id: projectId });
         await db.batch([
@@ -453,7 +627,11 @@ export default {
         // Clients can finish or reopen items, but only Positive Tribes removes them.
         if (user.role !== 'pt') throw new InputError('Only Positive Tribes can delete items. Mark it done instead.', 403);
         const item = await requireItem(db, client.id, rawId);
+        // A care request with credits held is cancelled (credits returned) before it can go; its ledger rows stay.
+        const care = await db.prepare('SELECT status FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id).first();
+        if (care?.status === 'queued') throw new InputError('Cancel this request first, so any credits are returned.', 409);
         await db.batch([
+          db.prepare('DELETE FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
           db.prepare('DELETE FROM items WHERE id = ? AND client_id = ?').bind(item.id, client.id),
           logEvent(db, client.id, item.id, 'deleted', item, '', user)
         ]);
