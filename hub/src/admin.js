@@ -6,6 +6,9 @@
 import { salesforceToken, soql, quote, sf as sfRequest } from './salesforce.js';
 import { windowEnd } from './dates.js';
 import { TIERS, BOOST, planFor, ensureGrants, ledgerOf, balanceOf, careRequests, todayUtc, monthOf, addYearsMonths } from './care.js';
+// One error class for the whole Worker, so a check that fails inside a shared helper (triage.js) answers 4xx here too.
+import { InputError } from './triage.js';
+import { patchAdmin, patchInbox, aiCost } from './patch.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
 const TIME_ZONE = 'America/Denver';
@@ -17,9 +20,6 @@ const GENERIC_DOMAINS = ['gmail.com', 'googlemail.com', 'yahoo.com', 'hotmail.co
 
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } });
 
-class InputError extends Error {
-  constructor(message, status = 400) { super(message); this.status = status; }
-}
 
 function text(value, max, { required = false, label = 'Text', multiline = false } = {}) {
   if (value != null && typeof value !== 'string') throw new InputError(`${label} must be text.`);
@@ -719,7 +719,7 @@ export async function handleAdmin(request, env, url, who) {
       return json({ ...view, testing, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, user: who.email });
     }
 
-    if (route === 'GET /api/admin/inbox') return json(await loadInbox(env, db, today));
+    if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });
     if (route === 'POST /api/admin/inbox/clear') {
       const pairs = clearInput(await body(request));
       if (pairs.length) await db.batch(pairs.map(([backlog, id]) => db.prepare('INSERT OR IGNORE INTO backlog_cleared (backlog, event_id) VALUES (?, ?)').bind(backlog, id)));
@@ -826,6 +826,8 @@ export async function handleAdmin(request, env, url, who) {
 
     const care = await careAdmin(request, env, url, route, path, method, who);
     if (care) return care;
+    const patch = await patchAdmin({ request, env, url, route, path, method, who, json, body, text });
+    if (patch) return patch;
 
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
@@ -914,7 +916,7 @@ async function careOverview(hub, today) {
     }
     return row;
   }));
-  return { today, tiers: TIERS, boost: BOOST, clients: rows };
+  return { today, tiers: TIERS, boost: BOOST, clients: rows, ai: await aiCost(hub, month) };
 }
 
 async function careAdmin(request, env, url, route, path, method, who) {

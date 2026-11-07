@@ -5,12 +5,13 @@ import { handleAdmin } from './admin.js';
 import { windowEnd } from './dates.js';
 import { listForClient, markRead } from './notifications.js';
 import {
-  SIZES, TYPE_NAMES, courtesyCost, costLabel, planFor, ensureGrants, ledgerOf, balanceOf, canConfirm, isLive,
+  TYPE_NAMES, costLabel, planFor, ensureGrants, ledgerOf, balanceOf, canConfirm, isLive,
   careView, todayUtc, monthOf, endOfMonth, ROLLOVER_MONTHS
 } from './care.js';
+import { InputError, PENDING, PENDING_STATUSES, clip, logEvent, spendRow, applyTriage, askQuestion } from './triage.js';
+import { scoreManualTriage, careAnswer, runPatch } from './patch.js';
 export { windowEnd };
 
-const CARE_TYPES = ['fix', 'courtesy', 'improvement', 'project'];
 // Credit routes take JSON only (the Origin check for every client write is in fetch below).
 const isJson = request => (request.headers.get('content-type') || '').startsWith('application/json');
 
@@ -31,10 +32,6 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }
 });
 
-class InputError extends Error {
-  constructor(message, status = 400) { super(message); this.status = status; }
-}
-
 function text(value, max, { required = false, label = 'Text' } = {}) {
   if (value != null && typeof value !== 'string') throw new InputError(`${label} must be text.`);
   const result = (value || '').trim();
@@ -47,7 +44,6 @@ const oneOf = (list, message) => value => { if (!list.includes(value)) throw new
 const tierOf = oneOf(TIERS, 'Choose must, nice, or idea.');
 const phaseOf = oneOf(PHASES, 'Choose review, prototype, full, or later.');
 const kindOf = oneOf(KINDS, 'Choose question, change, problem, or request.');
-const clip = (value, max = 300) => value.length > max ? value.slice(0, max - 1) + '…' : value;
 
 async function body(request) {
   let result;
@@ -178,15 +174,9 @@ export async function clientStatus(env, slug) {
 }
 
 // A null item id means the item was just inserted in the same batch.
-const logEvent = (db, clientId, itemId, action, item, detail, user) => db.prepare(
-  `INSERT INTO events (client_id, item_id, action, item_title, item_kind, detail, actor_email, actor_name)
-   VALUES (?, COALESCE(?, last_insert_rowid()), ?, ?, ?, ?, ?, ?)`
-).bind(clientId, itemId, action, item.title, item.kind || '', detail, user.email, user.name);
-
 // Care requests: the Tribe Guide sorts each one (fix, courtesy edit, improvement with a size, or a new project), the
 // director or named contact confirms improvements before any credit is used, and Positive Tribes ships it.
 // Event details say what happened and what it costs, never a balance, so the bell shows nothing staff may not see.
-const PENDING = "('awaiting_confirm', 'waiting_credits')";
 async function careRoute({ request, db, user, client, rawId, action, method }) {
   if (!rawId && !action && method === 'GET') return json(await careView(db, client, user));
   if (!rawId || method !== 'POST' || !action || action === 'move' || action === 'signoff') return json({ error: 'Not found.' }, 404);
@@ -211,48 +201,26 @@ async function careRoute({ request, db, user, client, rawId, action, method }) {
 
   if (action === 'triage') {
     if (user.role !== 'pt') throw new InputError('Only Positive Tribes sorts requests.', 403);
-    if (!['new', 'awaiting_confirm', 'waiting_credits'].includes(care.status)) throw new InputError('This request has already been decided.', 409);
-    if (care.type === 'courtesy') throw new InputError('This courtesy edit is already counted.', 409);
-    const type = oneOf(CARE_TYPES, 'Choose fix, courtesy, improvement or project.')(b.type);
-    const size = type === 'improvement' ? oneOf(Object.keys(SIZES), 'Choose a size: S, M or L.')(b.size) : null;
-    const note = text(b.note, 500, { label: 'Note' });
-    const withNote = detail => detail + (note ? ': ' + clip(note, 200) : '');
-    const set = (status, credits) => db.prepare(
-      `UPDATE care_requests SET type = ?, size = ?, credits = ?, status = ?, triage_note = ?, triaged_by = ?, triaged_at = CURRENT_TIMESTAMP
-       WHERE item_id = ? AND client_id = ? AND status IN ('new', 'awaiting_confirm', 'waiting_credits')`
-    ).bind(type, size, credits, status, note, who, item.id, client.id);
-    if (type === 'fix') {
-      await db.batch([set('queued', 0), event('triaged', withNote('Fix · free'))]);
-    } else if (type === 'project') {
-      await db.batch([set('declined', 0), closeItem, event('triaged', withNote('New project · quoted separately, no credits used'))]);
-    } else if (type === 'improvement') {
-      const credits = SIZES[size];
-      await db.batch([set('awaiting_confirm', credits), event('triaged', withNote(`${costLabel({ type, size, credits })} · waiting for your OK`))]);
+    if (b.type === 'question') {
+      await askQuestion(db, { client, item, care, question: text(b.question, 300, { label: 'Question', required: true }), user });
     } else {
-      // Courtesy edits are counted when sorted. The count row goes in first (once per request), and its place among this
-      // month's count rows decides its cost, so two edits sorted at the same moment can never get the same number.
-      await db.prepare(
-        `INSERT OR IGNORE INTO credit_ledger (client_id, care_plan_id, kind, credits, month, item_id, note, actor_email) VALUES (?, ?, 'courtesy', 0, ?, ?, 'Courtesy edit', ?)`
-      ).bind(client.id, plan.id, month, item.id, user.email).run();
-      const mine = await db.prepare("SELECT id, month FROM credit_ledger WHERE item_id = ? AND client_id = ? AND kind = 'courtesy'").bind(item.id, client.id).first();
-      const n = (await db.prepare("SELECT COUNT(*) AS n FROM credit_ledger WHERE care_plan_id = ? AND client_id = ? AND kind = 'courtesy' AND month = ? AND id <= ?")
-        .bind(plan.id, client.id, mine.month, mine.id).first()).n;
-      const cost = courtesyCost(n);
-      if (!cost) {
-        await db.batch([set('queued', 0), event('triaged', withNote(`Courtesy edit ${n} this month · free`))]);
-      } else if ((await balanceNow()).available >= cost) {
-        await db.batch([spendRow(db, client, plan, item, cost, month, `Courtesy edit ${n} this month`, user), set('queued', cost),
-          event('triaged', `Courtesy edit ${n} this month · 1 credit (past the free 5)`)]);
-      } else {
-        await db.batch([set('waiting_credits', cost), event('triaged', `Courtesy edit ${n} this month · 1 credit (past the free 5) · waiting for credits`)]);
-      }
+      const note = text(b.note, 500, { label: 'Note' });
+      await applyTriage(db, { client, plan, item, care, type: b.type, size: b.size, note, user, today });
     }
+    // Sorting by hand still answers any suggestion Patch has waiting, so its agreement numbers stay honest.
+    await scoreManualTriage(db, { client, item, kind: b.type === 'question' ? 'needs_info' : b.type, size: b.size, user });
+    return done();
+  }
+
+  if (action === 'answer') {
+    if (user.role === 'pt') throw new InputError('The client answers this question.', 403);
+    await careAnswer(db, { client, item, care, answer: text(b.answer, 1000, { label: 'Answer', required: true }), user });
     return done();
   }
 
   if (action === 'confirm' || action === 'decline') {
     if (!canConfirm(user, plan)) throw new InputError('Only the director or the named care plan contact can decide this.', 403);
-    if (!['awaiting_confirm', 'waiting_credits'].includes(care.status)) throw new InputError('This request is not waiting for a decision.', 409);
+    if (!PENDING_STATUSES.includes(care.status)) throw new InputError('This request is not waiting for a decision.', 409);
     if (action === 'decline') {
       await db.batch([
         eventIf('declined', 'Not now · no credits used', PENDING, care.credits),
@@ -315,14 +283,12 @@ async function careRoute({ request, db, user, client, rawId, action, method }) {
   return json({ error: 'Not found.' }, 404);
 }
 
-// One spend for a request. With guardCredits, only while the request still waits for a decision at that size.
-const spendRow = (db, client, plan, item, credits, month, note, user, guardCredits = null) => db.prepare(
-  `INSERT INTO credit_ledger (client_id, care_plan_id, kind, credits, month, item_id, note, actor_email)
-   SELECT ?, ?, 'spend', ?, ?, ?, ?, ?
-   WHERE ? IS NULL OR EXISTS (SELECT 1 FROM care_requests WHERE item_id = ? AND client_id = ? AND status IN ${PENDING} AND credits = ?)`
-).bind(client.id, plan.id, -credits, month, item.id, clip(note, 200), user.email, guardCredits, item.id, client.id, guardCredits);
-
 export default {
+  // Patch's morning check (cron in wrangler.jsonc). runPatch refuses to run off the production host or without the key.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runPatch(env, 'cron').then(r => console.log('patch_run', r.ran ? `checked ${r.checked}, failed ${r.failed}` : r.reason))
+      .catch(error => console.error('patch_run_failed', error.message)));
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
@@ -342,7 +308,7 @@ export default {
       // The command center is Positive Tribes' own; to anyone else it does not exist.
       if (commandCenter) {
         if (!user || user.role !== 'pt') return json({ error: 'Not found.' }, 404);
-        return handleAdmin(request, env, url, { email: user.email });
+        return handleAdmin(request, env, url, { email: user.email, name: user.name });
       }
       // Signed in through Access but not invited to any workspace.
       if (!user) return json({ error: 'This email has not been invited yet. Please ask Positive Tribes.' }, 403);
@@ -466,7 +432,7 @@ export default {
         return json({ error: 'Not found.' }, 404);
       }
 
-      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications|status|care)(?:\/(\d+))?(?:\/(move|signoff|triage|confirm|decline|ship|cancel))?$/);
+      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications|status|care)(?:\/(\d+))?(?:\/(move|signoff|triage|answer|confirm|decline|ship|cancel))?$/);
       if (!match) return json({ error: 'Not found.' }, 404);
       const [, slug, resource, rawId, action] = match;
       const client = await scope(db, user, slug);

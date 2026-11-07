@@ -19,8 +19,14 @@
     "SF_TASK_OWNER_ID": "005Hu00000QcVdBIAV",
     "SF_TASK_SYNC_HOST": "hub.positivetribes.org",
     // Public status pages (the tribe-status Worker); the hub shows each client's checks on their home page.
-    "STATUS_URL": "https://status.positivetribes.org"
+    "STATUS_URL": "https://status.positivetribes.org",
+    // Patch (the AI triage helper) runs only while this is hub.positivetribes.org (blank it to switch Patch off) and the
+    // ANTHROPIC_API_KEY secret is set (wrangler secret put). Previews share this value; what keeps them off the API is
+    // that crons run only on the deployed Worker and a manual run must come in on hub.positivetribes.org itself.
+    "PATCH_HOST": "hub.positivetribes.org"
   },
+  // Patch's morning check: 12:00 UTC, 8am Eastern (7am in winter).
+  "triggers": { "crons": ["0 12 * * *"] },
   "d1_databases": [
     { "binding": "DB", "database_name": "hub-db", "database_id": "bfa66ad3-605c-4b6c-923e-2329f17e89bf", "migrations_dir": "migrations" },
     // The command center's own notes, next steps, synced activity and sync history (tables created at runtime).
