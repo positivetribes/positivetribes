@@ -470,7 +470,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const { view } = command.viewOf(sub);
     const tab = (key, href, label, extra) => h('a', { href, ...(view === key || (key === 'clients' && view === 'client') ? { 'aria-current': 'page' } : {}) }, label, extra);
     const tabs = inboxBadge => [tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', inboxBadge), tab('clients', '#/command/clients', 'Clients'),
-      tab('care', '#/command/care', 'Care plans'), tab('documents', '#/command/documents', 'Documents'), tab('ideas', '#/command/ideas', 'Improve this hub', h('span', { class: 'badge', id: 'cc-ideas-count' }))];
+      tab('care', '#/command/care', 'Care plans'), tab('triage', '#/command/triage', 'Triage'), tab('documents', '#/command/documents', 'Documents'), tab('ideas', '#/command/ideas', 'Improve this hub', h('span', { class: 'badge', id: 'cc-ideas-count' }))];
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {
@@ -629,6 +629,16 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const mayConfirm = state.care.canConfirm && viewer().role !== 'pt';
     const nodes = [h('div', { class: 'actions' }, h('span', { class: 'pill stage' }, r.status_name), r.cost && h('span', { class: 'meta' }, r.cost))];
     if (r.triage_note) nodes.push(h('p', { class: 'muted' }, r.triage_note));
+    if (r.question && r.status === 'new') {
+      nodes.push(h('p', {}, h('b', {}, 'A question from Positive Tribes: '), r.question));
+      if (r.answer) nodes.push(h('p', { class: 'muted' }, 'Your answer: ' + r.answer));
+      else if (isPt) nodes.push(h('p', { class: 'meta' }, 'Waiting for the client to answer.'));
+      else if (!state.preview) {
+        const answer = h('textarea', { maxlength: 1000, rows: 3, 'aria-label': 'Your answer', placeholder: 'Your answer' });
+        nodes.push(h('div', { class: 'stack' }, answer, h('div', { class: 'actions' },
+          h('button', { class: 'btn small', type: 'button', onclick: () => answer.value.trim() ? careAct(item, 'answer', { answer: answer.value }) : showError('Write your answer first.') }, 'Send answer'))));
+      }
+    }
     if (mayConfirm && ['awaiting_confirm', 'waiting_credits'].includes(r.status)) {
       const b = state.care.balance;
       if (b) nodes.push(h('p', { class: 'meta' }, b.available >= r.credits
@@ -1146,10 +1156,12 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         case 'declined': return `${who} chose not to go ahead with ${q(i.title)}`;
         case 'shipped': return `${q(i.title)} is live`;
         case 'cancelled': return `${who} cancelled ${q(i.title)}`;
+        case 'care_question': return `Positive Tribes has a question about your request ${q(i.title)}`;
+        case 'care_answered': return `${who} answered the question about ${q(i.title)}`;
         default: return q(i.title);
       }
     }
-    const clientDetail = i => ['answered', 'idea_status', 'triaged', 'confirmed', 'shipped', 'cancelled'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
+    const clientDetail = i => ['answered', 'idea_status', 'triaged', 'confirmed', 'shipped', 'cancelled', 'care_question', 'care_answered'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
     // Inbox rows, for Positive Tribes.
     function ptText(i) {
       const who = i.actor || 'Someone';
@@ -1159,7 +1171,8 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         signed_off: `signed off ${i.title}`, edited: `edited ${q(i.title)}`, tier: `changed the priority of ${q(i.title)}`,
         phase: `moved ${q(i.title)}`, deleted: `deleted ${q(i.title)}`,
         triaged: `sorted the care request ${q(i.title)}`, confirmed: `confirmed ${q(i.title)}`, declined: `chose not to go ahead with ${q(i.title)}`,
-        shipped: `shipped ${q(i.title)}`, cancelled: `cancelled ${q(i.title)}`
+        shipped: `shipped ${q(i.title)}`, cancelled: `cancelled ${q(i.title)}`,
+        care_question: `asked the client about ${q(i.title)}`, care_answered: `answered the question on ${q(i.title)}`
       }[i.action] || `changed ${q(i.title)}`;
       return `${who} ${verb}` + (i.eventIds.length > 1 ? ` (${i.eventIds.length} changes)` : '');
     }

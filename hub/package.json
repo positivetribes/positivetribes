@@ -9,6 +9,11 @@
     "test": "node --test test/*.test.mjs",
     "next-build": "wrangler -c wrangler.jsonc d1 execute hub-db --remote --command \"SELECT h.id, h.tier, COALESCE(c.name, 'Positive Tribes') AS client, h.added_by, h.title, h.details, h.note, (SELECT COUNT(*) FROM hub_idea_images WHERE idea_id = h.id) AS screenshots FROM hub_ideas h LEFT JOIN clients c ON c.id = h.client_id WHERE h.status = 'next' ORDER BY h.id\""
   },
-  "devDependencies": { "wrangler": "4.141.0" },
-  "type": "module"
+  "devDependencies": {
+    "wrangler": "4.141.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0"
+  }
 }

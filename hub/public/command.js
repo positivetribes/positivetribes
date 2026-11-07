@@ -219,7 +219,13 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         ${BACKLOG_STATUS[b.status] ? `<div class="banner">${esc(BACKLOG_STATUS[b.status])}</div>` : ''}
         ${rows.length ? `<ul class="items">${rows.map(([i, n]) => inboxRow(i, n)).join('')}</ul>` : b.status === 'ok' ? '<p class="empty">Nothing new.</p>' : ''}</section>`;
     }).join('');
-    box.innerHTML = `<div class="head"><div><h2 class="greet">Inbox</h2><p class="muted small">${data.items.length ? 'What clients changed in their workspaces. Your own edits are left out.' : 'Nothing new in the client workspaces.'}</p></div></div><div class="cols">${panels}</div>`;
+    const pt = data.patch || {};
+    const patchPanel = pt.pending || (pt.demotions || []).length || (pt.answered || []).length || (pt.failedRuns || []).length ? `<section class="panel"><h2>Patch</h2><ul class="items">
+      ${pt.pending ? `<li><a href="#/command/triage">${pt.pending} suggestion${pt.pending === 1 ? '' : 's'} waiting for you</a></li>` : ''}
+      ${(pt.answered || []).map(a => `<li><a href="#/${esc(a.slug)}/backlog/${a.item_id}">${esc(a.client_name)} answered a question: ${esc(a.title)}</a></li>`).join('')}
+      ${(pt.demotions || []).map(c => `<li><a href="#/command/triage">${esc(TRUST_NAME[c.trust_kind] || c.trust_kind)} went down to level ${c.to_level}: ${esc(c.reason)}</a></li>`).join('')}
+      ${(pt.failedRuns || []).map(r => `<li class="muted">Patch run ${esc(r.started_at)}: ${esc(r.note)}</li>`).join('')}</ul></section>` : '';
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Inbox</h2><p class="muted small">${data.items.length ? 'What clients changed in their workspaces. Your own edits are left out.' : 'Nothing new in the client workspaces.'}</p></div></div>${patchPanel}<div class="cols">${panels}</div>`;
     wireInbox(box);
   }
 
@@ -444,7 +450,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   function renderCare(box, data) {
     const active = data.clients.filter(c => c.plan && c.plan.status === 'active');
     const credits = active.reduce((n, c) => n + (c.balance ? c.balance.available : 0), 0);
-    box.innerHTML = `<div class="head"><div><h2 class="greet">Care plans</h2><p class="muted small">${active.length} active · ${credits} credits available across clients · $${active.reduce((n, c) => n + (c.plan.price || 0), 0)} a month</p></div></div>
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Care plans</h2><p class="muted small">${active.length} active · ${credits} credits available across clients · $${active.reduce((n, c) => n + (c.plan.price || 0), 0)} a month${data.ai ? ` · AI cost this month ${dollars(data.ai.microUsd)}` : ''}</p></div></div>
       ${data.clients.map(careRow).join('') || '<p class="empty">No clients yet.</p>'}`;
     const fail = (id, error) => { const el = box.querySelector(`[data-err="${id}"]`); if (el) el.textContent = error.message; };
     box.onsubmit = async e => {
@@ -470,10 +476,149 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     };
   }
 
+
+  // ---- Triage: Patch's suggestions, trust, rules and models (screen 2) ----
+  const KIND_NAME = { fix: 'Fix · free', courtesy: 'Courtesy edit', improvement: 'Improvement', project: 'New project', needs_info: 'Needs more info' };
+  const TRUST_NAME = { fix: 'Fix', courtesy: 'Courtesy edit', improvement_S: 'Improvement S', improvement_M: 'Improvement M', improvement_L: 'Improvement L', needs_info: 'Needs more info' };
+  const REASONS = { wrong_kind: 'Wrong kind', wrong_size: 'Wrong size', missed_rule1: 'Missed rule 1', unclear: 'Request was unclear', other: 'Other' };
+  const JOB_NAME = { triage: 'Sorting requests', build: 'Building', tweak: 'Small tweaks', writing: 'Writing' };
+  const dollars = micro => '$' + (micro / 1e6).toFixed(micro < 1e5 ? 3 : 2);
+  const callText = d => `${KIND_NAME[d.kind]}${d.kind === 'improvement' ? ' · ' + d.size : ''}`;
+  let triageData = null;
+  const loadTriage = () => api('/triage');
+
+  function decisionCard(d) {
+    const blind = d.blind && d.status === 'pending';
+    const flags = [d.screen_hits ? `<span class="chip warn">Rule 1 words: ${esc(d.screen_hits)}</span>` : '', d.rule1 ? '<span class="chip warn">Patch flags rule 1</span>' : '',
+      d.confidence === 'low' ? '<span class="chip warn">Low confidence</span>' : ''].join(' ');
+    const call = blind
+      ? '<p class="small"><b>Blind check:</b> decide first. Patch\'s call shows after you do.</p>'
+      : `<p><b>Patch suggests: ${esc(callText(d))}</b> <span class="chip">${esc(d.confidence)} confidence</span> ${flags}</p>
+         <p class="small">${esc(d.client_reason)}${d.question ? '<br><i>Question: ' + esc(d.question) + '</i>' : ''}${d.note ? '<br><span class="muted">Note: ' + esc(d.note) + '</span>' : ''}</p>`;
+    const kinds = Object.entries(KIND_NAME).map(([k, v]) => `<option value="${k}"${!blind && d.kind === k ? ' selected' : ''}>${esc(v)}</option>`).join('');
+    const sizes = ['S', 'M', 'L'].map(k => `<option value="${k}"${!blind && d.size === k ? ' selected' : ''}>${k}</option>`).join('');
+    const reasons = Object.entries(REASONS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+    return `<li data-decision="${d.id}"><div class="row"><div class="grow"><div class="title">${esc(d.title)}</div>
+        <div class="meta">${esc(d.client_name)} · ${esc(d.project)} · rules ${esc(d.rules_version)}</div></div></div>
+      ${d.details ? `<p class="small">${esc(d.details)}</p>` : ''}${call}
+      <form class="row" data-decide="${d.id}">
+        <select name="kind" aria-label="Kind">${kinds}</select><select name="size" aria-label="Size">${sizes}</select>
+        <input type="text" name="question" maxlength="300" placeholder="Question for the client" aria-label="Question" hidden>
+        <input type="text" name="note" maxlength="500" placeholder="Note for the client (optional)" aria-label="Note">
+        <select name="reason" aria-label="Why you changed it"${blind ? '' : ' hidden'}><option value="">Why changed?</option>${reasons}</select>
+        <button class="primary">${blind ? 'Decide' : 'Agree or change'}</button></form>
+      <p class="err" data-derr="${d.id}"></p></li>`;
+  }
+
+  function trustRow(t) {
+    const c = t.checks;
+    const need = [!c.decisions && `${t.decisions}/30 decisions`, !c.agreement && `agreement ${t.agreement === null ? '–' : t.agreement + '%'} (needs 95% over 30)`, !c.noSeriousMiss && 'serious miss in the last 60 days', !c.clients && `${t.clients}/2 clients`].filter(Boolean).join(' · ');
+    return `<li><div class="row"><div class="grow"><b>${esc(TRUST_NAME[t.kind])}</b> <span class="chip">Level ${t.level} · ${esc(t.levelName)}</span>
+      <div class="meta">${t.decisions} decisions · ${t.agreement === null ? 'no agreement yet' : t.agreement + '% agreement'} · ${t.clients} client${t.clients === 1 ? '' : 's'}${t.lastSeriousMiss ? ' · last serious miss ' + esc(t.lastSeriousMiss.slice(0, 10)) : ''}${need && t.level < 1 ? ' · ' + esc(need) : ''}</div></div>
+      ${t.canPromote ? `<button data-trust="${t.kind}" data-level="${t.level + 1}">Promote to Suggest</button>` : ''}${t.level > 0 ? `<button class="link" data-trust="${t.kind}" data-level="${t.level - 1}">Demote</button>` : ''}</div></li>`;
+  }
+
+  function renderTriage(box, data) {
+    triageData = data;
+    const last = data.runs[0];
+    const failed = data.failed.length ? `<section class="panel"><h2>Sort by hand (${data.failed.length})</h2><p class="small muted">Patch could not read these. Sort them on the client page.</p>
+      <ul class="items">${data.failed.map(d => `<li><div class="title">${esc(d.title)}</div><div class="meta">${esc(d.client_name)} · ${esc(d.error)}</div></li>`).join('')}</ul></section>` : '';
+    const models = data.models.map(m => `<li><form class="row" data-model="${esc(m.job)}"><span class="grow"><b>${esc(JOB_NAME[m.job] || m.job)}</b> <span class="meta">${esc(m.changed_by ? 'changed by ' + m.changed_by : 'standard')}${m.previous_model ? ' · before: ' + esc(m.previous_model) : ''}${m.priced ? '' : ' · price unknown, costed high'}</span></span>
+      <input type="text" name="model" value="${esc(m.model)}" maxlength="64" aria-label="Model for ${esc(m.job)}"><button>Save</button>${m.previous_model ? `<button type="button" data-rollback="${esc(m.job)}">Go back</button>` : ''}</form></li>`).join('');
+    const recent = data.decided.map(d => `<li><span class="title">${esc(d.title)}</span> <span class="meta">${esc(d.client_name)} · Patch: ${esc(callText(d))} · you: ${esc(KIND_NAME[d.guide_kind])}${d.guide_size ? ' ' + d.guide_size : ''} · ${d.miss === 'none' ? 'agreed' : d.miss + ' miss'}</span></li>`).join('');
+    const changes = data.trustChanges.map(c => `<li class="small">${esc(c.at.slice(0, 10))} · ${esc(TRUST_NAME[c.trust_kind] || c.trust_kind)}: level ${c.from_level} → ${c.to_level} · ${esc(c.reason)} <span class="muted">(${esc(c.actor)})</span></li>`).join('');
+    const byClient = data.cost.byClient.map(c => `${esc(c.name)} ${dollars(c.cost)}`).join(' · ');
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Triage</h2>
+        <p class="muted small">${data.enabled ? 'Patch checks new requests each morning.' : 'Patch is off: it needs the Anthropic API key on hub.positivetribes.org.'} AI cost this month ${dollars(data.cost.microUsd)}${byClient ? ' (' + byClient + ')' : ''}. ${last ? 'Last run ' + esc(seenAgo(last.started_at.replace(' ', 'T') + 'Z')) + ': ' + last.checked + ' checked, ' + last.failed + ' failed' + (last.note ? ', ' + esc(last.note) : '') + '.' : 'Not run yet.'}</p></div>
+        <button id="run-patch"${data.enabled ? '' : ' disabled'}>Run Patch now</button></div>
+      <p class="err" id="triage-err"></p>
+      <section class="panel"><h2>Waiting for you${data.pending.length ? ` (${data.pending.length})` : ''}</h2>
+        ${data.pending.length ? `<ul class="items">${data.pending.map(decisionCard).join('')}</ul>` : '<p class="empty">Nothing waiting.</p>'}</section>
+      ${failed}
+      <section class="panel"><h2>Trust, one kind of decision at a time</h2><p class="small muted">Patch only suggests for now (highest level 1). Promotion needs 30 decisions, 95% agreement over the last 30, no serious miss in 60 days and 2 clients. A serious miss, or agreement under 90%, demotes automatically. New projects and anything under rule 1 are never automated.</p>
+        <ul class="items">${data.trust.map(trustRow).join('')}</ul>${changes ? `<details><summary>Level changes</summary><ul>${changes}</ul></details>` : ''}</section>
+      <section class="panel"><h2>Client rules</h2><p class="small muted">Each client's own rules add to the standard five questions. Saving makes a new version.</p>
+        <form class="row" id="rules-pick"><select name="client" aria-label="Client"><option value="">Choose a client</option>${(data.hubClients || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></form>
+        <div id="rules-box"></div></section>
+      <section class="panel"><h2>Models</h2><p class="small muted">Exact model ids, set here and never in code. "Go back" restores the one before.</p><ul class="items">${models}</ul></section>
+      ${recent ? `<details class="panel"><summary>Recently decided</summary><ul class="items">${recent}</ul></details>` : ''}`;
+    wireTriage(box);
+  }
+
+  function wireTriage(box) {
+    const err = (id, e) => { const el = id ? box.querySelector(`[data-derr="${id}"]`) : $('triage-err'); if (el) el.textContent = e ? e.message : ''; };
+    const reload = async () => renderTriage(box, await loadTriage());
+    const syncForm = f => { f.size.hidden = f.kind.value !== 'improvement'; f.question.hidden = f.kind.value !== 'needs_info'; };
+    box.querySelectorAll('[data-decide]').forEach(f => { syncForm(f); f.kind.onchange = () => syncForm(f); });
+    $('run-patch').onclick = async () => {
+      err(null);
+      try { await api('/triage/run', { method: 'POST', body: JSON.stringify({}) }); await reload(); } catch (e) { err(null, e); }
+    };
+    box.onsubmit = async e => {
+      e.preventDefault();
+      const f = e.target;
+      try {
+        if (f.dataset.decide) {
+          const id = f.dataset.decide, d = triageData.pending.find(x => x.id === Number(id));
+          err(id);
+          const kind = f.kind.value, changed = d && !d.blind && (kind !== d.kind || (kind === 'improvement' && f.size.value !== d.size));
+          if (changed && !f.reason.value) { f.reason.hidden = false; return err(id, new Error('Choose why you changed it.')); }
+          const result = await api(`/triage/${id}/decide`, { method: 'POST', body: JSON.stringify({
+            kind, size: kind === 'improvement' ? f.size.value : undefined, question: f.question.value, note: f.note.value, change_reason: f.reason.value || undefined }) });
+          // A blind check shows Patch's call now; the reason is asked for if the answers differ.
+          if (result.needsReason) {
+            const reason = prompt('Patch said ' + callText(result.decision) + '. Why did you choose differently?\n' + Object.entries(REASONS).map(([k, v]) => k + ' = ' + v).join('\n'), 'wrong_kind');
+            if (reason && REASONS[reason]) await api(`/triage/${id}/reason`, { method: 'POST', body: JSON.stringify({ change_reason: reason }) });
+          }
+          if (result.demoted) alert(`${TRUST_NAME[result.demoted.kind]} went down to level ${result.demoted.to}: ${result.demoted.reason}.`);
+          await reload();
+        } else if (f.dataset.model) {
+          await api('/models/' + f.dataset.model, { method: 'PUT', body: JSON.stringify({ model: f.model.value.trim() }) });
+          await reload();
+        } else if (f.id === 'rules-pick') {
+          return;
+        } else if (f.dataset.rules) {
+          await api('/rules/' + f.dataset.rules, { method: 'PUT', body: JSON.stringify({ extra: f.extra.value }) });
+          await loadRules(box, f.dataset.rules);
+        }
+      } catch (error) { err(f.dataset.decide, error); }
+    };
+    box.onchange = e => { if (e.target.closest('#rules-pick')) loadRules(box, e.target.value); };
+    box.onclick = async e => {
+      const t = e.target.closest('[data-trust],[data-rollback]');
+      if (!t) return;
+      try {
+        if (t.dataset.rollback) {
+          if (!confirm('Go back to the earlier model for ' + t.dataset.rollback + '?')) return;
+          await api('/models/' + t.dataset.rollback + '/rollback', { method: 'POST', body: JSON.stringify({}) });
+        } else {
+          const reason = prompt(Number(t.dataset.level) > triageData.trust.find(x => x.kind === t.dataset.trust).level ? 'Why promote?' : 'Why demote?');
+          if (!reason) return;
+          await api('/trust/' + t.dataset.trust, { method: 'PUT', body: JSON.stringify({ level: Number(t.dataset.level), reason }) });
+        }
+        await reload();
+      } catch (error) { err(null, error); }
+    };
+  }
+
+  // The rules box works by client id; the overview lists clients by Salesforce account, so find the hub id through the care list.
+  async function loadRules(box, clientId) {
+    const out = $('rules-box');
+    if (!clientId) { out.innerHTML = ''; return; }
+    try {
+      const r = await api('/rules/' + clientId);
+      const current = r.versions.find(v => v.version === r.active);
+      out.innerHTML = `<form data-rules="${esc(clientId)}" class="fields"><p class="small muted wide">Active: ${esc(r.active || 'standard')}${r.versions.length ? ' · ' + r.versions.length + ' version' + (r.versions.length === 1 ? '' : 's') : ''}</p>
+        <label class="wide">Extra rules<textarea name="extra" rows="6" maxlength="4000">${esc(current ? current.extra : '')}</textarea></label>
+        <p class="actions wide"><button class="primary">Save as a new version</button></p></form>
+        <details><summary>The standard rules</summary><pre class="small" style="white-space:pre-wrap">${esc(r.standard.text)}</pre></details>`;
+    } catch (error) { out.innerHTML = `<p class="err">${esc(error.message)}</p>`; }
+  }
+
   // sub is what follows #/command: '', 'inbox', 'clients', 'documents' or 'client/<Salesforce account id>'.
   const viewOf = sub => {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
-    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients', 'care', 'documents', 'ideas'].includes(sub) ? sub : 'today' };
+    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients', 'care', 'triage', 'documents', 'ideas'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
@@ -498,6 +643,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         if (current.box !== box) return;
         document.title = 'Care plans | Command center';
         renderCare(box, data);
+      } else if (view === 'triage') {
+        const data = await loadTriage();
+        if (current.box !== box) return;
+        document.title = 'Triage | Command center';
+        renderTriage(box, data);
       } else if (view === 'inbox') {
         const data = await api('/inbox');
         if (current.box !== box) return;

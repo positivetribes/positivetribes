@@ -148,7 +148,7 @@ export const isLive = (project, plan) => Boolean(plan && plan.status === 'active
 export async function careRequests(db, clientId) {
   const { results } = await db.prepare(
     `SELECT r.item_id, r.type, r.size, r.credits, r.status, r.triage_note, r.triaged_at, r.confirmed_by, r.confirmed_at, r.shipped_at,
-            r.created_at, i.title, i.project_id, p.name AS project
+            r.question, r.answer, r.created_at, i.title, i.project_id, p.name AS project
      FROM care_requests r JOIN items i ON i.id = r.item_id AND i.client_id = r.client_id JOIN projects p ON p.id = i.project_id
      WHERE r.client_id = ? ORDER BY r.created_at DESC, r.item_id DESC LIMIT 200`
   ).bind(clientId).all();
