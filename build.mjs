@@ -36,6 +36,8 @@ await copyFile('positive-tribes-community.jpg', 'public/positive-tribes-communit
 for (const file of ['eric-roberts.jpg', 'eric-roberts.webp', 'eric-roberts-headshot.jpg', 'rich-sonnenblick.jpg', 'glenn-hadley.jpg']) await copyFile(file, `public/${file}`);
 await cp('fonts', 'public/fonts', { recursive: true });
 await cp('brand', 'public/brand', { recursive: true });
+await cp('video', 'public/video', { recursive: true });
+await copyFile('onesheet/positive-tribes-one-sheet.pdf', 'public/positive-tribes-one-sheet.pdf');
 await cp('help-a-friend', 'public/help-a-friend', { recursive: true });
 await cp('coyote', 'public/coyote', { recursive: true });
 // The prototype is copied as-is, so add the same GA4 tag here to count its visitors.

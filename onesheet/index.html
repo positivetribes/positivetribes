@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Positive Tribes One-Sheet</title>
+<style>
+@font-face{font-family:'Fraunces';font-weight:400;src:url('../fonts/fraunces-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Fraunces';font-style:italic;font-weight:400;src:url('../fonts/fraunces-latin-400-italic.woff2') format('woff2')}
+@font-face{font-family:'Fraunces';font-weight:500;src:url('../fonts/fraunces-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:400;src:url('../fonts/dm-sans-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:600;src:url('../fonts/dm-sans-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:700;src:url('../fonts/dm-sans-latin-700-normal.woff2') format('woff2')}
+:root{--paper:#f7f6ef;--ink:#243f36;--rust:#a94c32;--pale:#e9eddf;--line:#d9dfd4;--muted:#59665e}
+@page{size:8.5in 11in;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{width:8.5in;height:11in;padding:.5in .55in .4in;font:400 10.5px/1.45 'DM Sans',Arial,sans-serif;color:var(--ink);display:flex;flex-direction:column;overflow:hidden}
+h1,h2,h3{font-family:'Fraunces',Georgia,serif;font-weight:500;margin:0}
+.top{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid var(--rust);padding-bottom:12px}
+.top img{height:34px}.top span{font-size:8.5px;letter-spacing:1.6px;text-transform:uppercase;font-weight:600;color:var(--muted)}
+h1{font-size:42px;line-height:1.05;letter-spacing:-1.4px;margin:16px 0 8px}h1 em{color:var(--rust)}
+.intro{font-size:11.5px;line-height:1.5;color:var(--muted);margin:0 0 10px}
+.ask{font:500 15px/1.35 'Fraunces',Georgia,serif;border-left:3px solid var(--rust);padding:2px 0 2px 12px;margin:10px 0 0}
+.kicker{font-size:8.5px;letter-spacing:1.8px;font-weight:700;text-transform:uppercase;color:var(--rust);margin:0 0 7px}
+section{border-top:1px solid var(--line);padding:10px 0 0;margin-top:10px}
+.who{display:grid;grid-template-columns:.9fr 1.1fr;gap:26px}.who h2{font-size:21px;line-height:1.15;letter-spacing:-.4px}.who p{margin:0;color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.cols.two{grid-template-columns:repeat(3,1fr);gap:11px 22px}
+h3{font-size:14px;margin-bottom:3px}.cols p{margin:0;color:var(--muted)}
+.card{background:var(--pale);border-radius:5px;padding:9px 11px}.card b{display:block;font-weight:700;margin-bottom:2px;font-size:10.5px}.card p{margin:0;color:var(--muted);font-size:9.8px;line-height:1.4}
+.step{display:flex;gap:9px}.num{flex:none;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--paper);font:500 12px/22px 'Fraunces',serif;text-align:center}
+.for{font-size:10.5px;color:var(--muted);margin:0 0 10px}.for b{color:var(--ink)}
+.cta{margin-top:auto;margin-bottom:0;background:var(--ink);color:var(--paper);border-radius:6px;padding:15px 20px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.cta h2{font-size:19px;line-height:1.2;letter-spacing:-.3px}.cta h2 em{color:#e0a089}.cta div:last-child{white-space:nowrap;text-align:right;font-size:10.5px;line-height:1.6}.cta a{color:var(--paper);text-decoration:none;font-weight:600}
+.fine{font-size:8.2px;color:var(--muted);margin:8px 0 0;text-align:center}
+</style></head><body>
+<div class="top"><img src="../brand/positive-tribes-logo-horizontal.svg" alt="Positive Tribes"><span>Technology for healthier communities</span></div>
+<h1>Less busywork. <em>More mission.</em></h1>
+<p class="intro">Too many nonprofits are held together by late nights, sticky notes and whatever lives in the founder's head. That works until a key person leaves, a funder asks for numbers, or demand doubles. Then the people you serve are the ones who wait. Positive Tribes, a nonprofit ourselves, builds the exact tool your team needs, hosts it and supports it, at a price a nonprofit budget can handle. You see a working mock-up in days and go live in weeks, with no IT staff required and often for less than you pay for software today.</p>
+<p class="ask">Tell us the one task that keeps your team from the people they serve. We'll deliver a fix in days.</p>
+
+<section class="who"><div><p class="kicker">Who we are</p><h2>A 501(c)(3) that does technology work for nonprofits, so you don't have to hire for it.</h2></div>
+<p>Most nonprofits can't afford a development team, and off-the-shelf software rarely fits how they actually work. Positive Tribes closes that gap. Our founder spent years as a Salesforce solutions engineer working with some of the largest organizations in healthcare. We use AI-assisted development to bring that level of delivery to small and mid-size nonprofits anywhere in the US, especially those with no IT staff.</p></section>
+
+<section><p class="kicker">What we do</p><div class="cols">
+<div><h3>Build</h3><p>Custom tools shaped around your programs: scheduling and registration, intake and case tracking, volunteer and donor management, reporting, dashboards, and connections to systems you already use such as Salesforce.</p></div>
+<div><h3>Host</h3><p>We run it for you. No servers, accounts, security patches or updates for your team to manage. Built on modern, low-cost cloud infrastructure.</p></div>
+<div><h3>Support and improve</h3><p>A real help desk when someone has a question. Your tool keeps getting better after launch, with small improvements shipped continuously.</p></div></div></section>
+
+<section><p class="kicker">What changes for your nonprofit</p><div class="cols two">
+<div class="card"><b>Hours back for your mission</b><p>Replace spreadsheets, duplicate entry and manual reports with one tool. Staff time goes to people, not paperwork.</p></div>
+<div class="card"><b>Better data, better funding stories</b><p>Reporting across every program and location, ready when a funder or board asks for it.</p></div>
+<div class="card"><b>No IT staff needed</b><p>One partner for the whole job. No hand-offs, no vendors to coordinate.</p></div>
+<div class="card"><b>Lower software costs</b><p>Stop paying for per-seat licenses and features you don't use. One tool, hosted and supported for less.</p></div>
+<div class="card"><b>Low risk</b><p>See a clickable mock-up before you commit. Build in small phases you test along the way. No big upfront bet.</p></div>
+<div class="card"><b>Mission-aligned</b><p>We're a nonprofit too. Proven pieces from past builds are reused, so every new partner starts further ahead.</p></div></div></section>
+
+<section><p class="kicker">How it works</p><div class="cols">
+<div class="step"><span class="num">1</span><div><h3>A conversation</h3><p>Tell us who you serve and what's getting in the way. No polished brief needed.</p></div></div>
+<div class="step"><span class="num">2</span><div><h3>A mock-up in days</h3><p>Click through a working prototype with your team and agree on what's needed before anything is built.</p></div></div>
+<div class="step"><span class="num">3</span><div><h3>A phased build</h3><p>Test each phase as it lands. We launch it, host it and keep improving it.</p></div></div></div></section>
+
+<section><p class="kicker">Who it's for</p><p class="for"><b>Small to mid-size nonprofits</b> · Anywhere in the US · Outgrowing spreadsheets or a tool that doesn't fit · No in-house IT · Health, recreation, youth, community and more</p></section>
+
+<div class="cta"><h2>What's keeping your team from the people they serve? <em>Let's fix it.</em></h2><div><a href="https://positivetribes.org">positivetribes.org</a><br><a href="mailto:hello@positivetribes.org">hello@positivetribes.org</a><br>Eric Roberts, Founder &amp; CEO</div></div>
+<p class="fine">Positive Tribes is a 501(c)(3) nonprofit in Golden, Colorado. EIN 99-2221407.</p>
+</body></html>
