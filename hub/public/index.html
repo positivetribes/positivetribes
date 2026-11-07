@@ -210,6 +210,11 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 .cc-bar{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:6px 0 22px}
 .cc-bar nav.tabs{margin:0;flex:1 1 auto}
 .cc-sync.late{color:var(--nice)}
+.cc-ideas{font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;white-space:nowrap}
+.cc-ideas[aria-current=page]{color:var(--ink);text-decoration:underline;text-decoration-color:var(--client);text-underline-offset:6px}
+.seg.subnav{margin-bottom:18px}
+.seg a{padding:4px 12px;border-radius:9px;font-weight:600;font-size:14px;text-decoration:none;min-height:32px;display:inline-flex;align-items:center;color:var(--muted)}
+.seg a[aria-current=page]{background:var(--ink);color:var(--bg)}
 .cc{font-size:15px;line-height:1.55}
 .cc a{color:inherit}
 .cc h2{font-size:20px;margin-bottom:12px}
@@ -468,20 +473,27 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     renderBar();
     command = command || window.CommandCenter({ api });
     const { view } = command.viewOf(sub);
-    const tab = (key, href, label, extra) => h('a', { href, ...(view === key || (key === 'clients' && view === 'client') ? { 'aria-current': 'page' } : {}) }, label, extra);
-    const tabs = inboxBadge => [tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', inboxBadge), tab('clients', '#/command/clients', 'Clients'),
-      tab('care', '#/command/care', 'Care plans'), tab('triage', '#/command/triage', 'Triage'), tab('documents', '#/command/documents', 'Documents'), tab('ideas', '#/command/ideas', 'Improve this hub', h('span', { class: 'badge', id: 'cc-ideas-count' }))];
+    // The old #/command/triage address moves to its place under Care plans.
+    if (sub === 'triage') { location.replace('#/command/care/triage'); return; }
+    const current = (key, also) => view === key || view === also ? { 'aria-current': 'page' } : {};
+    const tab = (key, href, label, extra, also) => h('a', { href, ...current(key, also) }, label, extra);
+    // Five daily tabs; Improve this hub sits apart at the right end, its new ideas also reach the Inbox.
+    const tabs = (inboxBadge, careBadge) => [tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', inboxBadge), tab('clients', '#/command/clients', 'Clients', null, 'client'),
+      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents')];
+    const ideasLink = () => h('a', { class: 'cc-ideas', id: 'cc-ideas', href: '#/command/ideas', ...current('ideas') }, 'Improve this hub', h('span', { class: 'badge', id: 'cc-ideas-count' }));
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {
       // Moving between command center views keeps the hero and tab row; only the view below changes.
-      $('cc-tabs').replaceChildren(...tabs($('cc-inbox-count')));
+      $('cc-tabs').replaceChildren(...tabs($('cc-inbox-count'), $('cc-care-count')));
+      $('cc-ideas').replaceWith(ideasLink());
       $('cc').replaceWith(box);
     } else {
       $('main').replaceChildren(
         h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Command center'), h('h1', {}, 'Positive Tribes')),
         h('div', { class: 'cc-bar' },
-          h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' }, ...tabs(h('span', { class: 'badge', id: 'cc-inbox-count' }))),
+          h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' }, ...tabs(h('span', { class: 'badge', id: 'cc-inbox-count' }), h('span', { class: 'badge', id: 'cc-care-count' }))),
+          ideasLink(),
           h('span', { class: 'meta cc-sync', id: 'cc-sync' }),
           h('button', { class: 'btn ghost small', type: 'button', onclick: () => state.ccView === 'ideas' ? loadCommandIdeas() : command.refresh() }, 'Refresh')),
         box);

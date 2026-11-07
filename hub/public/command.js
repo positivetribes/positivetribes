@@ -79,6 +79,10 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     el.classList.toggle('late', hours > 36);
   }
   const inboxBadge = n => { const el = $('cc-inbox-count'); if (el) el.textContent = n || ''; };
+  // Care plans has two parts: the plans overview and Triage (Patch's suggestions). The tab's count is suggestions waiting.
+  const careBadge = n => { const el = $('cc-care-count'); if (el) el.textContent = n || ''; if (overview) overview.carePending = n; };
+  const careNav = active => `<nav class="seg small subnav" aria-label="Care plans">${[['care', '#/command/care', 'Overview'], ['triage', '#/command/care/triage', 'Triage']]
+    .map(([key, href, label]) => `<a href="${href}"${key === active ? ' aria-current="page"' : ''}>${label}</a>`).join('')}</nav>`;
   // The bell in the header shows the same Inbox; tell it after a clear here.
   const inboxChanged = () => window.dispatchEvent(new Event('hub-inbox-changed'));
   function banners(data) {
@@ -221,9 +225,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     }).join('');
     const pt = data.patch || {};
     const patchPanel = pt.pending || (pt.demotions || []).length || (pt.answered || []).length || (pt.failedRuns || []).length ? `<section class="panel"><h2>Patch</h2><ul class="items">
-      ${pt.pending ? `<li><a href="#/command/triage">${pt.pending} suggestion${pt.pending === 1 ? '' : 's'} waiting for you</a></li>` : ''}
+      ${pt.pending ? `<li><a href="#/command/care/triage">${pt.pending} suggestion${pt.pending === 1 ? '' : 's'} waiting for you</a></li>` : ''}
       ${(pt.answered || []).map(a => `<li><a href="#/${esc(a.slug)}/backlog/${a.item_id}">${esc(a.client_name)} answered a question: ${esc(a.title)}</a></li>`).join('')}
-      ${(pt.demotions || []).map(c => `<li><a href="#/command/triage">${esc(TRUST_NAME[c.trust_kind] || c.trust_kind)} went down to level ${c.to_level}: ${esc(c.reason)}</a></li>`).join('')}
+      ${(pt.demotions || []).map(c => `<li><a href="#/command/care/triage">${esc(TRUST_NAME[c.trust_kind] || c.trust_kind)} went down to level ${c.to_level}: ${esc(c.reason)}</a></li>`).join('')}
       ${(pt.failedRuns || []).map(r => `<li class="muted">Patch run ${esc(r.started_at)}: ${esc(r.note)}</li>`).join('')}</ul></section>` : '';
     box.innerHTML = `<div class="head"><div><h2 class="greet">Inbox</h2><p class="muted small">${data.items.length ? 'What clients changed in their workspaces. Your own edits are left out.' : 'Nothing new in the client workspaces.'}</p></div></div>${patchPanel}<div class="cols">${panels}</div>`;
     wireInbox(box);
@@ -450,7 +454,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   function renderCare(box, data) {
     const active = data.clients.filter(c => c.plan && c.plan.status === 'active');
     const credits = active.reduce((n, c) => n + (c.balance ? c.balance.available : 0), 0);
-    box.innerHTML = `<div class="head"><div><h2 class="greet">Care plans</h2><p class="muted small">${active.length} active · ${credits} credits available across clients · $${active.reduce((n, c) => n + (c.plan.price || 0), 0)} a month${data.ai ? ` · AI cost this month ${dollars(data.ai.microUsd)}` : ''}</p></div></div>
+    box.innerHTML = careNav('care') + `<div class="head"><div><h2 class="greet">Care plans</h2><p class="muted small">${active.length} active · ${credits} credits available across clients · $${active.reduce((n, c) => n + (c.plan.price || 0), 0)} a month${data.ai ? ` · AI cost this month ${dollars(data.ai.microUsd)}` : ''}</p></div></div>
       ${data.clients.map(careRow).join('') || '<p class="empty">No clients yet.</p>'}`;
     const fail = (id, error) => { const el = box.querySelector(`[data-err="${id}"]`); if (el) el.textContent = error.message; };
     box.onsubmit = async e => {
@@ -528,7 +532,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const recent = data.decided.map(d => `<li><span class="title">${esc(d.title)}</span> <span class="meta">${esc(d.client_name)} · Patch: ${esc(callText(d))} · you: ${esc(KIND_NAME[d.guide_kind])}${d.guide_size ? ' ' + d.guide_size : ''} · ${d.miss === 'none' ? 'agreed' : d.miss + ' miss'}</span></li>`).join('');
     const changes = data.trustChanges.map(c => `<li class="small">${esc(c.at.slice(0, 10))} · ${esc(TRUST_NAME[c.trust_kind] || c.trust_kind)}: level ${c.from_level} → ${c.to_level} · ${esc(c.reason)} <span class="muted">(${esc(c.actor)})</span></li>`).join('');
     const byClient = data.cost.byClient.map(c => `${esc(c.name)} ${dollars(c.cost)}`).join(' · ');
-    box.innerHTML = `<div class="head"><div><h2 class="greet">Triage</h2>
+    careBadge(data.pending.length);
+    box.innerHTML = careNav('triage') + `<div class="head"><div><h2 class="greet">Triage</h2>
         <p class="muted small">${data.enabled ? 'Patch checks new requests each morning.' : 'Patch is off: it needs the Anthropic API key on hub.positivetribes.org.'} AI cost this month ${dollars(data.cost.microUsd)}${byClient ? ' (' + byClient + ')' : ''}. ${last ? 'Last run ' + esc(seenAgo(last.started_at.replace(' ', 'T') + 'Z')) + ': ' + last.checked + ' checked, ' + last.failed + ' failed' + (last.note ? ', ' + esc(last.note) : '') + '.' : 'Not run yet.'}</p></div>
         <button id="run-patch"${data.enabled ? '' : ' disabled'}>Run Patch now</button></div>
       <p class="err" id="triage-err"></p>
@@ -615,10 +620,13 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     } catch (error) { out.innerHTML = `<p class="err">${esc(error.message)}</p>`; }
   }
 
-  // sub is what follows #/command: '', 'inbox', 'clients', 'documents' or 'client/<Salesforce account id>'.
+  // sub is what follows #/command: '', 'inbox', 'clients', 'care', 'care/triage', 'documents', 'ideas' or
+  // 'client/<Salesforce account id>'. The old 'triage' address still opens Triage.
   const viewOf = sub => {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
-    return client ? { view: 'client', id: client[1] } : { view: ['inbox', 'clients', 'care', 'triage', 'documents', 'ideas'].includes(sub) ? sub : 'today' };
+    if (client) return { view: 'client', id: client[1] };
+    if (sub === 'care/triage' || sub === 'triage') return { view: 'triage' };
+    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
@@ -628,6 +636,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     try {
       if (!overview || refresh) await loadOverview(refresh);
       else { syncStatus(overview.lastSync); inboxBadge(overview.inboxCount); }
+      careBadge(overview.carePending);
       if (view === 'client') {
         const data = await api('/clients/' + id);
         if (current.box !== box) return;
