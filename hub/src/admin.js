@@ -716,7 +716,9 @@ export async function handleAdmin(request, env, url, who) {
       const seen = lastSeenBy(people);
       const view = buildOverview(env, sf, { meta: meta.results, steps: steps.results, notes: notes.results, activity: activity.results }, today);
       view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id), hubSeen: seen[workspaceOf(c.id)] || null }));
-      return json({ ...view, testing, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, user: who.email });
+      // Patch's suggestions waiting for a decision: the count on the Care plans tab.
+      const carePending = env.DB ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM patch_decisions WHERE status = 'pending'").first()).n : 0;
+      return json({ ...view, testing, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });

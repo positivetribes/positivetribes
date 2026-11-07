@@ -400,7 +400,12 @@ test('the inbox reads each client from the hub database, keeps them apart, and c
   assert.match(safe.url, /^#\/safe\/backlog\/\d+$/);
   const uep = r.body.items.find(i => i.backlog === 'uep-hub');
   assert.deepEqual([uep.title, uep.actor, uep.kind], ['Save fails on step 3', 'Molly Cupka', 'problem']);
-  assert.equal((await call(db, 'GET', '/api/admin/overview', undefined, { env })).body.inboxCount, 3);
+  let overview = (await call(db, 'GET', '/api/admin/overview', undefined, { env })).body;
+  assert.deepEqual([overview.inboxCount, overview.carePending], [3, 0]);
+  // The Care plans tab counts Patch's suggestions waiting for a decision, and only those.
+  await h.db.prepare("INSERT INTO patch_decisions (client_id, item_id, status, kind, trust_kind) VALUES (1, 1, 'pending', 'fix', 'fix'), (1, 2, 'agreed', 'fix', 'fix')").run();
+  overview = (await call(db, 'GET', '/api/admin/overview', undefined, { env })).body;
+  assert.equal(overview.carePending, 1);
 
   // Only Eric, from the hub, can clear; bad input is refused. Clearing one client leaves the others alone.
   const clear = { items: [{ backlog: 'safe-hub', eventIds: safe.eventIds }] };
