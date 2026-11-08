@@ -71,6 +71,10 @@ h1{font-size:clamp(30px,6vw,44px);margin-top:4px}
 nav.tabs{display:flex;gap:4px;margin:6px 0 22px;overflow-x:auto}
 nav.tabs a{padding:12px 16px;text-decoration:none;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
 nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
+nav.tabs a.tab-end{margin-left:auto;align-self:center;padding:6px 14px;min-height:36px;display:inline-flex;align-items:center;color:var(--bg);background:var(--ink);border:1px solid var(--ink);border-radius:10px;font-size:14px}
+nav.tabs a.tab-end:hover{opacity:.88}
+nav.tabs a.tab-end[aria-current=page]{color:var(--bg);border-color:var(--ink);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--client)}
+nav.tabs a.tab-end .badge{background:var(--bg);color:var(--ink)}
 .badge{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12px;line-height:20px;text-align:center}
 .stack{display:flex;flex-direction:column;gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
@@ -560,7 +564,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
         h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : '')),
         h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents'),
-        h('a', { href: link('ideas'), ...(state.view === 'ideas' ? { 'aria-current': 'page' } : {}) }, 'Improve this hub', h('span', { class: 'badge' }, isPt && newIdeas() ? String(newIdeas()) : ''))),
+        h('a', { class: 'tab-end', href: link('ideas'), ...(state.view === 'ideas' ? { 'aria-current': 'page' } : {}) }, 'Improve this hub', h('span', { class: 'badge' }, isPt && newIdeas() ? String(newIdeas()) : ''))),
       state.view === 'home' ? home() : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt));
     document.querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
   }
