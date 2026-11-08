@@ -365,7 +365,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   // Signed papers first inside a group; otherwise the saved order.
   const bySigned = (a, b) => (b.status === 'signed') - (a.status === 'signed');
-  let docClosed = new Set(), docOpenGroups = new Set();
+  let docOpenFolders = new Set(), docOpenGroups = new Set();
   const docDate = iso => iso ? new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
   function docRow(d, client) {
@@ -383,7 +383,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       const here = mine.filter(d => (d.project_id || null) === f.id).sort(bySigned);
       if (f.id === null && !here.length && client.projects.length) return '';
       const key = client.slug + ':' + (f.id || 0);
-      return `<details class="folder" data-folder="${esc(key)}" data-client="${esc(client.slug)}" data-project="${f.id || ''}"${docClosed.has(key) ? '' : ' open'}><summary>${esc(f.name)}<span class="count">${here.length || ''}</span></summary>
+      return `<details class="folder" data-folder="${esc(key)}" data-client="${esc(client.slug)}" data-project="${f.id || ''}"${docOpenFolders.has(key) ? ' open' : ''}><summary>${esc(f.name)}<span class="count">${here.length || ''}</span></summary>
         ${here.length ? `<ul class="items">${here.map(d => docRow(d, client)).join('')}</ul>` : '<p class="empty small">Nothing here yet. Drag a document onto this folder.</p>'}</details>`;
     }).join('');
   }
@@ -426,7 +426,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       } catch (error) { button.disabled = false; box.querySelector('#doc-err').textContent = error.message; }
     };
     box.querySelectorAll('details.group').forEach(el => el.addEventListener('toggle', () => { if (el.open) docOpenGroups.add(el.dataset.group); else docOpenGroups.delete(el.dataset.group); }));
-    box.querySelectorAll('details.folder').forEach(el => el.addEventListener('toggle', () => { if (el.open) docClosed.delete(el.dataset.folder); else docClosed.add(el.dataset.folder); }));
+    box.querySelectorAll('details.folder').forEach(el => el.addEventListener('toggle', () => { if (el.open) docOpenFolders.add(el.dataset.folder); else docOpenFolders.delete(el.dataset.folder); }));
     let dragging = null;
     box.ondragstart = e => { const li = e.target.closest('[data-doc-drag]'); if (!li) return; dragging = docs.documents.find(x => x.id === Number(li.dataset.docDrag)); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragging && dragging.id)); li.classList.add('dragging'); };
     box.ondragend = () => { dragging = null; box.querySelectorAll('.dragging,.drop').forEach(el => el.classList.remove('dragging', 'drop')); };
