@@ -365,7 +365,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   // Signed papers first inside a group; otherwise the saved order.
   const bySigned = (a, b) => (b.status === 'signed') - (a.status === 'signed');
-  let docClosed = new Set();
+  let docClosed = new Set(), docOpenGroups = new Set();
   const docDate = iso => iso ? new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
   function docRow(d, client) {
@@ -395,9 +395,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const blank = { client: '', project_id: null, kind: 'other', title: '', url: '', note: '', status: '', visible: false, doc_date: new Date().toLocaleDateString('en-CA') };
     const groups = [{ slug: '', name: 'Positive Tribes', projects: [] }, ...data.clients].map(g => {
       const mine = data.documents.filter(d => d.client === g.slug);
-      return `<section class="panel"><div class="row"><h2 class="grow">${esc(g.name)}<span class="count">${mine.length || ''}</span></h2></div>
+      return `<section class="panel"><details class="group" data-group="${esc(g.slug)}"${docOpenGroups.has(g.slug) ? ' open' : ''}><summary><h2>${esc(g.name)}<span class="count">${mine.length || ''}</span></h2></summary>
         <p class="small muted links">${g.slug ? `Shown documents also appear in the client's workspace. <a class="client-link" href="#/${esc(g.slug)}/home">Open workspace</a>` : 'Only you see these.'}</p>
-        ${!mine.length && !g.slug ? '<p class="empty">No documents yet.</p>' : g.slug ? docFolders(g, mine) : `<ul class="items">${mine.map(d => docRow(d, null)).join('')}</ul>`}</section>`;
+        ${!mine.length && !g.slug ? '<p class="empty">No documents yet.</p>' : g.slug ? docFolders(g, mine) : `<ul class="items">${mine.map(d => docRow(d, null)).join('')}</ul>`}</details></section>`;
     }).join('');
     box.innerHTML = `<div class="head"><div><h2 class="greet">Documents</h2><p class="muted small">Your own documents and every client's, in one place. Links open in a new tab.</p></div></div>
       ${docForm(data, editing || blank)}<div class="doc-groups">${groups}</div>`;
@@ -425,6 +425,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         docEditing = null; again();
       } catch (error) { button.disabled = false; box.querySelector('#doc-err').textContent = error.message; }
     };
+    box.querySelectorAll('details.group').forEach(el => el.addEventListener('toggle', () => { if (el.open) docOpenGroups.add(el.dataset.group); else docOpenGroups.delete(el.dataset.group); }));
     box.querySelectorAll('details.folder').forEach(el => el.addEventListener('toggle', () => { if (el.open) docClosed.delete(el.dataset.folder); else docClosed.add(el.dataset.folder); }));
     let dragging = null;
     box.ondragstart = e => { const li = e.target.closest('[data-doc-drag]'); if (!li) return; dragging = docs.documents.find(x => x.id === Number(li.dataset.docDrag)); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragging && dragging.id)); li.classList.add('dragging'); };
