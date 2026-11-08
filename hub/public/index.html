@@ -747,7 +747,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     const folders = [...state.projects.map(p => ({ id: p.id, name: p.name })), { id: null, name: 'General' }]
       .map(f => ({ ...f, docs: docs.filter(d => (d.project_id || null) === f.id).sort(signedFirst) })).filter(f => f.docs.length);
     return h('div', { class: 'card' }, h('h2', {}, 'Documents'),
-      folders.map(f => h('details', { class: 'doc-folder', open: true },
+      folders.map(f => h('details', { class: 'doc-folder' },
         h('summary', {}, f.name, h('span', { class: 'meta' }, ' ' + f.docs.length)),
         h('ul', { class: 'docs' }, f.docs.map(row)))));
   }
