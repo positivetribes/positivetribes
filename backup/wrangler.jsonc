@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tribe-backup",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-27",
+  // Nightly encrypted D1 backups into a private R2 bucket. The only public route is /health/<client>, which says
+  // ok or stale and nothing else. Reachable at backup.positivetribes.org only (no workers.dev address).
+  "workers_dev": false,
+  "routes": [{ "pattern": "backup.positivetribes.org", "custom_domain": true }],
+  // 08:00 UTC (1am Mountain), clear of the hub's 12:00 UTC morning check.
+  "triggers": { "crons": ["0 8 * * *"] },
+  // Bindings are named in src/config.js. The code only ever runs SELECT on them.
+  // Secret: BACKUP_KEY (base64, 32 random bytes), set with `wrangler secret put BACKUP_KEY`; keep a copy on paper.
+  "d1_databases": [
+    { "binding": "HUB_DB", "database_name": "hub-db", "database_id": "bfa66ad3-605c-4b6c-923e-2329f17e89bf" },
+    { "binding": "ADMIN_DB", "database_name": "positivetribes-admin-db", "database_id": "c74ab999-3171-432b-9234-da16795e7e50" },
+    { "binding": "UEP_SCHEDULER_DB", "database_name": "uep-scheduler-db", "database_id": "128aa211-3279-48ba-a565-6bd58a3777fb" }
+  ],
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "tribe-backups" }]
+}
