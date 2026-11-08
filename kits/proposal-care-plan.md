@@ -6,6 +6,7 @@ Rules when using it:
 - Open with the client's own result (the Monday-to-Friday story), then the cost comparison as proof.
 - Sell only what exists. Live in the hub since Nov 5, 2026 (roadmap P1): "Request an improvement" on released tools, each request's size and cost shown before work, confirm-before-work by the director or one named contact, the credit balance and history, and the "shipped this month" count. Live since Nov 7, 2026 (P2a): Patch, an AI helper, suggests how to sort each request and the Tribe Guide decides every one; say "AI helps sort requests, a person decides", and keep the AI-service term in the Terms. Still done by hand: the Tribe Guide posts the preview link and test script, and adds boost packs on request (invoiced). Don't promise automatic sorting without review or self-serve boost checkout yet, and don't give dates for them.
 - Always include "Included / Not included". It is what keeps this a software team and not an IT department.
+- Never name the AI vendor or model (Anthropic, Claude) to clients. Say "an AI service", "AI" or "our AI helper".
 - Use made-up or the client's own examples. Never name another client's tools or people.
 - The plan goes live in the client's hub only after the project is signed off, completed and released. Say so in the proposal.
 - Update the pricing experiments table in the Productization Strategy doc each time this offer goes out and when it's won or lost.
@@ -48,8 +49,11 @@ Most nonprofits {client name}'s size have no tech staff. With the Care plan, {cl
 | AI help desk |  | ✓ | ✓ |
 | Credits a month (1 credit ≈ 30 minutes) | 2 | 6 | 12 |
 | Built within 3 business days of confirming |  |  | ✓ |
+| Quarterly Salesforce health review (for clients on Salesforce) |  |  | ✓ |
 
 Sizes: small change 1 credit, medium 2, large 4. Wording, label, typo and image changes are free (up to 5 a month).
+
+Growth also includes a quarterly Salesforce health review by a Salesforce Certified Administrator: permissions, licenses, data quality and reports, with a short written summary. It is on top of the monthly credits. Any change the review recommends is sized and paid in credits like any other improvement. Only offer it to clients whose records live in Salesforce (it is a manual review by Eric, not a hub feature).
 
 **Our promises**
 - Fixes are always free.
@@ -78,10 +82,11 @@ Replace the older "up to N hours a month, unused hours do not carry over" wordin
 - The plan includes {credits} credits a month. One credit is about 30 minutes of work. Each improvement's size (small 1, medium 2, large 4) is shown before work starts and only used once {client name} confirms it.
 - Fixes to problems in Positive Tribes' own code, and tweaks needed to deliver what was confirmed, never use credits.
 - Courtesy edits (wording, labels, typos, images; no change to logic or data) are free, up to 5 a month. After that, every 5 count as 1 credit.
+- The Growth plan includes a quarterly Salesforce health review (permissions, licenses, data quality and reports) with a short written summary. It does not use credits. Changes the review recommends are sized and use credits like any other improvement.
 - Unused monthly credits roll over for one month, then expire. Boost pack credits last 12 months and are used after monthly credits.
 - Requests beyond the available credits wait for the next month at no cost, unless {client name} buys a boost pack.
 - Changes needed because another service changes (for example a CRM's API or texting rules) use credits when small or medium. Larger ones are quoted before any work starts.
 - New screens, modules, integrations, user roles, and anything that changes sign-in, payments, or personal or health data are new projects, quoted separately.
 - Every change is tested by {client name} on a test copy with sample data. Nothing goes live until {client name} signs off and Positive Tribes reviews it. A request with no reply for 14 days is paused, with its credits held, and can be picked up at any time.
-- To answer faster, Positive Tribes uses an AI service (Anthropic's Claude) to help sort requests. Only the request's own words are sent, with email addresses and phone numbers removed. Requests that mention sign-in, payments, permissions, or personal or health data are never sent. Under Anthropic's commercial terms, this data is not used to train its models. A person at Positive Tribes reviews every decision before {client name} sees it.
+- To answer faster, Positive Tribes uses an AI service to help sort requests. Only the request's own words are sent, with email addresses and phone numbers removed. Requests that mention sign-in, payments, permissions, or personal or health data are never sent. Under the service's commercial terms, this data is not used to train its models. A person at Positive Tribes reviews every decision before {client name} sees it.
 - The monthly price may be adjusted once a year with 60 days' notice. Either side can end the plan with 60 days' notice, and {client name} always gets a full export of its data.
