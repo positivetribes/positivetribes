@@ -454,7 +454,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     // Coming back from the command center to the same client restores its accent and title.
     document.documentElement.style.setProperty('--client', state.client.accent);
     document.title = state.client.name + ' | Positive Tribes';
-    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : view === 'ideas' ? 'ideas' : 'home';
+    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : view === 'ideas' ? 'ideas' : view === 'documents' ? 'documents' : 'home';
     // #/uep/problems opens the test problems of the project being tested (the link in UAT scripts).
     if (view === 'problems') {
       const testing = state.releases.find(r => r.stage === 'uat');
@@ -559,8 +559,9 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('nav', { class: 'tabs', 'aria-label': 'Sections' },
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
         h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : '')),
+        h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents'),
         h('a', { href: link('ideas'), ...(state.view === 'ideas' ? { 'aria-current': 'page' } : {}) }, 'Improve this hub', h('span', { class: 'badge' }, isPt && newIdeas() ? String(newIdeas()) : ''))),
-      state.view === 'home' ? home() : state.view === 'ideas' ? ideas(isPt) : backlog(isPt));
+      state.view === 'home' ? home() : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt));
     document.querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
   }
 
@@ -622,7 +623,6 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
             h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production')));
       })),
       systemStatus(),
-      documents(),
       mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
         h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
   }
