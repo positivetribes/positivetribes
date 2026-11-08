@@ -348,7 +348,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   function docForm(data, d) {
     const forOptions = '<option value="">Positive Tribes (only you)</option>' + data.clients.map(c => `<option value="${esc(c.slug)}"${c.slug === d.client ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
-    return `<form class="panel docform" id="doc-form"><h2>${d.id ? 'Edit document' : 'Add a document or link'}</h2>
+    return `<details class="panel docform"${d.id ? ' open' : ''}><summary>${d.id ? 'Edit document' : '+ Add a document or link'}</summary><form id="doc-form">
       <div class="fields">
         <label class="wide">Link<input type="url" name="url" value="${esc(d.url)}" maxlength="1000" placeholder="https://docs.google.com/… or https://claude.ai/artifact/…"></label>
         <label class="wide">Title<input type="text" name="title" value="${esc(d.title)}" maxlength="200" required></label>
@@ -360,7 +360,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         <label class="wide">Note (optional)<input type="text" name="note" value="${esc(d.note)}" maxlength="500" placeholder="Coming after the Nov 4 budget call"></label>
         <label class="check wide"><input type="checkbox" name="visible"${d.visible ? ' checked' : ''}><span>Show it in the client's workspace</span></label>
       </div>
-      <p class="actions"><button class="primary">${d.id ? 'Save' : 'Add document'}</button>${d.id ? ' <button type="button" id="doc-cancel">Cancel</button>' : ''}</p><p class="err" id="doc-err"></p></form>`;
+      <p class="actions"><button class="primary">${d.id ? 'Save' : 'Add document'}</button>${d.id ? ' <button type="button" id="doc-cancel">Cancel</button>' : ''}</p><p class="err" id="doc-err"></p></form></details>`;
   }
 
   // Signed papers first inside a group; otherwise the saved order.
@@ -444,7 +444,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     box.onclick = async e => {
       const t = e.target.closest('[data-doc-edit],[data-doc-delete]');
       if (!t) return;
-      if (t.dataset.docEdit) { docEditing = Number(t.dataset.docEdit); renderDocuments(box, docs); box.querySelector('#doc-form').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      if (t.dataset.docEdit) { docEditing = Number(t.dataset.docEdit); renderDocuments(box, docs); box.querySelector('.docform').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       const d = docs.documents.find(x => x.id === Number(t.dataset.docDelete));
       if (!d || !confirm(`Delete "${d.title}" from the hub? The document itself is not touched.`)) return;
       try { await api('/documents/' + d.id, { method: 'DELETE' }); if (docEditing === d.id) docEditing = null; again(); } catch (error) { alert(error.message); }

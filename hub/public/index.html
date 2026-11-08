@@ -274,7 +274,12 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 .cc label.check{display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-weight:400;font-size:inherit;margin:0}
 .cc label.check input{margin-top:4px}
 .cc details{margin-top:12px}
-.cc .docform{margin-bottom:18px}
+.cc .docform{margin-bottom:18px;padding:0}
+.cc .docform>summary{cursor:pointer;list-style:none;padding:14px 24px;font-family:var(--display);font-size:20px;font-weight:600;color:var(--ink)}
+.cc .docform>summary::-webkit-details-marker{display:none}
+.cc .docform>summary:hover{color:var(--rust)}
+.cc .docform[open]>summary{padding-bottom:4px}
+.cc .docform>form{padding:0 24px 22px}
 .cc .docform .fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;margin-top:6px}
 .cc .docform label{display:flex;flex-direction:column;gap:5px;margin:0;font-size:13px;font-weight:600;color:var(--muted)}
 .cc .docform label.wide{grid-column:span 2}
