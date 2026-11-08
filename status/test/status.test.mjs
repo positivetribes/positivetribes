@@ -35,7 +35,7 @@ test("page: unknown slug 404, public page hides URL, shows up", async () => {
   assert.equal((await handle(new Request("https://s.test/__proto__"), env, 1000000)).status, 404);
   assert.equal((await handle(new Request("https://s.test/uep", { method: "POST" }), env, 1000000)).status, 405);
   const now = 1_800_000_000;
-  await runChecks(env, now, res(200, '{"ok":true,"database":"ready"}'));
+  await runChecks(env, now, res(200, '{"ok":true,"database":"ready","backup":"ok"}'));
   const html = await (await handle(new Request("https://s.test/uep/"), env, now + 30)).text();
   assert.match(html, /All systems running/);
   assert.doesNotMatch(html, /workers\.dev/);
@@ -52,12 +52,12 @@ test("page: down and stale states", async () => {
 test("json view: states only, no URLs, same slug rules", async () => {
   const env = { DB: fakeDb() };
   const now = 1_800_000_000;
-  await runChecks(env, now, res(200, '"database":"ready"'));
+  await runChecks(env, now, res(200, '"database":"ready","backup":"ok"'));
   const r = await handle(new Request("https://s.test/uep.json"), env, now + 10);
   assert.equal(r.status, 200);
   const body = await r.json();
   assert.equal(body.overall, "up");
-  assert.deepEqual(body.checks, [{ name: "Climb Scheduler", state: "up", pct: 100 }]);
+  assert.deepEqual(body.checks, [{ name: "Climb Scheduler", state: "up", pct: 100 }, { name: "Nightly backup", state: "up", pct: 100 }]);
   assert.doesNotMatch(JSON.stringify(body), /https?:/);
   assert.equal((await handle(new Request("https://s.test/nope.json"), env, now)).status, 404);
   assert.equal((await handle(new Request("https://s.test/__proto__.json"), env, now)).status, 404);

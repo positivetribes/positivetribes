@@ -10,6 +10,12 @@ export const CLIENTS = {
         url: "https://uep-scheduler.traveleric.workers.dev/api/health",
         keyword: '"database":"ready"',
       },
+      {
+        id: "backup",
+        name: "Nightly backup",
+        url: "https://backup.positivetribes.org/health/uep",
+        keyword: '"backup":"ok"',
+      },
     ],
   },
 };

@@ -1,0 +1,12 @@
+{
+  "name": "tribe-backup",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler -c wrangler.jsonc dev --test-scheduled",
+    "deploy": "wrangler -c wrangler.jsonc deploy",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": { "wrangler": "4.141.0" }
+}
