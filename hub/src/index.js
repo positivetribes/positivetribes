@@ -61,6 +61,14 @@ async function scope(db, user, slug) {
 }
 
 // Newest first: position grows with each new document. Positive Tribes also sees documents not yet shown to the client (visible = 0).
+// The client's Salesforce address is shown as a link only if it is a plain https address on Salesforce's own domains.
+function safeSalesforceUrl(v) {
+  try {
+    const u = new URL(String(v || ''));
+    return u.protocol === 'https:' && !u.username && !u.password && /(^|\.)(salesforce|force)\.com$/.test(u.hostname) ? u.href : '';
+  } catch { return ''; }
+}
+
 async function listDocuments(db, clientId, everything) {
   const { results } = await db.prepare(
     `SELECT id, project_id, kind, title, url, note, status, visible, doc_date FROM documents
@@ -466,7 +474,7 @@ export default {
           'SELECT id, slug, name, poc_url, live_url, phase FROM projects WHERE client_id = ? ORDER BY position, id'
         ).bind(client.id).all();
         return json({
-          client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date },
+          client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date, salesforce_url: safeSalesforceUrl(client.salesforce_url) },
           projects: results,
           releases: await listReleases(db, client.id),
           documents: await listDocuments(db, client.id, user.role === 'pt')
