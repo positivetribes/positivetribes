@@ -1,0 +1,140 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap">
+<style>
+:root{--cream:#f7f6ef;--green:#243f36;--deep:#1a2e27;--rust:#a94c32;--coral:#e08a6b;--sage:#d3dcbf;--pale:#e9eddf;
+ --display:'Fraunces',Georgia,serif;--body:'DM Sans',Arial,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:var(--green);font-family:var(--body)}
+.scene{position:absolute;inset:0;opacity:0;display:flex;flex-direction:column;justify-content:center;padding:0 170px}
+.dark{background:var(--green);color:var(--cream)}
+.light{background:var(--cream);color:var(--green)}
+.pale{background:var(--pale);color:var(--green)}
+.a{opacity:0;will-change:transform,opacity}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-1.5px;line-height:1.08}
+.big{font-size:132px}.mid{font-size:86px}.sm{font-size:44px}
+em{font-style:italic;color:var(--coral)}
+.light em,.pale em{color:var(--rust)}
+.label{font:700 24px var(--body);letter-spacing:4px;text-transform:uppercase;color:var(--coral);margin-bottom:28px}
+.light .label,.pale .label{color:var(--rust)}
+.sub{font-size:40px;line-height:1.4;opacity:.9;max-width:1300px}
+.row{display:flex;gap:56px;margin-top:70px}
+.card{flex:1;border-top:4px solid var(--rust);padding-top:30px}
+.card h3{font-size:68px;margin-bottom:18px}
+.card p{font-size:32px;line-height:1.4;color:#59665e}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:56px 64px;margin-top:60px}
+.grid b{display:block;font:600 42px var(--display);margin-bottom:10px;letter-spacing:-.5px}
+.grid span{font-size:27px;line-height:1.4;color:#59665e}
+.step{flex:1}
+.num{width:84px;height:84px;border:3px solid var(--rust);border-radius:50%;display:grid;place-items:center;font:700 38px var(--body);color:var(--rust);margin-bottom:26px}
+.step h3{font-size:62px;margin-bottom:16px}
+.step p{font-size:32px;line-height:1.4;color:#59665e}
+.dot{position:absolute;border-radius:50%}
+.contact{margin-top:60px;font-size:40px;line-height:1.7}
+.fine{position:absolute;bottom:52px;left:170px;font-size:22px;opacity:.6}
+.bar{position:absolute;left:0;bottom:0;height:8px;background:var(--coral);width:0}
+</style></head><body>
+
+<!-- 1: brand open (0-5) -->
+<section class="scene dark" data-s="0" data-e="5.4" style="align-items:center;text-align:center">
+  <svg class="a" data-s="0.3" data-e="5.2" data-pop width="260" height="260" viewBox="0 0 200 200">
+    <circle cx="100" cy="46" r="22" fill="#f7f6ef"/><circle cx="154" cy="100" r="22" fill="#f7f6ef"/>
+    <circle cx="100" cy="154" r="22" fill="#f7f6ef"/><circle cx="46" cy="100" r="22" fill="#f7f6ef"/>
+    <circle cx="100" cy="100" r="22" fill="#e08a6b"/></svg>
+  <h1 class="a big" data-s="1.2" data-e="5.2" style="margin-top:40px;font-size:120px">Positive Tribes</h1>
+  <p class="a sub" data-s="2.0" data-e="5.2" style="margin-top:24px;color:var(--sage)">Technology for healthier communities</p>
+</section>
+
+<!-- 2: problem (5.4-12.6) -->
+<section class="scene dark" data-s="5.4" data-e="12.8">
+  <div class="a label" data-s="5.8" data-e="12.6">Sound familiar?</div>
+  <h2 class="a mid" data-s="6.0" data-e="12.6">Late nights. Sticky notes.</h2>
+  <h2 class="a mid" data-s="7.4" data-e="12.6" style="margin-top:8px">Whatever lives in the <em>founder&rsquo;s head.</em></h2>
+  <p class="a sub" data-s="9.6" data-e="12.6" style="margin-top:56px">That works&hellip; until a key person leaves, a funder asks for numbers, or demand doubles. Then the people you serve are the ones who wait.</p>
+</section>
+
+<!-- 3: promise (12.8-17.4) -->
+<section class="scene light" data-s="12.8" data-e="17.6" style="align-items:center;text-align:center">
+  <h1 class="a big" data-s="13.2" data-e="17.4" style="font-size:170px">Less busywork.</h1>
+  <h1 class="a big" data-s="14.4" data-e="17.4" style="font-size:170px"><em>More mission.</em></h1>
+  <p class="a sub" data-s="15.6" data-e="17.4" style="margin-top:40px">The exact tool your team needs, built, hosted and supported.</p>
+</section>
+
+<!-- 4: build host support (17.6-24.6) -->
+<section class="scene light" data-s="17.6" data-e="24.8">
+  <div class="a label" data-s="18.0" data-e="24.6">What we do</div>
+  <h2 class="a mid" data-s="18.2" data-e="24.6">One partner. <em>The whole job.</em></h2>
+  <div class="row">
+    <div class="a card" data-s="19.2" data-e="24.6"><h3>Build</h3><p>Custom tools shaped around your programs: scheduling, intake, case tracking, volunteers, donors and reporting.</p></div>
+    <div class="a card" data-s="20.4" data-e="24.6"><h3>Host</h3><p>We run it. No servers, security patches or updates for your team to manage.</p></div>
+    <div class="a card" data-s="21.6" data-e="24.6"><h3>Support &amp; improve</h3><p>A real help desk, and small improvements shipped continuously after launch.</p></div>
+  </div>
+</section>
+
+<!-- 5: benefits (24.8-33.6) -->
+<section class="scene pale" data-s="24.8" data-e="33.8">
+  <div class="a label" data-s="25.2" data-e="33.6">What changes for your nonprofit</div>
+  <h2 class="a mid" data-s="25.4" data-e="33.6">Put your energy <em>back on mission.</em></h2>
+  <div class="grid">
+    <div class="a" data-s="26.4" data-e="33.6"><b>Hours back</b><span>One tool replaces spreadsheets and duplicate entry.</span></div>
+    <div class="a" data-s="27.0" data-e="33.6"><b>Lower software costs</b><span>No per-seat licenses or features you don&rsquo;t use.</span></div>
+    <div class="a" data-s="27.6" data-e="33.6"><b>Better funding stories</b><span>Reports across every program, ready when a funder asks.</span></div>
+    <div class="a" data-s="28.2" data-e="33.6"><b>Low risk</b><span>See a clickable mock-up first. Build in small phases.</span></div>
+    <div class="a" data-s="28.8" data-e="33.6"><b>No IT staff needed</b><span>No hand-offs and no vendors to coordinate.</span></div>
+    <div class="a" data-s="29.4" data-e="33.6"><b>Mission-aligned</b><span>We&rsquo;re a nonprofit too, and reuse proven pieces.</span></div>
+  </div>
+</section>
+
+<!-- 6: how it works (33.8-41) -->
+<section class="scene light" data-s="33.8" data-e="41.2">
+  <div class="a label" data-s="34.2" data-e="41.0">How it works</div>
+  <h2 class="a mid" data-s="34.4" data-e="41.0">A mock-up in days. <em>Live in weeks.</em></h2>
+  <div class="row">
+    <div class="a step" data-s="35.4" data-e="41.0"><div class="num">1</div><h3>A conversation</h3><p>Tell us who you serve and what&rsquo;s in the way. No polished brief needed.</p></div>
+    <div class="a step" data-s="36.6" data-e="41.0"><div class="num">2</div><h3>A mock-up in days</h3><p>Click through a working prototype with your team before anything is built.</p></div>
+    <div class="a step" data-s="37.8" data-e="41.0"><div class="num">3</div><h3>A phased build</h3><p>Test each phase as it lands. We launch, host and keep improving it.</p></div>
+  </div>
+</section>
+
+<!-- 7: CTA (41.2-48) -->
+<section class="scene dark" data-s="41.2" data-e="48.4">
+  <div class="a label" data-s="41.6" data-e="48.4">Let&rsquo;s talk</div>
+  <h1 class="a mid" data-s="41.8" data-e="48.4" style="max-width:1500px">What&rsquo;s keeping your team from the people they serve?</h1>
+  <h1 class="a mid" data-s="43.2" data-e="48.4" style="margin-top:12px"><em>Let&rsquo;s fix it.</em></h1>
+  <p class="a contact" data-s="44.6" data-e="48.4">positivetribes.org<br>hello@positivetribes.org<br><span style="color:var(--sage)">Eric Roberts, Founder &amp; CEO</span></p>
+  <p class="a fine" data-s="45.4" data-e="48.4">Positive Tribes is a 501(c)(3) nonprofit in Golden, Colorado.</p>
+</section>
+
+<div class="bar" id="bar"></div>
+
+<script>
+// Piecewise time warp: [designStart, designEnd, realStart, realEnd] per scene, so scenes
+// can be stretched to fit the narration without retiming every element.
+const DEFAULT_WARP = [[0,5.4,0,5.4],[5.4,12.8,5.4,13.8],[12.8,17.6,13.8,18.4],[17.6,24.8,18.4,25.6],
+              [24.8,33.8,25.6,34.6],[33.8,41.2,34.6,43.4],[41.2,48.4,43.4,50.8]];
+const WARP = window.__TIMING ? window.__TIMING.warp : DEFAULT_WARP;   // timings.json, injected by render.mjs
+const TOTAL = window.__TIMING ? window.__TIMING.total : 50.8;
+const ease = x => 1 - Math.pow(1 - x, 3);
+const clamp = (x) => Math.max(0, Math.min(1, x));
+const unwarp = r => { for (const [d0,d1,r0,r1] of WARP) if (r <= r1) return d0 + (d1-d0) * clamp((r-r0)/(r1-r0)); return 48.4; };
+window.render = function (real) {
+  const t = unwarp(real);
+  document.querySelectorAll('.scene').forEach(s => {
+    const a = +s.dataset.s, e = +s.dataset.e;
+    const inn = clamp((t - a) / 0.5), out = clamp((e - t) / 0.5);
+    s.style.opacity = (t >= a && t <= e) ? Math.min(inn, out) : 0;
+  });
+  document.querySelectorAll('.a').forEach(el => {
+    const a = +el.dataset.s, e = +el.dataset.e;
+    const k = ease(clamp((t - a) / 0.7));
+    const out = clamp((e - t) / 0.4);
+    el.style.opacity = (t >= a && t <= e) ? k * out : 0;
+    const pop = el.hasAttribute('data-pop');
+    el.style.transform = pop ? `scale(${0.6 + 0.4 * k})` : `translateY(${(1 - k) * 36}px)`;
+  });
+  document.getElementById('bar').style.width = (real / TOTAL * 100) + '%';
+};
+window.TOTAL = TOTAL;
+render(0);
+</script>
+</body></html>
