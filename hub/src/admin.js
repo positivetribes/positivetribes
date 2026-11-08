@@ -638,7 +638,7 @@ const DOC_STATUSES = ['', 'draft', 'sent', 'signed'];
 
 async function loadDocuments(hub) {
   const [docs, clients, projects] = await Promise.all([
-    hub.prepare(`SELECT d.id, c.slug AS client, d.project_id, d.kind, d.title, d.url, d.note, d.status, d.visible, d.created_at
+    hub.prepare(`SELECT d.id, c.slug AS client, d.project_id, d.kind, d.title, d.url, d.note, d.status, d.visible, d.created_at, d.doc_date
                  FROM documents d LEFT JOIN clients c ON c.id = d.client_id ORDER BY d.position, d.id`).all(),
     hub.prepare('SELECT id, slug, name FROM clients ORDER BY name').all(),
     hub.prepare('SELECT id, client_id, name FROM projects ORDER BY position, id').all()
@@ -672,7 +672,9 @@ async function documentInput(hub, input) {
   if (!url && !note) throw new InputError('Add a link, or a note saying when it is coming.');
   // Only a client's document can be shown, and only to that client.
   const visible = clientId !== null && input.visible === true ? 1 : 0;
-  return [clientId, projectId, kind, title, url, note, status, visible];
+  // Empty keeps the saved date (or today for a new document).
+  const docDate = dateOf(input.doc_date, 'Date');
+  return [clientId, projectId, kind, title, url, note, status, visible, docDate];
 }
 
 // ---- Routes ----
@@ -812,14 +814,14 @@ export async function handleAdmin(request, env, url, who) {
       if (!id && method === 'GET') return json(await loadDocuments(hub));
       if (!id && method === 'POST') {
         const values = await documentInput(hub, await body(request));
-        const { meta } = await hub.prepare(`INSERT INTO documents (client_id, project_id, kind, title, url, note, status, visible, position)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM documents))`).bind(...values).run();
+        const { meta } = await hub.prepare(`INSERT INTO documents (client_id, project_id, kind, title, url, note, status, visible, doc_date, position)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')), (SELECT COALESCE(MAX(position), 0) + 1 FROM documents))`).bind(...values).run();
         return json({ ok: true, id: meta.last_row_id }, 201);
       }
       if (id && (method === 'PUT' || method === 'DELETE')) {
         if (!await hub.prepare('SELECT id FROM documents WHERE id = ?').bind(id).first()) throw new InputError('That document no longer exists.', 404);
         if (method === 'DELETE') await hub.prepare('DELETE FROM documents WHERE id = ?').bind(id).run();
-        else await hub.prepare('UPDATE documents SET client_id = ?, project_id = ?, kind = ?, title = ?, url = ?, note = ?, status = ?, visible = ? WHERE id = ?')
+        else await hub.prepare('UPDATE documents SET client_id = ?, project_id = ?, kind = ?, title = ?, url = ?, note = ?, status = ?, visible = ?, doc_date = COALESCE(?, doc_date) WHERE id = ?')
           .bind(...await documentInput(hub, await body(request)), id).run();
         return json({ ok: true });
       }

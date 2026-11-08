@@ -63,7 +63,7 @@ async function scope(db, user, slug) {
 // Newest first: position grows with each new document. Positive Tribes also sees documents not yet shown to the client (visible = 0).
 async function listDocuments(db, clientId, everything) {
   const { results } = await db.prepare(
-    `SELECT id, project_id, kind, title, url, note, status, visible FROM documents
+    `SELECT id, project_id, kind, title, url, note, status, visible, doc_date FROM documents
      WHERE client_id = ? AND (visible = 1 OR ?) ORDER BY position DESC, id DESC`
   ).bind(clientId, everything ? 1 : 0).all();
   return results.map(d => ({ ...d, visible: Boolean(d.visible) }));

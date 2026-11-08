@@ -356,31 +356,48 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         <label>Project<select name="project_id"></select></label>
         <label>Type<select name="kind">${options(DOC_KIND, d.kind)}</select></label>
         <label>Status<select name="status">${options(DOC_STATUS, d.status)}</select></label>
+        <label>Date<input type="date" name="doc_date" value="${esc(d.doc_date || '')}"></label>
         <label class="wide">Note (optional)<input type="text" name="note" value="${esc(d.note)}" maxlength="500" placeholder="Coming after the Nov 4 budget call"></label>
         <label class="check wide"><input type="checkbox" name="visible"${d.visible ? ' checked' : ''}><span>Show it in the client's workspace</span></label>
       </div>
       <p class="actions"><button class="primary">${d.id ? 'Save' : 'Add document'}</button>${d.id ? ' <button type="button" id="doc-cancel">Cancel</button>' : ''}</p><p class="err" id="doc-err"></p></form>`;
   }
 
+  // Signed papers first inside a group; otherwise the saved order.
+  const bySigned = (a, b) => (b.status === 'signed') - (a.status === 'signed');
+  let docClosed = new Set();
+  const docDate = iso => iso ? new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
   function docRow(d, client) {
     const url = safeUrl(d.url);
-    const project = client && (client.projects.find(p => p.id === d.project_id) || {}).name;
-    const meta = [DOC_KIND[d.kind], project, d.note].filter(Boolean).map(esc).join(' · ');
+    const meta = [DOC_KIND[d.kind], docDate(d.doc_date), d.note].filter(Boolean).map(esc).join(' · ');
     const seen = !d.client ? '' : d.visible ? '<span class="chip">Client sees it</span>' : '<span class="chip warn">Hidden from client</span>';
-    return `<li${d.id === docEditing ? ' class="editing"' : ''}><div class="row"><div class="grow"><div class="title">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(d.title)}</a>` : esc(d.title)}</div><div class="meta">${meta}</div></div>${d.status ? `<span class="chip">${esc(DOC_STATUS[d.status])}</span>` : ''}${seen}</div>
+    return `<li${d.id === docEditing ? ' class="editing"' : ''}${client ? ` draggable="true" data-doc-drag="${d.id}"` : ''}><div class="row"><div class="grow"><div class="title">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(d.title)}</a>` : esc(d.title)}</div><div class="meta">${meta}</div>${d.status || seen ? `<div class="chips">${d.status ? `<span class="chip">${esc(DOC_STATUS[d.status])}</span>` : ''}${seen}</div>` : ''}</div></div>
       <div class="small"><button class="link" data-doc-edit="${d.id}">Edit</button><button class="link" data-doc-delete="${d.id}">Delete</button></div></li>`;
+  }
+
+  // A client's documents are filed under its projects. Drag a document onto another folder to move it.
+  function docFolders(client, mine) {
+    const folders = [...client.projects.map(p => ({ id: p.id, name: p.name })), { id: null, name: 'General' }];
+    return folders.map(f => {
+      const here = mine.filter(d => (d.project_id || null) === f.id).sort(bySigned);
+      if (f.id === null && !here.length && client.projects.length) return '';
+      const key = client.slug + ':' + (f.id || 0);
+      return `<details class="folder" data-folder="${esc(key)}" data-client="${esc(client.slug)}" data-project="${f.id || ''}"${docClosed.has(key) ? '' : ' open'}><summary>${esc(f.name)}<span class="count">${here.length || ''}</span></summary>
+        ${here.length ? `<ul class="items">${here.map(d => docRow(d, client)).join('')}</ul>` : '<p class="empty small">Nothing here yet. Drag a document onto this folder.</p>'}</details>`;
+    }).join('');
   }
 
   function renderDocuments(box, data) {
     docs = data;
     const editing = data.documents.find(d => d.id === docEditing);
     if (!editing) docEditing = null;
-    const blank = { client: '', project_id: null, kind: 'other', title: '', url: '', note: '', status: '', visible: false };
+    const blank = { client: '', project_id: null, kind: 'other', title: '', url: '', note: '', status: '', visible: false, doc_date: new Date().toLocaleDateString('en-CA') };
     const groups = [{ slug: '', name: 'Positive Tribes', projects: [] }, ...data.clients].map(g => {
       const mine = data.documents.filter(d => d.client === g.slug);
       return `<section class="panel"><div class="row"><h2 class="grow">${esc(g.name)}<span class="count">${mine.length || ''}</span></h2></div>
         <p class="small muted links">${g.slug ? `Shown documents also appear in the client's workspace. <a class="client-link" href="#/${esc(g.slug)}/home">Open workspace</a>` : 'Only you see these.'}</p>
-        ${mine.length ? `<ul class="items">${mine.map(d => docRow(d, g.slug ? g : null)).join('')}</ul>` : '<p class="empty">No documents yet.</p>'}</section>`;
+        ${!mine.length && !g.slug ? '<p class="empty">No documents yet.</p>' : g.slug ? docFolders(g, mine) : `<ul class="items">${mine.map(d => docRow(d, null)).join('')}</ul>`}</section>`;
     }).join('');
     box.innerHTML = `<div class="head"><div><h2 class="greet">Documents</h2><p class="muted small">Your own documents and every client's, in one place. Links open in a new tab.</p></div></div>
       ${docForm(data, editing || blank)}<div class="doc-groups">${groups}</div>`;
@@ -400,13 +417,28 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     form.client.onchange = () => projects(null);
     form.onsubmit = async e => {
       e.preventDefault();
-      const payload = { client: form.client.value, project_id: form.project_id.value ? Number(form.project_id.value) : null, kind: form.kind.value, title: form.title.value, url: form.url.value, note: form.note.value, status: form.status.value, visible: form.visible.checked };
+      const payload = { client: form.client.value, project_id: form.project_id.value ? Number(form.project_id.value) : null, kind: form.kind.value, title: form.title.value, url: form.url.value, note: form.note.value, status: form.status.value, visible: form.visible.checked, doc_date: form.doc_date.value };
       const button = form.querySelector('button.primary');
       button.disabled = true;
       try {
         if (docEditing) await send('/documents/' + docEditing, 'PUT', payload); else await send('/documents', 'POST', payload);
         docEditing = null; again();
       } catch (error) { button.disabled = false; box.querySelector('#doc-err').textContent = error.message; }
+    };
+    box.querySelectorAll('details.folder').forEach(el => el.addEventListener('toggle', () => { if (el.open) docClosed.delete(el.dataset.folder); else docClosed.add(el.dataset.folder); }));
+    let dragging = null;
+    box.ondragstart = e => { const li = e.target.closest('[data-doc-drag]'); if (!li) return; dragging = docs.documents.find(x => x.id === Number(li.dataset.docDrag)); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragging && dragging.id)); li.classList.add('dragging'); };
+    box.ondragend = () => { dragging = null; box.querySelectorAll('.dragging,.drop').forEach(el => el.classList.remove('dragging', 'drop')); };
+    box.ondragover = e => { const f = e.target.closest('details.folder'); if (!f || !dragging || f.dataset.client !== dragging.client) return; e.preventDefault(); f.classList.add('drop'); };
+    box.ondragleave = e => { const f = e.target.closest('details.folder'); if (f && !f.contains(e.relatedTarget)) f.classList.remove('drop'); };
+    box.ondrop = async e => {
+      const f = e.target.closest('details.folder');
+      if (!f || !dragging || f.dataset.client !== dragging.client) return;
+      e.preventDefault(); f.classList.remove('drop');
+      const project = f.dataset.project ? Number(f.dataset.project) : null;
+      if ((dragging.project_id || null) === project) return;
+      const d = dragging;
+      try { await send('/documents/' + d.id, 'PUT', { client: d.client, project_id: project, kind: d.kind, title: d.title, url: d.url, note: d.note, status: d.status, visible: d.visible, doc_date: d.doc_date }); again(); } catch (error) { alert(error.message); }
     };
     box.querySelector('#doc-cancel')?.addEventListener('click', () => { docEditing = null; renderDocuments(box, docs); });
     box.onclick = async e => {

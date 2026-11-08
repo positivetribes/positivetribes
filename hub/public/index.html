@@ -132,6 +132,8 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .loop .pips li.ready{background:color-mix(in srgb,var(--client) 40%,var(--line))}
 .loop .note{font-size:12px;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:4px}
 .loop .note svg{width:12px;height:12px;flex:none}
+.doc-folder{border-top:1px solid var(--line);padding:10px 0}.doc-folder:first-of-type{border-top:0}
+.doc-folder>summary{cursor:pointer;font-weight:700;font-size:16px}
 .releases{list-style:none;margin:14px 0 0;padding:0;font-size:15px}
 .releases li{padding:10px 0;border-top:1px solid var(--line)}
 .releases li:first-child{border-top:0;padding-top:0}
@@ -277,10 +279,24 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 .cc .docform label{display:flex;flex-direction:column;gap:5px;margin:0;font-size:13px;font-weight:600;color:var(--muted)}
 .cc .docform label.wide{grid-column:span 2}
 .cc .docform label.check{flex-direction:row;align-items:center;color:var(--ink);font-weight:400;font-size:14px}
-.cc .docform label.check input{margin:0}
+.cc .docform label.check input{width:auto;margin:0;flex:none}
+.cc .docform label.check{padding-top:22px;gap:10px}
 .cc .docform input,.cc .docform select{width:100%;font-weight:400}
 .cc .docform select:disabled,.cc .docform input:disabled{opacity:.5}
 .cc .docform .actions{margin:14px 0 0}
+.cc .doc-groups .row h2.grow{display:flex;align-items:baseline;gap:8px}
+.cc .doc-groups .row h2.grow .count{margin:0}
+.cc .doc-groups .links{margin:2px 0 14px;line-height:1.5}
+.cc .doc-groups .items>li{padding:12px 0}
+.cc .doc-groups .items>li:first-child{padding-top:0}
+.cc .doc-groups .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.cc .doc-groups .small{margin-top:6px;display:flex;gap:14px}
+.cc .folder{border-top:1px solid var(--line);padding:10px 0}
+.cc .folder:first-of-type{border-top:0}
+.cc .folder>summary{cursor:pointer;font-weight:700;font-size:15px;list-style:revert}
+.cc .folder .items{margin-top:8px}
+.cc .folder.drop{background:var(--soft);border-radius:8px;outline:2px dashed var(--rust);outline-offset:2px}
+.cc .items li[draggable=true]{cursor:grab}.cc .items li.dragging{opacity:.4}
 .cc .doc-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:18px;align-items:start}
 .cc .items li.editing{outline:2px solid var(--rust);outline-offset:4px;border-radius:6px}
 @media (max-width:700px){.cc .docform .fields{grid-template-columns:minmax(0,1fr)}.cc .docform label.wide{grid-column:auto}}
@@ -702,18 +718,25 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
   // ---- Documents: proposals and other papers, as links ----
   const DOC_STATUS = { draft: 'Draft', sent: 'Sent', signed: 'Signed' };
   const DOC_KINDS = { proposal: 'Proposal', agreement: 'Agreement', test_script: 'Test script', design: 'Design', plan: 'Plan', process: 'Process', link: 'Link', other: 'Document' };
+  const shortDocDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   function documents() {
     // Positive Tribes receives hidden documents too; a preview shows only what the client would see.
     const isPt = viewer().role === 'pt';
     const docs = state.documents.filter(d => d.visible || isPt);
     if (!docs.length) return null;
-    const projectName = id => (state.projects.find(p => p.id === id) || {}).name;
+    // Filed under each project, signed papers first; anything without a project goes under General.
+    const row = d => h('li', {},
+      h('div', { class: 'doc-title' }, h('b', {}, d.title),
+        h('span', { class: 'meta' }, [DOC_KINDS[d.kind], d.doc_date && shortDocDate(d.doc_date), d.note].filter(Boolean).join(' \u00b7 ') + (!d.visible ? ' \u00b7 only Positive Tribes sees this' : ''))),
+      d.status && h('span', { class: 'pill doc ' + d.status }, DOC_STATUS[d.status]),
+      d.url && h('a', { class: 'btn ghost small', href: d.url, target: '_blank', rel: 'noopener' }, 'Open'));
+    const signedFirst = (a, b) => (b.status === 'signed') - (a.status === 'signed');
+    const folders = [...state.projects.map(p => ({ id: p.id, name: p.name })), { id: null, name: 'General' }]
+      .map(f => ({ ...f, docs: docs.filter(d => (d.project_id || null) === f.id).sort(signedFirst) })).filter(f => f.docs.length);
     return h('div', { class: 'card' }, h('h2', {}, 'Documents'),
-      h('ul', { class: 'docs' }, docs.map(d => h('li', {},
-        h('div', { class: 'doc-title' }, h('b', {}, d.title),
-          h('span', { class: 'meta' }, [DOC_KINDS[d.kind], projectName(d.project_id)].filter(Boolean).join(' \u00b7 ') + (d.note ? ' \u00b7 ' + d.note : '') + (!d.visible ? ' \u00b7 only Positive Tribes sees this' : ''))),
-        d.status && h('span', { class: 'pill doc ' + d.status }, DOC_STATUS[d.status]),
-        d.url && h('a', { class: 'btn ghost small', href: d.url, target: '_blank', rel: 'noopener' }, 'Open')))));
+      folders.map(f => h('details', { class: 'doc-folder', open: true },
+        h('summary', {}, f.name, h('span', { class: 'meta' }, ' ' + f.docs.length)),
+        h('ul', { class: 'docs' }, f.docs.map(row)))));
   }
 
   // ---- Client phases and their testing window ----
