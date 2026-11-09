@@ -131,9 +131,22 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         <span class="muted small">Due ${esc(longDate(r.due))} (${esc(r.days)}${business ? ' business' : ''} days from ${esc(r.started)})${r.autoAccept ? ' · accepted automatically unless problems are listed' : ''}</span></span></a>`;
     }).join('');
   }
-  // Suggestions and problems waiting for our reply, per client: one line, each name opens that client's list.
-  const needsReplyLine = data => (data.needsReply || []).length ? `<p class="panel needs-reply"><strong>Needs a reply:</strong> ${data.needsReply.map(r =>
-    `<a href="#/${esc(r.workspace)}/backlog">${esc(r.client)} ${esc(r.count)}</a>`).join(' · ')} <span class="muted small">suggested changes and test problems with no answer yet</span></p>` : '';
+  // Suggestions and problems waiting for our reply: one row per item, most urgent first, top 3 with "show all".
+  // Each row opens that item on the client's list, where the reply box is.
+  const REPLY_SHOWN = 3;
+  let replyAll = false;
+  const needsReplyLine = data => {
+    const rows = data.needsReply || [];
+    if (!rows.length) return '';
+    const shown = replyAll ? rows : rows.slice(0, REPLY_SHOWN);
+    const row = r => `<li class="${r.late ? 'late' : ''}"><a href="#/${esc(r.workspace)}/backlog/${esc(r.id)}"><span class="who">${esc(r.client)}</span>
+      <span class="what">${esc(r.title)}</span></a>
+      <span class="meta">${r.testing ? '<span class="pill testing">Test problem</span> ' : '<span class="pill">' + esc(r.kind === 'problem' ? 'Problem' : 'Change') + '</span> '}${r.days === 0 ? 'today' : esc(r.days) + (r.days === 1 ? ' business day' : ' business days')}${r.late ? ' · waiting' : ''}</span>
+      <a class="btn small" href="#/${esc(r.workspace)}/backlog/${esc(r.id)}">Reply</a></li>`;
+    return `<section class="panel needs-reply" aria-label="Needs a reply"><p class="label"><strong>Needs a reply</strong> <span class="muted small">${rows.length} suggested change${rows.length === 1 ? '' : 's'} and test problem${rows.length === 1 ? '' : 's'} with no answer yet</span></p>
+      <ul class="reply-list">${shown.map(row).join('')}</ul>
+      ${rows.length > REPLY_SHOWN ? `<button type="button" class="link" id="reply-toggle">${replyAll ? 'Show fewer' : 'Show all ' + rows.length}</button>` : ''}</section>`;
+  };
   const countdownRow = data => (data.testing || []).length ? `<div class="countdowns">${countdowns(data)}</div>` : '';
 
   // "Not now" only hides an item for the rest of today, in this browser.
@@ -172,6 +185,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       } catch (error) { alert(error.message); }
       renderToday(box, overview);
     });
+    box.querySelector('#reply-toggle')?.addEventListener('click', () => { replyAll = !replyAll; renderToday(box, overview); });
     box.querySelector('#now-reset')?.addEventListener('click', () => { try { localStorage.removeItem(doneKey); } catch {} save([]); });
   }
 

@@ -226,7 +226,7 @@ test('Today counts down every client phase in testing, from the hub', async () =
   ]);
 });
 
-test('Today counts open changes and problems with no reply yet, per hub client', async () => {
+test('Today lists each open change and problem with no reply yet, most urgent first', async () => {
   const { hub: h, admin } = hubDb();
   h.sqlite.exec(`
     INSERT INTO items (client_id, project_id, kind, title, tier, status, done, position) VALUES
@@ -235,7 +235,25 @@ test('Today counts open changes and problems with no reply yet, per hub client',
       (2, 2, 'problem', 'g', 'nice', 'new', 0, 1);
   `);
   const r = await call(admin.db, 'GET', '/api/admin/overview', undefined, { env: { DB: h.db } });
-  assert.deepEqual(r.body.needsReply, [{ workspace: 'uep', client: 'UEP', count: 3 }, { workspace: 'safe', client: 'Sober AF', count: 1 }]);
+  // Problems first, then changes, each by tier; ranks are by kind, tier, then age.
+  assert.deepEqual(r.body.needsReply.map(n => [n.workspace, n.title, n.kind, n.tier]), [
+    ['uep', 'b', 'problem', 'must'], ['safe', 'g', 'problem', 'nice'], ['uep', 'a', 'change', 'must'], ['uep', 'c', 'change', 'idea']
+  ]);
+  assert.ok(r.body.needsReply.every(n => typeof n.id === 'number' && n.client && typeof n.days === 'number'));
+});
+
+test('a problem from a client in testing ranks first, and 3+ business days is marked late', async () => {
+  const { hub: h, admin } = hubDb();
+  h.sqlite.exec(`
+    INSERT INTO releases (client_id, project_id, number, name, stage, uat_started, uat_days, uat_day_type, auto_accept) VALUES (1, 1, 1, '', 'uat', '2026-11-04', 10, 'business', 1);
+    INSERT INTO items (client_id, project_id, kind, title, tier, status, done, position, created_at) VALUES
+      (2, 2, 'problem', 'other client must problem', 'must', 'new', 0, 1, '2026-11-02 12:00:00'),
+      (1, 1, 'problem', 'test problem', 'idea', 'new', 0, 1, datetime('now'));
+  `);
+  const r = await call(admin.db, 'GET', '/api/admin/overview', undefined, { env: { DB: h.db } });
+  assert.deepEqual(r.body.needsReply.map(n => [n.title, n.testing]), [['test problem', true], ['other client must problem', false]]);
+  assert.equal(r.body.needsReply[0].late, false);
+  assert.equal(r.body.needsReply[1].late, true);
 });
 
 // ---- The Today rules ----

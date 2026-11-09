@@ -418,16 +418,32 @@ export function buildInbox(backlogs, results, cleared, ownNames) {
   return { backlogs: summary, items: items.sort((x, y) => y.at.localeCompare(x.at)) };
 }
 
-// Suggested changes and test problems nobody at Positive Tribes has replied to yet, per hub client, for Today.
-async function loadNeedsReply(env) {
+// Suggested changes and test problems nobody at Positive Tribes has replied to yet, one row per item, for Today.
+// Ranked: problems from a client in testing first (their sign-off clock is running), then other problems, then
+// changes, each by tier (must, nice, idea) and then oldest first. `late` marks an item waiting 3+ business days.
+const REPLY_TIER = { must: 0, nice: 1, idea: 2 };
+function businessDaysSince(iso, now = Date.now()) {
+  const start = Date.parse(String(iso).replace(' ', 'T') + 'Z');
+  if (Number.isNaN(start)) return 0;
+  let n = 0;
+  for (let t = start + 864e5; t <= now; t += 864e5) { const d = new Date(t).getUTCDay(); if (d !== 0 && d !== 6) n++; }
+  return n;
+}
+async function loadNeedsReply(env, now = Date.now()) {
   if (!env.DB) return [];
   try {
     const { results } = await env.DB.prepare(
-      `SELECT c.slug, c.name, COUNT(*) AS n FROM items i JOIN clients c ON c.id = i.client_id
-       WHERE i.kind IN ('change', 'problem') AND i.done = 0 AND i.status = 'new'
-       GROUP BY c.id ORDER BY n DESC, c.name`
+      `SELECT i.id, i.kind, i.title, i.tier, i.created_at, c.slug, c.name,
+              EXISTS (SELECT 1 FROM releases r WHERE r.client_id = i.client_id AND r.stage = 'uat') AS testing
+       FROM items i JOIN clients c ON c.id = i.client_id
+       WHERE i.kind IN ('change', 'problem') AND i.done = 0 AND i.status = 'new'`
     ).all();
-    return results.map(r => ({ workspace: r.slug, client: r.name, count: r.n }));
+    return results.map(r => {
+      const days = businessDaysSince(r.created_at, now);
+      return { id: r.id, workspace: r.slug, client: r.name, kind: r.kind, title: r.title, tier: r.tier, days, late: days >= 3, testing: !!(r.testing && r.kind === 'problem'), created: r.created_at };
+    }).sort((x, y) => (y.testing - x.testing) || ((x.kind === 'problem' ? 0 : 1) - (y.kind === 'problem' ? 0 : 1))
+      || (REPLY_TIER[x.tier] - REPLY_TIER[y.tier]) || String(x.created).localeCompare(String(y.created)) || x.id - y.id)
+      .map(({ created, ...row }) => row);
   } catch (error) {
     console.error('admin_needs_reply_failed', error.message);
     return [];

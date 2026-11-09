@@ -379,7 +379,17 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .countdown .num{font-family:var(--display);font-size:44px;line-height:1}
 .cc .countdown.soon .num{color:var(--nice)}.cc .countdown.over .num{color:var(--rust)}
 .cc .needs-reply{margin:0 0 22px;padding-top:12px;padding-bottom:12px;border-left:6px solid var(--must)}
-.cc .needs-reply a{font-weight:600}
+.cc .needs-reply .label{margin:0 0 8px}
+.cc .reply-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.cc .reply-list li{display:grid;grid-template-columns:1fr auto auto;gap:4px 12px;align-items:center;padding:8px 0;border-top:1px solid var(--line,rgba(0,0,0,.08))}
+.cc .reply-list li:first-child{border-top:0}
+.cc .reply-list li>a:first-child{display:flex;flex-direction:column;min-width:0;text-decoration:none;font-weight:600}
+.cc .reply-list .who{font-size:.8em;font-weight:500;opacity:.75}
+.cc .reply-list .meta{font-size:.85em;white-space:nowrap}
+.cc .reply-list li.late .meta{color:var(--must);font-weight:600}
+.cc .reply-list .pill.testing{background:var(--must);color:#fff}
+.cc .needs-reply .link{margin-top:6px}
+@media (max-width:560px){.cc .reply-list li{grid-template-columns:1fr auto}.cc .reply-list .meta{grid-column:1/-1;white-space:normal}}
 .cc .nowcard{border-left:6px solid var(--rust);margin-bottom:22px}
 .cc .nowcard .label{margin:0 0 6px}
 .cc .nowcard h2{font-size:26px;margin-bottom:6px;overflow-wrap:anywhere}
