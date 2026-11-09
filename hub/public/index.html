@@ -65,7 +65,8 @@ p{margin:0}
 .bell-panel .bp-empty{padding:20px 16px;color:var(--muted);margin:0}
 .bell-panel .bp-foot{padding:10px 16px;border-top:1px solid var(--line);text-align:center}
 .hero{padding:18px 0 22px;border-bottom:1px solid var(--line);margin-bottom:6px;position:relative}
-.hero-sf{position:absolute;right:0;bottom:18px;display:inline-flex;align-items:center}
+.eyebrow .eb-sf{color:var(--muted);text-decoration:none;border-bottom:1px solid transparent}
+.eyebrow .eb-sf:hover,.eyebrow .eb-sf:focus-visible{color:var(--ink);border-bottom-color:var(--client)}
 .hero:before{content:"";display:block;width:56px;height:5px;border-radius:3px;background:var(--client);margin-bottom:14px}
 .eyebrow{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 h1{font-size:clamp(30px,6vw,44px);margin-top:4px}
@@ -560,8 +561,8 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     renderBar();
     const waiting = open(state.items).filter(i => i.kind === 'question').length;
     $('main').replaceChildren(
-      h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Your workspace'), h('h1', {}, state.client.name),
-        state.client.salesforce_url && h('a', { class: 'btn small hero-sf', href: state.client.salesforce_url, target: '_blank', rel: 'noopener noreferrer' }, 'Open Salesforce')),
+      h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Your workspace',
+        state.client.salesforce_url && [' \u00b7 ', h('a', { class: 'eb-sf', href: state.client.salesforce_url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Open Salesforce (opens in a new tab)' }, 'Salesforce \u2197')]), h('h1', {}, state.client.name)),
       h('nav', { class: 'tabs', 'aria-label': 'Sections' },
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
         h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : '')),
