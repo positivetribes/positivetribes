@@ -589,23 +589,25 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
           h('div', {}, h('a', { class: 'btn ghost', href: link('backlog') }, 'Suggest a change or ask a question')));
     return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero, carePlan(),
       h('div', { class: 'grid' }, state.projects.map(p => {
-        const at = STEPS.findIndex(s => s[0] === p.phase);
+        // A project without a prototype (such as a data migration) skips that step in its progress line.
+        const steps = p.has_prototype === 0 ? STEPS.filter(s => s[0] !== 'prototype') : STEPS;
+        const at = steps.findIndex(s => s[0] === p.phase);
         const counts = open(state.items.filter(i => i.project_id === p.id));
         const phases = state.releases.filter(r => r.project_id === p.id);
         const isPt = viewer().role === 'pt';
         // With more than one client phase, Build and Testing repeat for each phase before Launch.
         const loops = phases.length > 1;
         const current = phases.find(r => r.stage === 'uat') || phases.find(r => r.stage === 'building') || phases.find(r => !['signed_off', 'live'].includes(r.stage));
-        const inLoop = loops && LOOP.includes(STEPS[Math.max(at, 0)][0]);
-        const loopVars = '--from:' + STEPS.findIndex(s => s[0] === LOOP[0]) + ';--span:' + LOOP.length + ';--steps:' + STEPS.length;
+        const inLoop = loops && LOOP.includes(steps[Math.max(at, 0)][0]);
+        const loopVars = '--from:' + steps.findIndex(s => s[0] === LOOP[0]) + ';--span:' + LOOP.length + ';--steps:' + steps.length;
         const tip = (key, label, n) => (n < at ? label + ' \u00b7 done' : n > at ? label + ' \u00b7 coming up' : label) + (loops && LOOP.includes(key) && n !== at ? ', repeats for each phase' : '');
         return h('div', { class: 'card' },
           h('h2', {}, p.name),
-          h('p', { class: 'muted' }, 'Now: ' + STEPS[Math.max(at, 0)][1] + (inLoop && current ? ' ' + phaseName(current) + ' of ' + phases.length : '')),
+          h('p', { class: 'muted' }, 'Now: ' + steps[Math.max(at, 0)][1] + (inLoop && current ? ' ' + phaseName(current) + ' of ' + phases.length : '')),
           h('div', { class: 'steps-wrap', style: loopVars },
             loops && h('div', { class: 'zone', 'aria-hidden': 'true' }),
             h('ol', { class: 'steps', 'aria-label': 'Progress for ' + p.name },
-              STEPS.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : { tabindex: '0' }) }, h('span', {}, tip(key, label, n)))))),
+              steps.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : { tabindex: '0' }) }, h('span', {}, tip(key, label, n)))))),
           loops && h('div', { class: 'loop', style: loopVars },
             h('div', { class: 'bracket', 'aria-hidden': 'true' }),
             h('ul', { class: 'pips', 'aria-label': 'Build and testing, once per phase' }, phases.map(r =>
