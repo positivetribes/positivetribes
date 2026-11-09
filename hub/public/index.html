@@ -122,6 +122,7 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .next.caught p{margin:0}
 .status-line>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
 .status-line>summary::-webkit-details-marker{display:none}
+.status-line>summary:focus:not(:focus-visible){outline:none}
 .status-line>summary .ok-dot{width:10px;height:10px;border-radius:50%;background:#2e8b57;flex:none}
 .status-line>summary .more{margin-left:auto;font-size:14px;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
 .status-line[open]>summary .more{display:none}
@@ -148,6 +149,7 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .uat{border-left:6px solid var(--client);display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px}
 .uat .left{font-family:var(--display);font-size:clamp(44px,9vw,64px);line-height:1;white-space:nowrap}
 .uat.soon .left,.uat.late .left{color:var(--rust)}
+.uat .left .unit{display:block;font-family:var(--font);font-size:15px;font-weight:600;color:var(--muted);margin-top:6px}
 .uat .what{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:4px}
 .uat .what h2{font-size:22px;font-family:var(--font);font-weight:700}
 .uat .actions{flex-basis:100%}
@@ -614,8 +616,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           h('p', {}, h('b', {}, 'You’re all caught up.'), h('span', { class: 'muted' }, ' We’ll tell you here, and by email, when we need something.')),
           h('a', { class: 'btn ghost small', href: link('backlog') }, 'Suggest a change or ask a question'));
     return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero, carePlan(),
-      // Projects with several client phases come first and span the row.
-      h('div', { class: 'grid' }, [...state.projects].sort((a, b) => (state.releases.filter(r => r.project_id === b.id).length > 1) - (state.releases.filter(r => r.project_id === a.id).length > 1)).map(p => {
+      // Projects with several client phases come first and span the row; the rest share the next row evenly.
+      ...[true, false].map(wide => { const group = state.projects.filter(p => (state.releases.filter(r => r.project_id === p.id).length > 1) === wide); return group.length > 0 && h('div', { class: 'grid' }, group.map(p => {
         // A project without a prototype (such as a data migration) skips that step in its progress line.
         const steps = p.has_prototype === 0 ? STEPS.filter(s => s[0] !== 'prototype') : STEPS;
         const at = steps.findIndex(s => s[0] === p.phase);
@@ -651,7 +653,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             : p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')),
           isPt && p.live_url && !isLive(p, phases) && h('p', { class: 'admin-only' }, h('span', { class: 'meta' }, 'Only Positive Tribes sees this: '),
             h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production')));
-      })),
+      })); }),
       systemStatus(),
       mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
         h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
@@ -819,7 +821,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const blocking = problems.filter(i => i.tier === 'must');
     // The big number counts the same days as the due line under it (business days for business-day windows).
     const unit = business ? ' business day' : ' day';
-    const big = left == null ? 'Testing' : left === 0 ? 'Due today' : left > 0 ? left + unit + (left === 1 ? '' : 's') + ' left' : -left + unit + (left === -1 ? '' : 's') + ' over';
+    // A count shows the number large with its words small beneath, so a long label does not crowd the card.
+    const big = left == null ? 'Testing' : left === 0 ? 'Due today'
+      : [h('span', {}, String(Math.abs(left))), h('span', { class: 'unit' }, unit.trim() + (Math.abs(left) === 1 ? '' : 's') + (left > 0 ? ' left' : ' over'))];
     // Under the agreement, a phase with auto_accept is accepted on its due date unless problems are listed by then.
     const acceptance = r.auto_accept && r.uat_due && (problems.length
       ? (problems.length === 1 ? 'A problem is' : problems.length + ' problems are') + ' listed, so ' + phaseName(r) + ' is accepted once ' + (problems.length === 1 ? 'it is' : 'they are') + ' fixed and signed off.'
