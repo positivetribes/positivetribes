@@ -418,6 +418,22 @@ export function buildInbox(backlogs, results, cleared, ownNames) {
   return { backlogs: summary, items: items.sort((x, y) => y.at.localeCompare(x.at)) };
 }
 
+// Suggested changes and test problems nobody at Positive Tribes has replied to yet, per hub client, for Today.
+async function loadNeedsReply(env) {
+  if (!env.DB) return [];
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT c.slug, c.name, COUNT(*) AS n FROM items i JOIN clients c ON c.id = i.client_id
+       WHERE i.kind IN ('change', 'problem') AND i.done = 0 AND i.status = 'new'
+       GROUP BY c.id ORDER BY n DESC, c.name`
+    ).all();
+    return results.map(r => ({ workspace: r.slug, client: r.name, count: r.n }));
+  } catch (error) {
+    console.error('admin_needs_reply_failed', error.message);
+    return [];
+  }
+}
+
 // Every client phase being tested right now, from the hub's own releases, for the countdown on Today.
 async function loadTesting(env) {
   if (!env.DB) return [];
@@ -706,7 +722,7 @@ export async function handleAdmin(request, env, url, who) {
         const ids = sf.accounts.map(a => a.Id).filter(id => !hidden.has(id));
         if (ids.length) await reconcileSteps(env, db, sf.tasks, ids).catch(error => console.error('admin_step_sync_failed', error.message));
       }
-      const [meta, steps, notes, activity, lastSync, inbox, testing, people] = await Promise.all([
+      const [meta, steps, notes, activity, lastSync, inbox, testing, people, needsReply] = await Promise.all([
         db.prepare('SELECT * FROM client_meta').all(),
         db.prepare("SELECT * FROM next_steps WHERE status = 'open' OR done_at >= ?").bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM notes WHERE created_at >= ?').bind(addDays(today, -60)).all(),
@@ -714,14 +730,15 @@ export async function handleAdmin(request, env, url, who) {
         db.prepare('SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1').first(),
         loadInbox(env, db, today),
         loadTesting(env),
-        hubPeople(env)
+        hubPeople(env),
+        loadNeedsReply(env)
       ]);
       const seen = lastSeenBy(people);
       const view = buildOverview(env, sf, { meta: meta.results, steps: steps.results, notes: notes.results, activity: activity.results }, today);
       view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id), hubSeen: seen[workspaceOf(c.id)] || null }));
       // Patch's suggestions waiting for a decision: the count on the Care plans tab.
       const carePending = env.DB ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM patch_decisions WHERE status = 'pending'").first()).n : 0;
-      return json({ ...view, testing, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
+      return json({ ...view, testing, needsReply, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });

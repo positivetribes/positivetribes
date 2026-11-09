@@ -213,6 +213,14 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .seg button.zero:not([aria-pressed=true]){color:var(--muted);font-weight:500}
 .show-by{display:flex;align-items:center;gap:8px}.show-by label{margin:0;font-weight:500;color:var(--muted)}
 .show-by select{width:auto;min-height:36px;padding:5px 30px 5px 10px;font-size:15px}
+.pill.status{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}
+.pill.status.built{background:var(--client);color:#fff}.pill.status.declined{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.pill.status.reply{background:var(--must-bg);color:var(--must)}
+.status-pick{width:auto;min-height:32px;padding:3px 28px 3px 10px;font-size:14px}
+details.wishlist{border-top:1px solid var(--line);padding-top:12px}
+details.wishlist>summary{cursor:pointer;font-family:var(--display);font-size:22px;font-weight:600;padding:4px 0}
+details.wishlist .why{margin:4px 0 12px;color:var(--muted);font-size:15px}
+details.wishlist h3.sub{font-size:16px;font-family:var(--font);font-weight:600;margin:6px 0 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .tier .meaning{font-family:var(--font);font-size:14px;color:var(--muted);font-weight:400}
 .answer p.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .answer .show-all{border:0;background:none;padding:4px 0 0;font-weight:600;font-size:14px;color:var(--ink);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
@@ -370,6 +378,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .countdown:hover{border-color:var(--ink)}
 .cc .countdown .num{font-family:var(--display);font-size:44px;line-height:1}
 .cc .countdown.soon .num{color:var(--nice)}.cc .countdown.over .num{color:var(--rust)}
+.cc .needs-reply{margin:0 0 22px;padding-top:12px;padding-bottom:12px;border-left:6px solid var(--must)}
+.cc .needs-reply a{font-weight:600}
 .cc .nowcard{border-left:6px solid var(--rust);margin-bottom:22px}
 .cc .nowcard .label{margin:0 0 6px}
 .cc .nowcard h2{font-size:26px;margin-bottom:6px;overflow-wrap:anywhere}
@@ -475,6 +485,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const patch = b => ({ method: 'PATCH', body: JSON.stringify(b) });
   const firstName = () => (viewer().name || '').split(/\s+/)[0].toLowerCase();
   const open = items => items.filter(i => !i.done);
+  // Nice-to-have and idea suggestions are the Wishlist: listed, never counted in badges, weighed at each phase review.
+  const isWish = i => i.kind === 'change' && i.tier !== 'must';
+  const tally = items => open(items).filter(i => !isWish(i));
+  // Positive Tribes' reply on a suggested change or test problem, in words for each kind.
+  const STATUS_NAMES = {
+    change: [['new', 'New'], ['planned', 'Planned'], ['built', 'Built, ready to test'], ['declined', 'Not doing']],
+    problem: [['new', 'Reported'], ['planned', 'Fixing'], ['built', 'Fixed, ready to retest'], ['declined', 'Not fixing']]
+  };
+  const statusName = (i, key = i.status) => isWish(i) && key === 'planned' ? 'On the wishlist' : (STATUS_NAMES[i.kind].find(s => s[0] === key) || [, ''])[1];
   const link = (view, id) => '#/' + state.slug + '/' + view + (id ? '/' + id : '');
 
   async function loadClient(slug) {
@@ -510,7 +529,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (id) {
       // #/uep/old/42 is item 42 on the client's old backlog site, so old links keep working.
       const item = view === 'old' ? state.items.find(i => i.legacy_id === Number(id)) : state.items.find(i => i.id === Number(id));
-      if (item) { state.view = 'backlog'; state.project = item.project_id; state.kind = item.kind; state.filter = 'all'; state.flash = item.id; }
+      if (item) { state.view = 'backlog'; state.project = item.project_id; state.kind = item.kind; state.filter = 'all'; state.flash = item.id; if (isWish(item)) state.wishOpen = true; }
     }
     render();
     if (state.flash) {
@@ -646,7 +665,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         // A project without a prototype (such as a data migration) skips that step in its progress line.
         const steps = p.has_prototype === 0 ? STEPS.filter(s => s[0] !== 'prototype') : STEPS;
         const at = steps.findIndex(s => s[0] === p.phase);
-        const counts = open(state.items.filter(i => i.project_id === p.id));
+        const counts = tally(state.items.filter(i => i.project_id === p.id));
         const phases = state.releases.filter(r => r.project_id === p.id);
         const isPt = viewer().role === 'pt';
         // With more than one client phase, Build and Testing repeat for each phase before Launch.
@@ -896,12 +915,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const nodes = [];
     if (state.projects.length > 1) {
       nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a project' }, state.projects.map(p => {
-        const n = open(state.items.filter(i => i.project_id === p.id)).length;
+        const n = tally(state.items.filter(i => i.project_id === p.id)).length;
         return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(p.id === project), onclick: () => { state.project = p.id; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, p.name, n > 0 && h('span', { class: 'n' }, String(n)));
       })));
     }
     nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a kind of item' }, KIND_TABS.map(([key, label]) => {
-      const n = open(here.filter(i => i.kind === key)).length;
+      const n = tally(here.filter(i => i.kind === key)).length;
       return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, label, n > 0 && h('span', { class: 'n' }, String(n)));
     })));
     // The form stays closed behind one button until someone wants it, so the list comes first.
@@ -919,19 +938,35 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     // The phase filter applies to open items only. Finished items all go in one
     // list at the bottom, whatever their tier or phase, and empty tiers are hidden.
     let shown = 0;
+    const wishes = [];
     for (const [key, label] of tiers) {
       const group = mine.filter(i => i.tier === key && (filter === 'all' || i.phase === filter));
       const active = open(group);
       if (!active.length) continue;
+      // Suggested changes below Must have fold into the Wishlist under the must-haves.
+      if (kind === 'change' && key !== 'must') { wishes.push([key, label, group, active]); continue; }
       shown += active.length;
       nodes.push(h('section', { class: 'tier' },
         h('h2', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'count' }, active.length + (active.length === 1 ? ' item' : ' items')),
           h('span', { class: 'meaning' }, '· ' + tiers.find(t => t[0] === key)[2])),
         active.map(i => card(i, group, isPt))));
     }
+    const wishCount = wishes.reduce((n, w) => n + w[3].length, 0);
     if (!shown) {
       const phase = filter === 'all' ? '' : ' in ' + PHASES.find(p => p[0] === filter)[1];
-      nodes.push(h('p', { class: 'empty' }, 'No open ' + { question: 'questions', change: 'suggestions', problem: 'problems', request: 'requests' }[kind] + phase + '.'));
+      nodes.push(h('p', { class: 'empty' }, wishCount ? 'No open must-haves' + phase + '.' : 'No open ' + { question: 'questions', change: 'suggestions', problem: 'problems', request: 'requests' }[kind] + phase + '.'));
+    }
+    if (wishCount) {
+      const proj = state.projects.find(p => p.id === project);
+      const launched = proj && ['launch', 'hypercare', 'support'].includes(proj.phase);
+      nodes.push(h('details', { class: 'wishlist', ...(state.wishOpen ? { open: true } : {}), ontoggle: e => { state.wishOpen = e.target.open; } },
+        h('summary', {}, 'Wishlist (' + wishCount + ')'),
+        h('p', { class: 'why' }, launched
+          ? 'Good ideas, not promised. Now that this tool is live, ask for one with Request an improvement on your care plan.'
+          : "Good ideas we'll weigh at each phase review. Not promised, and they never hold up sign-off."),
+        h('div', { class: 'stack' }, wishes.map(([key, label, group, active]) => [
+          h('h3', { class: 'sub' }, h('span', { class: 'pill ' + key }, label), h('span', { class: 'meaning' }, tiers.find(t => t[0] === key)[2])),
+          active.map(i => card(i, group, isPt))]))));
     }
     // Newest first: most recently answered (or edited) on top.
     const finished = mine.filter(i => i.done).sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '') || b.id - a.id);
@@ -1017,7 +1052,17 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       ? (item.kind === 'problem' ? [h('b', {}, item.owner), ' · '] : [item.done ? 'Answered by ' : 'Waiting on ', h('b', {}, item.owner), ' · '])
       : [];
     // Open items sit under their priority heading already, so only finished ones carry a status pill.
-    const pills = [item.done && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
+    // Changes and problems also show where they stand: our reply, ready to test, or not doing. A new one is flagged
+    // "Needs a reply" for Positive Tribes only; the client sees nothing until we have answered.
+    const tracked = Boolean(STATUS_NAMES[item.kind]);
+    const declined = tracked && item.status === 'declined';
+    const statusPill = tracked && !(item.done && !declined) && (item.status === 'new'
+      ? isPt && h('span', { class: 'pill status reply' }, 'Needs a reply')
+      : h('span', { class: 'pill status ' + item.status }, !isPt && item.status === 'built' ? 'Ready to test' : statusName(item)));
+    const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), statusPill, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
+    // Positive Tribes picks the status in one tap. Not doing closes it; anything else reopens a declined one.
+    const picker = isPt && tracked && (!item.done || declined) && h('select', { class: 'status-pick', 'aria-label': 'Status for ' + item.title, onchange: e => act(base() + '/items/' + item.id, patch({ status: e.target.value })) },
+      STATUS_NAMES[item.kind].map(([k]) => h('option', { value: k, ...(item.status === k ? { selected: true } : {}) }, statusName(item, k))));
     // Sorting controls (phase, priority, order) and Delete wait behind "More"; the card leads with its one main action.
     const more = !item.done || isPt ? h('details', { class: 'more-actions', ...(state.moreOpen === item.id ? { open: true } : {}), ontoggle: e => { if (e.target.open) state.moreOpen = item.id; else if (state.moreOpen === item.id) state.moreOpen = null; } },
       h('summary', {}, 'More options'),
@@ -1035,13 +1080,14 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       pills.length > 0 && h('div', { class: 'actions' }, pills),
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
-      item.answer && h('div', { class: 'answer' }, h('b', {}, item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), answerText,
+      item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), answerText,
         long && h('button', { type: 'button', class: 'show-all', onclick: e => { const shut = answerText.classList.toggle('clamp'); e.target.textContent = shut ? 'Show all' : 'Show less'; } }, 'Show all')),
       careBlock(item, isPt),
       h('div', { class: 'who' }, who, (item.kind === 'question' ? 'asked by ' : 'added by ') + (item.added_by || 'someone') + ', ' + date),
       h('div', { class: 'actions' },
-        h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : 'Edit'),
-        h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind])),
+        h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : isPt && item.kind === 'change' && !item.answer ? 'Reply' : 'Edit'),
+        !declined && h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind]),
+        picker),
       more,
       state.confirming === item.id && h('div', { class: 'confirm', role: 'alert' }, h('span', {}, 'Delete this for everyone? This cannot be undone.'),
         h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { state.confirming = null; act(base() + '/items/' + item.id, { method: 'DELETE' }); } }, 'Delete'),
@@ -1050,6 +1096,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 
   function editor(item) {
     const asks = item.kind === 'question' || item.kind === 'problem' || item.kind === 'request';
+    // On a suggested change, only Positive Tribes writes the reply.
+    const replies = item.kind === 'change' && viewer().role === 'pt';
     const title = h('input', { type: 'text', maxlength: 160, value: item.title, id: 'e-title' });
     const details = h('textarea', { maxlength: 2000, id: 'e-details' }, item.details);
     const owner = h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'e-owner' });
@@ -1060,12 +1108,13 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       e.preventDefault(); state.editing = null;
       const c = { title: title.value, details: details.value, project_id: Number(list.value) };
       if (asks) Object.assign(c, { owner: owner.value, answer: answer.value, done: done.checked });
+      if (replies) c.answer = answer.value;
       await act(base() + '/items/' + item.id, patch(c));
     } },
       h('div', {}, h('label', { for: 'e-title' }, 'Title'), title),
       h('div', {}, h('label', { for: 'e-details' }, 'Details'), details),
       asks && h('div', {}, h('label', { for: 'e-owner' }, item.kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner),
-      asks && h('div', {}, h('label', { for: 'e-answer' }, item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
+      (asks || replies) && h('div', {}, h('label', { for: 'e-answer' }, replies ? 'Our reply' : item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
       state.projects.length > 1 && h('div', {}, h('label', { for: 'e-project' }, 'Project'), list),
       asks && h('label', { for: 'e-done', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, done, 'This is ' + DONE_WORD[item.kind]),
       h('div', { class: 'row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.editing = null; render(); } }, 'Cancel')));
@@ -1298,6 +1347,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         case 'live': return `${i.title} is live`;
         case 'shared': return `New ${DOC_WORD[i.detail] || 'document'} shared with you: ${q(i.title)}`;
         case 'idea_status': return `Positive Tribes replied to your hub idea ${q(i.title)}`;
+        case 'status': return i.detail === 'Built, ready to test' || i.detail === 'Fixed, ready to retest' ? `${q(i.title)} is ready for you to test` : `${q(i.title)} is now: ${i.detail}`;
         case 'triaged': return `${who} sorted your request ${q(i.title)}`;
         case 'confirmed': return `${who} confirmed ${q(i.title)}`;
         case 'declined': return `${who} chose not to go ahead with ${q(i.title)}`;
@@ -1316,7 +1366,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         added: i.kind === 'idea' ? `suggested a hub idea ${q(i.title)}` : i.kind === 'question' ? `asked ${q(i.title)}` : `added a ${KIND_WORD[i.kind] || 'item'} ${q(i.title)}`,
         answered: `answered ${q(i.title)}`, done: `marked ${q(i.title)} ${done(i)}`, reopened: `reopened ${q(i.title)}`,
         signed_off: `signed off ${i.title}`, edited: `edited ${q(i.title)}`, tier: `changed the priority of ${q(i.title)}`,
-        phase: `moved ${q(i.title)}`, deleted: `deleted ${q(i.title)}`,
+        phase: `moved ${q(i.title)}`, status: `set ${q(i.title)} to ${i.detail}`, deleted: `deleted ${q(i.title)}`,
         triaged: `sorted the care request ${q(i.title)}`, confirmed: `confirmed ${q(i.title)}`, declined: `chose not to go ahead with ${q(i.title)}`,
         shipped: `shipped ${q(i.title)}`, cancelled: `cancelled ${q(i.title)}`,
         care_question: `asked the client about ${q(i.title)}`, care_answered: `answered the question on ${q(i.title)}`

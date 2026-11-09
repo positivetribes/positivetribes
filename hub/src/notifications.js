@@ -4,6 +4,8 @@ import { windowEnd } from './dates.js';
 
 // What a client person hears about. Edits, priority changes, deletes and reordering are left out as noise.
 export const CLIENT_ACTIONS = ['added', 'answered', 'done', 'reopened', 'phase', 'signed_off', 'uat_started', 'live', 'shared', 'idea_status',
+  // Positive Tribes' reply to a suggested change or test problem (planned, built, not doing); detail is the status words.
+  'status',
   // Care requests: sorted, confirmed or declined, shipped, cancelled (details carry the cost, never a balance).
   'triaged', 'confirmed', 'declined', 'shipped', 'cancelled',
   // A question about a request ("needs more info") and the client's answer; details carry the text only.
@@ -28,10 +30,10 @@ export function linkOf(slug, e) {
 }
 
 // A teammate adding their own change is not news; Positive Tribes adding to the list, or anyone asking a question, is.
-// A move between build phases is news only on something the client's own people suggested.
+// A move between build phases, or a status reply, is news only on something the client's own people suggested.
 const worthTelling = e => {
   if (e.action === 'added') return e.item_kind !== 'idea' && Boolean(e.from_pt || e.item_kind === 'question');
-  if (e.action === 'phase') return Boolean(e.client_added);
+  if (e.action === 'phase' || e.action === 'status') return Boolean(e.client_added);
   return true;
 };
 // The later of: 30 days ago, the bell's start, the day this person was invited.
