@@ -3,6 +3,8 @@
 // events rows, so the client's bell and the item history stay right. For Positive Tribes use from Eric's machine.
 //
 //   node scripts/item.mjs <client-slug> <item-id> [changes] [--apply]
+//   node scripts/item.mjs <client-slug> new --project <id> --title "text" --tier must|nice|idea
+//        [--kind change|question|problem] [--phase ...] [--details "text"] [--owner "text"] [--apply]
 //
 // Changes: --done | --reopen   --answer "text"   --phase review|prototype|full|later   --tier must|nice|idea
 //          --due YYYY-MM-DD|none   --title "text"   --details "text"
@@ -26,9 +28,12 @@ export function sq(value) {
   return "'" + text.replace(/'/g, "''") + "'";
 }
 
+export const KINDS = ['change', 'question', 'problem'];
+
 export function parseArgs(argv) {
   const [slug, rawId, ...rest] = argv;
   if (!/^[a-z0-9-]{1,60}$/.test(slug || '')) throw new Error('First argument: the client slug (a-z, 0-9, -).');
+  if (rawId === 'new') return parseNew(slug, rest);
   if (!/^[1-9][0-9]{0,8}$/.test(rawId || '')) throw new Error('Second argument: the item id (a number).');
   const changes = {};
   let apply = false;
@@ -63,6 +68,59 @@ export function parseArgs(argv) {
   if (changes.title !== undefined && !changes.title.trim()) throw new Error('--title cannot be empty.');
   if (!Object.keys(changes).length) throw new Error('Nothing to change. Add --done, --answer, --phase, --tier, --due, --title or --details.');
   return { slug, id: Number(rawId), changes, apply };
+}
+
+// A new item, the way the app's "add" form makes one (src/index.js): requests are left out on purpose,
+// since a care request also needs its care_requests row and the plan checks the app runs.
+export function parseNew(slug, rest) {
+  const item = { kind: 'change', details: '', owner: '' };
+  let apply = false;
+  for (let i = 0; i < rest.length; i++) {
+    const flag = rest[i];
+    const value = () => {
+      const v = rest[++i];
+      if (v === undefined) throw new Error(`${flag} needs a value.`);
+      return v;
+    };
+    if (flag === '--apply') apply = true;
+    else if (flag === '--project') {
+      const v = value();
+      if (!/^[1-9][0-9]{0,8}$/.test(v)) throw new Error('--project is the project id (a number).');
+      item.project_id = Number(v);
+    } else if (flag === '--kind') {
+      item.kind = value();
+      if (!KINDS.includes(item.kind)) throw new Error(`--kind is one of ${KINDS.join(', ')}.`);
+    } else if (flag === '--title') item.title = value();
+    else if (flag === '--details') item.details = value();
+    else if (flag === '--owner') item.owner = value();
+    else if (flag === '--tier') {
+      item.tier = value();
+      if (!TIER_NAMES[item.tier]) throw new Error(`--tier is one of ${Object.keys(TIER_NAMES).join(', ')}.`);
+    } else if (flag === '--phase') {
+      item.phase = value();
+      if (!PHASE_NAMES[item.phase]) throw new Error(`--phase is one of ${Object.keys(PHASE_NAMES).join(', ')}.`);
+    } else throw new Error(`Unknown option ${flag}.`);
+  }
+  if (!item.project_id) throw new Error('--project is required for a new item.');
+  if (!item.title || !item.title.trim()) throw new Error('--title is required for a new item.');
+  if (!item.tier) throw new Error('--tier is required for a new item.');
+  item.phase ??= item.kind === 'problem' ? 'full' : 'review';
+  for (const [key, max] of Object.entries({ ...LIMITS, owner: 60 })) {
+    if (item[key] !== undefined && item[key].length > max) throw new Error(`--${key} is longer than ${max} characters.`);
+  }
+  return { slug, isNew: true, item, apply };
+}
+
+// The INSERT plus its 'added' event, which takes the new row's id from last_insert_rowid() like the app's batch.
+export function buildNewSql(clientId, item, actor = ACTOR) {
+  const { project_id: projectId, kind, title, details, owner, tier, phase } = item;
+  return [
+    `INSERT INTO items (client_id, project_id, kind, title, details, owner, tier, phase, position, added_by) VALUES (` +
+    `${clientId}, ${projectId}, ${sq(kind)}, ${sq(title)}, ${sq(details)}, ${sq(owner)}, ${sq(tier)}, ${sq(phase)}, ` +
+    `(SELECT COALESCE(MAX(position), 0) + 1 FROM items WHERE client_id = ${clientId} AND project_id = ${projectId} AND kind = ${sq(kind)} AND tier = ${sq(tier)}), ${sq(actor.name)});`,
+    `INSERT INTO events (client_id, item_id, action, item_title, item_kind, detail, actor_email, actor_name, at) VALUES (` +
+    `${clientId}, last_insert_rowid(), 'added', ${sq(title)}, ${sq(kind)}, ${sq(clip(details))}, ${sq(actor.email)}, ${sq(actor.name)}, CURRENT_TIMESTAMP);`
+  ].join('\n');
 }
 
 // The UPDATE plus one event per kind of change, in the same words the app uses (src/index.js changeOf),
@@ -105,8 +163,33 @@ const HUB = join(dirname(fileURLToPath(import.meta.url)), '..');
 const wrangler = args => execFileSync('npx', ['wrangler', '-c', 'wrangler.jsonc', 'd1', 'execute', 'hub-db', '--remote', ...args],
   { cwd: HUB, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
+async function addNew({ slug, item, apply }) {
+  const found = JSON.parse(wrangler(['--json', '--command',
+    `SELECT c.id AS client_id, p.name FROM clients c JOIN projects p ON p.client_id = c.id WHERE c.slug = ${sq(slug)} AND p.id = ${item.project_id}`]));
+  const row = found[0].results[0];
+  if (!row) throw new Error(`No project ${item.project_id} for client ${slug}.`);
+  console.log(`New ${item.kind} on ${slug} / ${row.name} (${TIER_NAMES[item.tier]}, ${PHASE_NAMES[item.phase]}): ${item.title}`);
+  const sql = buildNewSql(row.client_id, item);
+  console.log('\n' + sql + '\n');
+  if (!apply) return console.log('Dry run. Add --apply to write it.');
+  run(sql);
+  const made = JSON.parse(wrangler(['--json', '--command',
+    `SELECT id FROM items WHERE client_id = ${row.client_id} AND project_id = ${item.project_id} AND title = ${sq(item.title)} ORDER BY id DESC LIMIT 1`]));
+  console.log(`Added as item ${made[0].results[0]?.id}. The client sees it on their bell where the app would tell them.`);
+}
+
+function run(sql) {
+  const dir = mkdtempSync(join(tmpdir(), 'hub-item-'));
+  try {
+    writeFileSync(join(dir, 'change.sql'), sql, { mode: 0o600 });
+    wrangler(['--file', join(dir, 'change.sql')]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
 async function main() {
-  const { slug, id, changes, apply } = parseArgs(process.argv.slice(2));
+  const args = parseArgs(process.argv.slice(2));
+  if (args.isNew) return addNew(args);
+  const { slug, id, changes, apply } = args;
   const out = JSON.parse(wrangler(['--json', '--command',
     `SELECT i.id, i.client_id, i.project_id, i.kind, i.title, i.details, i.answer, i.tier, i.phase, i.done, i.due_date
      FROM items i JOIN clients c ON c.id = i.client_id WHERE c.slug = ${sq(slug)} AND i.id = ${id}`]));
@@ -121,11 +204,7 @@ async function main() {
   if (!sql) return console.log('Already like that. Nothing to change.');
   console.log('\n' + sql + '\n');
   if (!apply) return console.log('Dry run. Add --apply to write it.');
-  const dir = mkdtempSync(join(tmpdir(), 'hub-item-'));
-  try {
-    writeFileSync(join(dir, 'change.sql'), sql, { mode: 0o600 });
-    wrangler(['--file', join(dir, 'change.sql')]);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  run(sql);
   console.log('Applied. The client sees it on their bell where the app would tell them.');
 }
 
