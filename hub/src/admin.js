@@ -10,6 +10,7 @@ import { TIERS, BOOST, planFor, ensureGrants, ledgerOf, balanceOf, careRequests,
 import { InputError } from './triage.js';
 import { patchAdmin, patchInbox, aiCost } from './patch.js';
 import { replyAdmin } from './reply.js';
+import { estimateAdmin, estimateLists } from './estimates.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
 const TIME_ZONE = 'America/Denver';
@@ -755,7 +756,9 @@ export async function handleAdmin(request, env, url, who) {
       view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id), hubSeen: seen[workspaceOf(c.id)] || null }));
       // Patch's suggestions waiting for a decision: the count on the Care plans tab.
       const carePending = env.DB ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM patch_decisions WHERE status = 'pending'").first()).n : 0;
-      return json({ ...view, testing, needsReply, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
+      // A broken estimate query never hides Today.
+      const estimates = env.DB ? await estimateLists(env.DB).catch(error => { console.error('admin_estimates_failed', error.message); return { waiting: [], toHandle: [], taskFailed: [] }; }) : { waiting: [], toHandle: [], taskFailed: [] };
+      return json({ ...view, testing, needsReply, estimates, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });
@@ -869,6 +872,8 @@ export async function handleAdmin(request, env, url, who) {
     if (patch) return patch;
     const reply = await replyAdmin({ request, env, url, route, path, method, who, json, body, text });
     if (reply) return reply;
+    const estimate = await estimateAdmin({ request, env, url, route, path, method, who, json, body, text });
+    if (estimate) return estimate;
 
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);

@@ -90,3 +90,12 @@ Replace the older "up to N hours a month, unused hours do not carry over" wordin
 - Every change is tested by {client name} on a test copy with sample data. Nothing goes live until {client name} signs off and Positive Tribes reviews it. A request with no reply for 14 days is paused, with its credits held, and can be picked up at any time.
 - To answer faster, Positive Tribes uses an AI service to help sort requests. Only the request's own words are sent, with email addresses and phone numbers removed. Requests that mention sign-in, payments, permissions, or personal or health data are never sent. Under the service's commercial terms, this data is not used to train its models. A person at Positive Tribes reviews every decision before {client name} sees it.
 - The monthly price may be adjusted once a year with 60 days' notice. Either side can end the plan with 60 days' notice, and {client name} always gets a full export of its data.
+
+---
+
+## Terms (changes during the build)
+
+Add to the build agreement or proposal terms:
+
+- Changes outside the signed scope are estimated in hours before any work starts, at {hourly rate} an hour, with the effect on the schedule shown. {client name}'s director (or the person named in the hub) chooses to add the change now, to do it after launch with care-plan credits, or not to do it.
+- A change that {client name}'s director approves in the hub, with its price, becomes part of this agreement, the same as a signed change order. Positive Tribes does not start it before then and never approves on {client name}'s behalf.

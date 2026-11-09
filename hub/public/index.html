@@ -246,6 +246,10 @@ section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wra
 .item p{white-space:pre-wrap;overflow-wrap:anywhere}.item.flash{outline:3px solid var(--client);outline-offset:3px}
 .item.is-done h3{color:var(--muted)}
 .answer{background:var(--ok-bg);border-radius:10px;padding:10px 14px}
+.estimate{border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.estimate .big{font-weight:600;font-size:17px;margin:0}
+.estimate .stack>*{margin:0}
+.estimate input[type=number]{width:6em}
 .care-meter{display:grid;grid-template-columns:repeat(auto-fill,minmax(18px,1fr));gap:5px;max-width:420px}
 .care-meter i{height:14px;border-radius:4px;background:var(--soft)}
 .care-meter i.used{background:var(--ok)}.care-meter i.roll{background:var(--idea-bg);outline:1.5px dashed var(--idea);outline-offset:-1.5px}
@@ -809,6 +813,72 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     return h('div', { class: 'stack' }, nodes);
   }
 
+  // ---- Change estimates: Positive Tribes enters hours; everyone on the hub sees the price; the director decides ----
+  async function reloadItems() { state.items = (await api(base() + '/items')).items; }
+  async function estimateAct(item, action, method, payload) {
+    showError('');
+    try {
+      await api('/admin/items/' + item.id + '/estimate' + (action ? '/' + action : ''), { method, body: JSON.stringify(payload || {}) });
+      if (action !== 'retry-task') state.estimating = null;
+      await reloadItems(); render();
+    } catch (e) { showError(e.message); }
+  }
+  async function decideEstimate(item, choice) {
+    showError('');
+    try {
+      const data = await api(base() + '/items/' + item.id + '/estimate/decide', post({ choice, version: item.estimate.version }));
+      state.items = data.items; render();
+    } catch (e) { showError(e.message); try { await reloadItems(); render(); } catch {} }
+  }
+  function estimateBlock(item) {
+    if (item.kind !== 'change' || item.done) return null;
+    const e = item.estimate, ptNow = viewer().role === 'pt' && !state.preview;
+    const nodes = [];
+    const summary = () => h('p', { class: 'big' }, 'About ' + e.hours_label + ' · ' + e.price_label);
+    const notes = () => [e.schedule_note && h('p', { class: 'muted' }, e.schedule_note), e.scope_note && h('p', { class: 'muted' }, e.scope_note)];
+    if (e && (e.status === 'offered' || ['approved_now', 'approved_later', 'not_now'].includes(e.status))) {
+      nodes.push(h('b', {}, 'Estimate for this change'), summary(), ...notes());
+      if (e.status === 'offered') {
+        if (e.can_decide && !state.preview) {
+          nodes.push(h('div', { class: 'actions' },
+            h('button', { class: 'btn small', type: 'button', onclick: () => decideEstimate(item, 'now') }, 'Add it now · ' + e.price_label),
+            e.later_ok && h('button', { class: 'btn ghost small', type: 'button', onclick: () => decideEstimate(item, 'later') }, 'After launch · ' + e.credits_label),
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => decideEstimate(item, 'not_now') }, 'Not now')));
+          nodes.push(h('p', { class: 'meta' }, 'Adding it now puts ' + e.price_label + ' on your next invoice and into the build.' + (e.later_ok ? ' After launch uses ' + e.credits_label + ' from your care plan.' : '')));
+          if (e.later_note) nodes.push(h('p', { class: 'meta' }, e.later_note));
+        } else nodes.push(h('p', { class: 'meta' }, ptNow ? 'Waiting for the client’s director to decide.' : 'Your director decides whether to add this.'));
+      } else {
+        const words = { approved_now: 'Added to the build · ' + e.price_label, approved_later: 'Planned for after launch · ' + e.credits_label, not_now: 'Not now: it stays on the wishlist' }[e.status];
+        nodes.push(h('p', {}, h('b', {}, words), e.decided_by ? ' · ' + e.decided_by : '', e.decided_at ? ', ' + shortDate(e.decided_at.slice(0, 10)) : ''));
+      }
+    }
+    if (ptNow) {
+      if (e && e.sf_error) nodes.push(h('p', { class: 'meta' }, 'The Salesforce Task did not save: ' + e.sf_error + ' ',
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => estimateAct(item, 'retry-task', 'POST') }, 'Try again')));
+      if (e && ['approved_now', 'approved_later'].includes(e.status) && !e.handled_at) nodes.push(h('div', { class: 'actions' },
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => estimateAct(item, 'handled', 'POST') }, 'Billed and scheduled')));
+      if (e && e.status === 'draft') nodes.unshift(h('b', {}, 'Draft estimate (only you see it)'), summary(), ...notes(), h('p', { class: 'meta' }, 'Rate ' + e.rate_label + '.'));
+      if (e && e.status === 'withdrawn') nodes.unshift(h('b', {}, 'Estimate withdrawn'));
+      const decided = e && ['approved_now', 'approved_later'].includes(e.status);
+      if (!decided) {
+        if (state.estimating === item.id) {
+          const hours = h('input', { type: 'number', min: 0.5, max: 200, step: 0.5, value: e ? e.hours : '', 'aria-label': 'Hours' });
+          const schedule = h('input', { type: 'text', maxlength: 200, value: e ? e.schedule_note : '', placeholder: 'Schedule impact, e.g. adds about a week', 'aria-label': 'Schedule impact' });
+          const scope = h('input', { type: 'text', maxlength: 200, value: e ? e.scope_note : '', placeholder: 'Why it is outside the agreement (optional)', 'aria-label': 'Why it is outside the agreement' });
+          nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours ', hours), schedule, scope, h('div', { class: 'actions' },
+            h('button', { class: 'btn small', type: 'button', onclick: () => hours.value ? estimateAct(item, '', 'PUT', { hours: Number(hours.value), schedule_note: schedule.value, scope_note: scope.value }) : showError('Enter the hours first.') }, 'Save estimate'),
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = null; render(); } }, 'Cancel'))));
+        } else {
+          nodes.push(h('div', { class: 'actions' },
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = item.id; render(); } }, e && e.status !== 'withdrawn' ? 'Re-estimate' : 'Estimate'),
+            e && e.status === 'draft' && h('button', { class: 'btn small', type: 'button', onclick: () => estimateAct(item, 'offer', 'POST') }, 'Send to client'),
+            e && ['draft', 'offered'].includes(e.status) && h('button', { class: 'btn ghost small', type: 'button', onclick: () => estimateAct(item, 'withdraw', 'POST') }, 'Withdraw')));
+        }
+      }
+    }
+    return nodes.length ? h('div', { class: 'estimate stack' }, nodes) : null;
+  }
+
   // ---- System status: live up/down for the client's apps, from the status Worker ----
   function systemStatus() {
     const st = state.status;
@@ -1099,6 +1169,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), answerText,
         long && h('button', { type: 'button', class: 'show-all', onclick: e => { const shut = answerText.classList.toggle('clamp'); e.target.textContent = shut ? 'Show all' : 'Show less'; } }, 'Show all')),
       careBlock(item, isPt),
+      estimateBlock(item),
       h('div', { class: 'who' }, who, (item.kind === 'question' ? 'asked by ' : 'added by ') + (item.added_by || 'someone') + ', ' + date),
       h('div', { class: 'actions' },
         h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : isPt && item.kind === 'change' && !item.answer ? 'Reply' : 'Edit'),
@@ -1409,10 +1480,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         case 'cancelled': return `${who} cancelled ${q(i.title)}`;
         case 'care_question': return `Positive Tribes has a question about your request ${q(i.title)}`;
         case 'care_answered': return `${who} answered the question about ${q(i.title)}`;
+        case 'estimate_offered': return `Positive Tribes sent an estimate for ${q(i.title)}`;
+        case 'estimate_decided': return `${who} decided on the estimate for ${q(i.title)}`;
         default: return q(i.title);
       }
     }
-    const clientDetail = i => ['answered', 'idea_status', 'triaged', 'confirmed', 'shipped', 'cancelled', 'care_question', 'care_answered'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
+    const clientDetail = i => ['answered', 'idea_status', 'triaged', 'confirmed', 'shipped', 'cancelled', 'care_question', 'care_answered', 'estimate_offered', 'estimate_decided'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
     // Inbox rows, for Positive Tribes.
     function ptText(i) {
       const who = i.actor || 'Someone';
@@ -1423,7 +1496,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         phase: `moved ${q(i.title)}`, status: `set ${q(i.title)} to ${i.detail}`, deleted: `deleted ${q(i.title)}`,
         triaged: `sorted the care request ${q(i.title)}`, confirmed: `confirmed ${q(i.title)}`, declined: `chose not to go ahead with ${q(i.title)}`,
         shipped: `shipped ${q(i.title)}`, cancelled: `cancelled ${q(i.title)}`,
-        care_question: `asked the client about ${q(i.title)}`, care_answered: `answered the question on ${q(i.title)}`
+        care_question: `asked the client about ${q(i.title)}`, care_answered: `answered the question on ${q(i.title)}`,
+        estimate_decided: `decided on the estimate for ${q(i.title)}: ${i.detail}`, estimate_offered: `was sent an estimate for ${q(i.title)}`
       }[i.action] || `changed ${q(i.title)}`;
       return `${who} ${verb}` + (i.eventIds.length > 1 ? ` (${i.eventIds.length} changes)` : '');
     }
