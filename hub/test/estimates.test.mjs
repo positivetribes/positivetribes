@@ -412,6 +412,20 @@ test('"Preview as" knows who gets the estimate buttons, and only Positive Tribes
   assert.equal((await call('molly@uep.org', 'c/uep/people')).status, 404);
 });
 
+test('while an estimate waits, the client cannot close it, change its phase or move it; Positive Tribes still can', async () => {
+  const { call, sent, decide, item, PT } = setup();
+  await sent(1, 3);
+  for (const [who, change] of [['molly@uep.org', { done: true }], ['sam@uep.org', { phase: 'full' }], ['molly@uep.org', { phase: 'later' }]]) {
+    assert.equal((await call(who, 'c/uep/items/1', 'PATCH', change)).status, 409, JSON.stringify(change));
+  }
+  assert.equal(item(1).done, 0);
+  assert.equal(item(1).phase, 'review');
+  assert.equal((await call('molly@uep.org', 'c/uep/items/1', 'PATCH', { tier: 'nice', title: 'Leads add a climber by link' })).status, 200, 'priority and wording are fine');
+  assert.equal((await call(PT, 'c/uep/items/1', 'PATCH', { phase: 'later' })).status, 200, 'Positive Tribes keeps every control');
+  await decide('molly@uep.org', 1, 'not_now');
+  assert.equal((await call('molly@uep.org', 'c/uep/items/1', 'PATCH', { done: true })).status, 200, 'decided, so the lock is gone');
+});
+
 test('Patch is never given an estimate', () => {
   for (const file of ['../src/reply.js', '../src/patch.js']) {
     assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), 'utf8'), /change_estimates|estimatesFor|estimateView/, file);

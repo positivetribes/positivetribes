@@ -1194,10 +1194,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const picker = isPt && tracked && (!item.done || declined) && h('select', { class: 'status-pick', 'aria-label': 'Status for ' + item.title, onchange: e => act(base() + '/items/' + item.id, patch({ status: e.target.value })) },
       STATUS_NAMES[item.kind].map(([k]) => h('option', { value: k, ...(item.status === k ? { selected: true } : {}) }, statusName(item, k))));
     // Sorting controls (phase, priority, order) and Delete wait behind "More"; the card leads with its one main action.
+    // An estimate waiting for the director: the client decides through it, so closing or moving the item waits (the server refuses it too).
+    const locked = !isPt && Boolean(item.estimate && item.estimate.status === 'offered');
     const more = !item.done || isPt ? h('details', { class: 'more-actions', ...(state.moreOpen === item.id ? { open: true } : {}), ontoggle: e => { if (e.target.open) state.moreOpen = item.id; else if (state.moreOpen === item.id) state.moreOpen = null; } },
       h('summary', {}, 'More options'),
       h('div', { class: 'stack' },
-        !item.done && !phaseless && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'When:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Phase for ' + item.title },
+        !item.done && !phaseless && !locked && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'When:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Phase for ' + item.title },
           PHASES.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.phase === k), onclick: () => item.phase !== k && act(base() + '/items/' + item.id, patch({ phase: k })) }, l)))),
         !item.done && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'Priority:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Priority for ' + item.title },
           tiers.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.tier === k), onclick: () => item.tier !== k && act(base() + '/items/' + item.id, patch({ tier: k })) }, l)))),
@@ -1219,7 +1221,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', { class: 'who' }, who, (item.kind === 'question' ? 'asked by ' : 'added by ') + (item.added_by || 'someone') + ', ' + date),
       h('div', { class: 'actions' },
         h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : isPt && item.kind === 'change' && !item.answer ? 'Reply' : 'Edit'),
-        !declined && h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind]),
+        !declined && !locked && h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind]),
         picker),
       more,
       state.confirming === item.id && h('div', { class: 'confirm', role: 'alert' }, h('span', {}, 'Delete this for everyone? This cannot be undone.'),
