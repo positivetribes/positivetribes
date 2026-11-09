@@ -475,7 +475,7 @@ export default {
           'SELECT id, slug, name, poc_url, live_url, phase, has_prototype FROM projects WHERE client_id = ? ORDER BY position, id'
         ).bind(client.id).all();
         return json({
-          client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date, salesforce_url: safeSalesforceUrl(client.salesforce_url) },
+          client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date, salesforce_url: safeSalesforceUrl(client.salesforce_url), logo: /^\/logos\/[a-z0-9-]+\.(png|svg|webp)$/.test(client.logo || '') ? client.logo : '' },
           projects: results,
           releases: await listReleases(db, client.id),
           documents: await listDocuments(db, client.id, user.role === 'pt')
