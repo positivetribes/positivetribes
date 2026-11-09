@@ -205,6 +205,7 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .seg button{border:0;background:none;padding:8px 14px;border-radius:9px;font-weight:600;min-height:40px}
 .seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
 .seg.small button{padding:4px 10px;min-height:32px;font-size:14px;font-weight:500}
+.item-no{font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;font-variant-numeric:tabular-nums}.item-no:hover{color:var(--ink);text-decoration:underline}
 .pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 10px;border-radius:99px;white-space:nowrap}
 .pill.must{background:var(--must-bg);color:var(--must)}.pill.nice{background:var(--nice-bg);color:var(--nice)}.pill.idea{background:var(--idea-bg);color:var(--idea)}.pill.done{background:var(--ok-bg);color:var(--ok)}
 .pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
@@ -510,6 +511,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   };
   const statusName = (i, key = i.status) => isWish(i) && key === 'planned' ? 'On the wishlist' : (STATUS_NAMES[i.kind].find(s => s[0] === key) || [, ''])[1];
   const link = (view, id) => '#/' + state.slug + '/' + view + (id ? '/' + id : '');
+  // The number people quote ("#133"): an item from the old backlog site keeps its old number, a newer one shows its hub id.
+  const itemNo = item => item.legacy_id || item.id;
 
   async function loadClient(slug) {
     const [p, i, d, st, care] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items'), api('/ideas').catch(() => ({ ideas: [] })), api('/c/' + slug + '/status').catch(() => null), api('/c/' + slug + '/care').catch(() => null)]);
@@ -1163,7 +1166,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           h('span', { class: 'spacer' }),
           isPt && h('button', { class: 'btn ghost small danger', type: 'button', onclick: () => { state.confirming = item.id; render(); } }, 'Delete')))) : null;
     return h('article', { id: 'item-' + item.id, class: 'card item' + (item.done ? ' is-done' : '') },
-      pills.length > 0 && h('div', { class: 'actions' }, pills),
+      h('div', { class: 'actions' }, h('a', { class: 'item-no', href: item.legacy_id ? link('old', item.legacy_id) : link('backlog', item.id), title: 'Link to this card', 'aria-label': 'Item ' + itemNo(item) }, '#' + itemNo(item)), pills),
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
       item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), answerText,
