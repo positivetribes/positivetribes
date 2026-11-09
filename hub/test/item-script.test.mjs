@@ -40,3 +40,23 @@ test('arguments are checked before anything runs', () => {
   assert.throws(() => parseArgs(['uep', '1']));
   assert.throws(() => parseArgs(['uep', '1', '--answer']));
 });
+
+test('a new item is one INSERT plus its added event, values quoted', async () => {
+  const { buildNewSql } = await import('../scripts/item.mjs');
+  const args = parseArgs(['uep', 'new', '--project', '1', '--title', "Lead's waiver link", '--tier', 'nice', '--details', 'd', '--owner', 'Molly']);
+  assert.equal(args.isNew, true);
+  assert.equal(args.item.phase, 'review');
+  const sql = buildNewSql(1, args.item, { email: 'e@x', name: 'Eric Roberts' });
+  const [insert, event] = sql.split('\n');
+  assert.match(insert, /^INSERT INTO items \(client_id, project_id, kind, title, details, owner, tier, phase, position, added_by\) VALUES \(1, 1, 'change', 'Lead''s waiver link', 'd', 'Molly', 'nice', 'review', \(SELECT COALESCE\(MAX\(position\), 0\) \+ 1 FROM items WHERE client_id = 1 AND project_id = 1 AND kind = 'change' AND tier = 'nice'\), 'Eric Roberts'\);$/);
+  assert.match(event, /VALUES \(1, last_insert_rowid\(\), 'added', 'Lead''s waiver link', 'change', 'd', 'e@x', 'Eric Roberts', CURRENT_TIMESTAMP\);$/);
+});
+
+test('new items check their arguments too', () => {
+  assert.throws(() => parseArgs(['uep', 'new', '--title', 'x', '--tier', 'nice']));
+  assert.throws(() => parseArgs(['uep', 'new', '--project', '1', '--tier', 'nice']));
+  assert.throws(() => parseArgs(['uep', 'new', '--project', '1', '--title', 'x']));
+  assert.throws(() => parseArgs(['uep', 'new', '--project', '1 OR 1=1', '--title', 'x', '--tier', 'nice']));
+  assert.throws(() => parseArgs(['uep', 'new', '--project', '1', '--title', 'x', '--tier', 'nice', '--kind', 'request']));
+  assert.equal(parseArgs(['uep', 'new', '--project', '1', '--title', 'x', '--tier', 'must', '--kind', 'problem']).item.phase, 'full');
+});
