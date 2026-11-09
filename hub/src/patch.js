@@ -113,7 +113,7 @@ export const waitsForGuide = (d, level) => level < 2 || d.kind === 'project' || 
 export const mask = value => String(value || '')
   .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
   .replace(/(\+?\d[\d\s().-]{7,}\d)/g, m => (m.replace(/\D/g, '').length >= 9 ? '[phone]' : m));
-const escapeTags = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export const escapeTags = value => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export async function inputHash({ title, details, question, answer }) {
   const data = new TextEncoder().encode(JSON.stringify([title || '', details || '', question || '', answer || '']));
@@ -204,7 +204,7 @@ async function askModel(env, model, prompt) {
   catch (error) { return { usage, error: 'invalid_output: ' + error.message }; }
 }
 
-const errorCode = error => {
+export const errorCode = error => {
   if (error instanceof Anthropic.APIError && error.status) return `api_${error.status}`;
   if (error instanceof Anthropic.APIConnectionTimeoutError) return 'timeout';
   if (error instanceof Anthropic.APIConnectionError) return 'connection';

@@ -1119,17 +1119,48 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const answer = h('textarea', { maxlength: 2000, id: 'e-answer' }, item.answer);
     const done = h('input', { type: 'checkbox', id: 'e-done', ...(item.done ? { checked: true } : {}) });
     const list = h('select', { id: 'e-project' }, state.projects.map(p => h('option', { value: p.id, ...(p.id === item.project_id ? { selected: true } : {}) }, p.name)));
+    // Patch drafts a reply and suggests a status. Positive Tribes reads, edits and saves; nothing is sent by Patch itself.
+    const canDraft = viewer().role === 'pt' && !state.preview && (item.kind === 'change' || item.kind === 'problem');
+    const STATUS_WORD = { planned: 'Planned', built: 'Built, ready to test', declined: 'Not doing' };
+    let draft = null;
+    const statusPick = h('input', { type: 'checkbox', id: 'e-draft-status' });
+    const suggestion = h('div', { class: 'stack', 'aria-live': 'polite' });
+    const showSuggestion = d => {
+      const settable = STATUS_WORD[d.status];
+      statusPick.checked = Boolean(settable) && !d.careful;
+      suggestion.replaceChildren(
+        d.careful && h('p', { class: 'meta' }, d.status === 'none' ? 'Patch thinks this needs a real conversation. Check or rewrite the reply before you save.' : 'Check this one carefully before you save: Patch is not sure, or the status closes the item.'),
+        h('p', { class: 'muted' }, 'Patch suggests: ' + (settable || 'no status yet') + (d.status_reason ? ' \u2014 ' + d.status_reason : '')),
+        d.note && h('p', { class: 'muted' }, 'Note: ' + d.note),
+        settable && h('label', { for: 'e-draft-status', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, statusPick, 'Also set the status to ' + STATUS_WORD[d.status]));
+    };
+    const draftButton = h('button', { class: 'btn ghost small', type: 'button', onclick: async e => {
+      const button = e.currentTarget;
+      if (answer.value.trim() && !confirm('Replace what you have written with Patch\u2019s draft?')) return;
+      showError(''); button.disabled = true; button.textContent = 'Patch is drafting\u2026';
+      try {
+        const r = await api('/admin/items/' + item.id + '/draft-reply', post({}));
+        if (r.screened) { draft = null; suggestion.replaceChildren(h('p', { class: 'muted' }, 'Not sent to Patch: it mentions ' + r.hits + '. Write this reply yourself.')); }
+        else { draft = r.draft; answer.value = draft.reply; showSuggestion(draft); }
+      } catch (error) { showError(error.message); }
+      button.disabled = false; button.textContent = 'Draft a reply with Patch';
+    } }, 'Draft a reply with Patch');
     return h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); state.editing = null;
       const c = { title: title.value, details: details.value, project_id: Number(list.value) };
       if (asks) Object.assign(c, { owner: owner.value, answer: answer.value, done: done.checked });
       if (replies) c.answer = answer.value;
+      const used = draft, setStatus = used && statusPick.checked && STATUS_WORD[used.status] ? used.status : '';
+      if (setStatus) c.status = setStatus;
       await act(base() + '/items/' + item.id, patch(c));
+      // Record what was actually saved next to Patch's draft, so we can see how often a draft goes out unedited.
+      if (used) api('/admin/replies/' + used.id + '/sent', post({ reply: answer.value, status: setStatus })).catch(() => {});
     } },
       h('div', {}, h('label', { for: 'e-title' }, 'Title'), title),
       h('div', {}, h('label', { for: 'e-details' }, 'Details'), details),
       asks && h('div', {}, h('label', { for: 'e-owner' }, item.kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner),
       (asks || replies) && h('div', {}, h('label', { for: 'e-answer' }, replies ? 'Our reply' : item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
+      canDraft && h('div', { class: 'stack' }, draftButton, suggestion),
       state.projects.length > 1 && h('div', {}, h('label', { for: 'e-project' }, 'Project'), list),
       asks && h('label', { for: 'e-done', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, done, 'This is ' + DONE_WORD[item.kind]),
       h('div', { class: 'row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.editing = null; render(); } }, 'Cancel')));

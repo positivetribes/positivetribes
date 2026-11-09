@@ -9,6 +9,7 @@ import { TIERS, BOOST, planFor, ensureGrants, ledgerOf, balanceOf, careRequests,
 // One error class for the whole Worker, so a check that fails inside a shared helper (triage.js) answers 4xx here too.
 import { InputError } from './triage.js';
 import { patchAdmin, patchInbox, aiCost } from './patch.js';
+import { replyAdmin } from './reply.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
 const TIME_ZONE = 'America/Denver';
@@ -866,6 +867,8 @@ export async function handleAdmin(request, env, url, who) {
     if (care) return care;
     const patch = await patchAdmin({ request, env, url, route, path, method, who, json, body, text });
     if (patch) return patch;
+    const reply = await replyAdmin({ request, env, url, route, path, method, who, json, body, text });
+    if (reply) return reply;
 
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);

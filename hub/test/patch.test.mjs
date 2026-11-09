@@ -396,3 +396,116 @@ test('the model is set in the command center, with rollback', async () => {
   assert.equal(sqlite.prepare("SELECT model FROM patch_models WHERE job = 'triage'").get().model, 'claude-opus-5-5');
   assert.equal((await call(ERIC, 'admin/models/build/rollback', 'POST', {})).status, 409);
 });
+
+// ---- Reply drafts ----
+
+const goodReply = extra => ({ reply: 'Thank you. This fits what we agreed, so it is planned for the full build.', status: 'planned', status_reason: 'It is in the signed scope.', confidence: 'high', note: '', ...extra });
+function replySetup(title = 'Show progress by state', details = 'Contact sam@uep.org about a state thermometer.') {
+  const s = setup();
+  s.sqlite.prepare("INSERT INTO items (client_id, project_id, kind, title, details, tier, phase, position) VALUES (1, 1, 'change', ?, ?, 'nice', 'full', 1)").run(title, details);
+  const itemId = s.sqlite.prepare('SELECT MAX(id) AS id FROM items').get().id;
+  const addFacts = async () => (await s.call(ERIC, 'admin/facts/1', 'PUT', { body: 'Goal thermometers by state are in the signed scope.' })).status;
+  return { ...s, itemId, addFacts };
+}
+
+test('a reply draft needs the client\'s facts first, and only Positive Tribes can ask', async () => {
+  const { call, itemId } = replySetup();
+  const mock = mockModel([goodReply()]);
+  try {
+    assert.equal((await call(ERIC, `admin/items/${itemId}/draft-reply`, 'POST', {}).then(r => r.status)), 409, 'no facts yet');
+    assert.notEqual((await call('sam@uep.org', `admin/items/${itemId}/draft-reply`, 'POST', {})).status, 200);
+    assert.equal(mock.sent.length, 0);
+  } finally { mock.restore(); }
+});
+
+test('production host only: a draft from another host is refused', async () => {
+  const { env, itemId, addFacts, call } = replySetup();
+  await addFacts();
+  const mock = mockModel([goodReply()]);
+  try {
+    const r = await worker.fetch(new Request('http://localhost/api/admin/items/' + itemId + '/draft-reply', { method: 'POST', headers: { 'x-dev-email': ERIC, 'content-type': 'application/json', origin: 'http://localhost' }, body: '{}' }), env);
+    // The test host is localhost, not the production host, so the draft is refused before any model call.
+    assert.equal(r.status, 409);
+    assert.equal(mock.sent.length, 0);
+  } finally { mock.restore(); }
+});
+
+test('a draft sends only that item and that client\'s facts, masked, and is recorded with its cost', async () => {
+  const { sqlite, env, itemId, addFacts } = replySetup();
+  await addFacts();
+  const { draftReply } = await import('../src/reply.js');
+  const mock = mockModel([goodReply()]);
+  try {
+    const out = await draftReply(env, env.DB, itemId, { email: ERIC });
+    assert.equal(out.draft.status, 'planned');
+    assert.equal(out.draft.careful, false);
+    const [sent] = mock.sent;
+    assert.equal(sent.body.model, 'claude-sonnet-5-5');
+    const all = JSON.stringify(sent.body);
+    assert.ok(all.includes('Goal thermometers by state'));
+    assert.ok(!all.includes('sam@uep.org'), 'email masked');
+    assert.ok(!all.includes('Sober AF'), 'no other client');
+    const row = sqlite.prepare('SELECT * FROM patch_replies').get();
+    assert.equal(row.item_id, itemId);
+    assert.ok(row.cost_microusd > 0);
+    assert.equal(row.sent_at, null);
+  } finally { mock.restore(); }
+});
+
+test('an item with rule-1 words is never sent to the model', async () => {
+  const { sqlite, env, itemId, addFacts } = replySetup('Take card payments', 'Let donors pay by credit card.');
+  await addFacts();
+  const { draftReply } = await import('../src/reply.js');
+  const mock = mockModel([goodReply()]);
+  try {
+    const out = await draftReply(env, env.DB, itemId, { email: ERIC });
+    assert.equal(out.screened, true);
+    assert.equal(mock.sent.length, 0);
+    assert.match(sqlite.prepare('SELECT error FROM patch_replies').get().error, /^screened/);
+  } finally { mock.restore(); }
+});
+
+test('a draft that states a price, a date, hours or credits is thrown away', async () => {
+  const { sqlite, env, itemId, addFacts } = replySetup();
+  await addFacts();
+  const { draftReply, forbiddenIn } = await import('../src/reply.js');
+  assert.deepEqual(forbiddenIn('It is planned and on the wishlist for the phase review.'), []);
+  for (const bad of ['We can do it for $500.', 'Expect it on March 3.', 'It is about 4 hours of work.', 'That would use 2 credits.', 'We will have it in 2027.']) {
+    const mock = mockModel([goodReply({ reply: bad })]);
+    try { await assert.rejects(() => draftReply(env, env.DB, itemId, { email: ERIC }), /thrown away/, bad); } finally { mock.restore(); }
+  }
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM patch_replies WHERE error LIKE 'rejected%'").get().n, 5);
+});
+
+test('a declined or unsure draft is marked careful; a long or malformed one is rejected', async () => {
+  const { env, itemId, addFacts } = replySetup();
+  await addFacts();
+  const { draftReply } = await import('../src/reply.js');
+  let mock = mockModel([goodReply({ status: 'none', confidence: 'low' })]);
+  try { assert.equal((await draftReply(env, env.DB, itemId, { email: ERIC })).draft.careful, true); } finally { mock.restore(); }
+  mock = mockModel([goodReply({ reply: 'x'.repeat(601) })]);
+  try { await assert.rejects(() => draftReply(env, env.DB, itemId, { email: ERIC }), /thrown away/); } finally { mock.restore(); }
+  mock = mockModel([{ text: '{"reply":' }]);
+  try { await assert.rejects(() => draftReply(env, env.DB, itemId, { email: ERIC }), /thrown away/); } finally { mock.restore(); }
+});
+
+test('facts are versioned, and what was sent is recorded once', async () => {
+  const { call, sqlite, itemId, addFacts } = replySetup();
+  await addFacts();
+  assert.equal((await call(ERIC, 'admin/facts/1', 'PUT', { body: 'Updated facts.' })).body.version, 'facts1-v2');
+  const g = await call(ERIC, 'admin/facts/1');
+  assert.equal(g.body.current.body, 'Updated facts.');
+  assert.equal(g.body.versions.length, 2);
+  assert.equal((await call('sam@uep.org', 'admin/facts/1')).status === 200, false);
+  sqlite.prepare("INSERT INTO patch_replies (client_id, item_id, reply) VALUES (1, ?, 'draft')").run(itemId);
+  const id = sqlite.prepare('SELECT MAX(id) AS id FROM patch_replies').get().id;
+  await call(ERIC, `admin/replies/${id}/sent`, 'POST', { reply: 'edited', status: 'planned' });
+  await call(ERIC, `admin/replies/${id}/sent`, 'POST', { reply: 'later edit', status: 'built' });
+  const row = sqlite.prepare('SELECT sent_reply, sent_status FROM patch_replies WHERE id = ?').get(id);
+  assert.deepEqual({ ...row }, { sent_reply: 'edited', sent_status: 'planned' });
+});
+
+test('the writing job uses Sonnet', () => {
+  const { sqlite } = setup();
+  assert.equal(sqlite.prepare("SELECT model, previous_model FROM patch_models WHERE job = 'writing'").get().model, 'claude-sonnet-5-5');
+});

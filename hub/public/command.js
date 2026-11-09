@@ -607,6 +607,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <section class="panel"><h2>Client rules</h2><p class="small muted">Each client's own rules add to the standard five questions. Saving makes a new version.</p>
         <form class="row" id="rules-pick"><select name="client" aria-label="Client"><option value="">Choose a client</option>${(data.hubClients || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></form>
         <div id="rules-box"></div></section>
+      <section class="panel"><h2>What Patch may say</h2><p class="small muted">Plain lines about this client's agreed scope, what is not included, and how to word replies. Patch uses them when drafting a reply to a suggested change or test problem, and never says yes to anything they do not cover. No prices, dates or personal details. Pick the client above. Saving makes a new version.</p>
+        <div id="facts-box"><p class="small muted">Choose a client above.</p></div></section>
       <section class="panel"><h2>Models</h2><p class="small muted">Exact model ids, set here and never in code. "Go back" restores the one before.</p><ul class="items">${models}</ul></section>
       ${recent ? `<details class="panel"><summary>Recently decided</summary><ul class="items">${recent}</ul></details>` : ''}`;
     wireTriage(box);
@@ -647,6 +649,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         } else if (f.dataset.rules) {
           await api('/rules/' + f.dataset.rules, { method: 'PUT', body: JSON.stringify({ extra: f.extra.value }) });
           await loadRules(box, f.dataset.rules);
+        } else if (f.dataset.facts) {
+          await api('/facts/' + f.dataset.facts, { method: 'PUT', body: JSON.stringify({ body: f.body.value }) });
+          await loadRules(box, f.dataset.facts);
         }
       } catch (error) { err(f.dataset.decide, error); }
     };
@@ -671,7 +676,13 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   // The rules box works by client id; the overview lists clients by Salesforce account, so find the hub id through the care list.
   async function loadRules(box, clientId) {
     const out = $('rules-box');
-    if (!clientId) { out.innerHTML = ''; return; }
+    if (!clientId) { out.innerHTML = ''; $('facts-box').innerHTML = '<p class="small muted">Choose a client above.</p>'; return; }
+    try {
+      const f = await api('/facts/' + clientId);
+      $('facts-box').innerHTML = `<form data-facts="${esc(clientId)}" class="fields"><p class="small muted wide">${f.current ? 'Active: ' + esc(f.current.version) + ' · ' + f.versions.length + ' version' + (f.versions.length === 1 ? '' : 's') : 'None yet. Patch will not draft replies for this client until there are facts.'}</p>
+        <label class="wide">Facts<textarea name="body" rows="14" maxlength="4000">${esc(f.current ? f.current.body : '')}</textarea></label>
+        <p class="actions wide"><button class="primary">Save as a new version</button></p></form>`;
+    } catch (error) { $('facts-box').innerHTML = `<p class="err">${esc(error.message)}</p>`; }
     try {
       const r = await api('/rules/' + clientId);
       const current = r.versions.find(v => v.version === r.active);
