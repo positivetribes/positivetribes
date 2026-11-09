@@ -208,6 +208,7 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .item-no{font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;font-variant-numeric:tabular-nums}.item-no:hover{color:var(--ink);text-decoration:underline}
 .pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 10px;border-radius:99px;white-space:nowrap}
 .pill.must{background:var(--must-bg);color:var(--must)}.pill.nice{background:var(--nice-bg);color:var(--nice)}.pill.idea{background:var(--idea-bg);color:var(--idea)}.pill.done{background:var(--ok-bg);color:var(--ok)}
+.pill.est{text-transform:none;letter-spacing:0;font-weight:600}.pill.est.draft{background:var(--nice-bg);color:var(--nice)}.pill.est.sent{background:var(--idea-bg);color:var(--idea)}.pill.est.yes{background:var(--ok-bg);color:var(--ok)}.pill.est.quiet{background:transparent;border:1px solid var(--line);color:var(--muted)}
 .pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
 .seg .n{display:inline-block;margin-left:6px;min-width:20px;padding:0 6px;border-radius:99px;background:var(--soft);color:var(--ink);font-size:12px;line-height:20px;text-align:center}
 .seg button[aria-pressed=true] .n{background:var(--bg);color:var(--ink)}
@@ -833,6 +834,28 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       state.items = data.items; render();
     } catch (e) { showError(e.message); try { await reloadItems(); render(); } catch {} }
   }
+  // The estimate at a glance, in the card's top row. No pill means no estimate (many changes never need one).
+  // A draft or a withdrawn estimate is Positive Tribes' alone, so clients never get those pills.
+  function estimatePill(item) {
+    const e = item.estimate;
+    if (item.kind !== 'change' || !e) return null;
+    if (e.status === 'offered') {
+      const days = e.offered_at ? Math.floor((Date.now() - Date.parse(e.offered_at.replace(' ', 'T') + 'Z')) / 864e5) : 0;
+      return h('span', { class: 'pill est sent' }, 'Estimate sent · ' + (days > 0 ? days + (days === 1 ? ' day' : ' days') : 'today'));
+    }
+    const [cls, words] = {
+      draft: ['draft', 'Draft estimate'], withdrawn: ['quiet', 'Estimate withdrawn'], not_now: ['quiet', 'Estimate: not now'],
+      approved_now: ['yes', e.donated ? 'Approved · donated' : 'Approved · ' + e.price_label], approved_later: ['yes', 'Approved for after launch']
+    }[e.status] || [];
+    return words ? h('span', { class: 'pill est ' + cls }, words) : null;
+  }
+  // Which estimate state a card is in, for Positive Tribes' "Estimate" filter.
+  const ESTIMATE_FILTERS = [['all', 'Any'], ['none', 'Not estimated'], ['draft', 'Draft'], ['sent', 'Sent, waiting'], ['decided', 'Decided']];
+  const estimateStage = item => {
+    const s = item.estimate ? item.estimate.status : '';
+    return !s || s === 'withdrawn' ? 'none' : s === 'draft' ? 'draft' : s === 'offered' ? 'sent' : 'decided';
+  };
+
   // Time Positive Tribes gave on this card without an estimate. Everyone on the client's hub sees it.
   function donatedBlock(item) {
     const list = item.donated_time || [], ptNow = viewer().role === 'pt' && !state.preview;
@@ -910,11 +933,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours ', hours), schedule, scope, h('label', {}, gift, ' Donate this (Positive Tribes covers it)'), h('div', { class: 'actions' },
             h('button', { class: 'btn small', type: 'button', onclick: () => hours.value ? estimateAct(item, '', 'PUT', { hours: Number(hours.value), schedule_note: schedule.value, scope_note: scope.value, donated: gift.checked }) : showError('Enter the hours first.') }, 'Save estimate'),
             h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = null; render(); } }, 'Cancel'))));
-        } else {
+        } else if (e) {
+          // With no estimate yet, "Estimate" sits in the card's button row instead, so an empty box never looks like one.
           nodes.push(h('div', { class: 'actions' },
-            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = item.id; render(); } }, e && e.status !== 'withdrawn' ? 'Re-estimate' : 'Estimate'),
-            e && e.status === 'draft' && h('button', { class: 'btn small', type: 'button', onclick: () => estimateAct(item, 'offer', 'POST') }, 'Send to client'),
-            e && ['draft', 'offered'].includes(e.status) && h('button', { class: 'btn ghost small', type: 'button', onclick: () => estimateAct(item, 'withdraw', 'POST') }, 'Withdraw')));
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = item.id; render(); } }, e.status !== 'withdrawn' ? 'Re-estimate' : 'Estimate'),
+            e.status === 'draft' && h('button', { class: 'btn small', type: 'button', onclick: () => estimateAct(item, 'offer', 'POST') }, 'Send to client'),
+            ['draft', 'offered'].includes(e.status) && h('button', { class: 'btn ghost small', type: 'button', onclick: () => estimateAct(item, 'withdraw', 'POST') }, 'Withdraw')));
         }
       }
     }
@@ -1037,7 +1061,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   function backlog(isPt) {
     const { kind, project, filter } = state;
     const here = state.items.filter(i => i.project_id === project);
-    const mine = here.filter(i => i.kind === kind);
+    // Positive Tribes can narrow suggested changes by estimate ("Not estimated" before a call); clients never get the filter.
+    const estFilter = isPt && kind === 'change' ? state.estFilter || 'all' : 'all';
+    const mine = here.filter(i => i.kind === kind && (estFilter === 'all' || estimateStage(i) === estFilter));
     const tiers = TIER_NAMES[kind];
     const nodes = [];
     if (state.projects.length > 1) {
@@ -1060,10 +1086,17 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('label', { for: 'show-by' }, 'Show'),
       h('select', { id: 'show-by', onchange: e => { state.filter = e.target.value; render(); } },
         [['all', 'All phases'], ...PHASES].map(([key, label]) => h('option', { value: key, ...(filter === key ? { selected: true } : {}) }, label + ' (' + phaseCount(key) + ')'))));
+    const openChanges = open(here.filter(i => i.kind === 'change'));
+    const estBy = isPt && kind === 'change' && openChanges.length > 0 && h('div', { class: 'show-by' },
+      h('label', { for: 'est-by' }, 'Estimate'),
+      h('select', { id: 'est-by', onchange: e => { state.estFilter = e.target.value; render(); } },
+        ESTIMATE_FILTERS.map(([key, label]) => h('option', { value: key, ...(estFilter === key ? { selected: true } : {}) },
+          label + ' (' + openChanges.filter(i => key === 'all' || estimateStage(i) === key).length + ')'))));
+    const filters = (showBy || estBy) && h('div', { class: 'actions' }, showBy || null, estBy || null);
     nodes.push(state.adding
       ? (careMode ? careForm() : addForm())
-      : h('div', { class: 'bar' }, h('button', { class: 'btn', type: 'button', onclick: () => { state.adding = true; render(); const f = $('f-title') || $('c-title'); if (f) f.focus(); } }, opener), showBy || null));
-    if (state.adding && showBy) nodes.push(showBy);
+      : h('div', { class: 'bar' }, h('button', { class: 'btn', type: 'button', onclick: () => { state.adding = true; render(); const f = $('f-title') || $('c-title'); if (f) f.focus(); } }, opener), filters || null));
+    if (state.adding && filters) nodes.push(filters);
     // The phase filter applies to open items only. Finished items all go in one
     // list at the bottom, whatever their tier or phase, and empty tiers are hidden.
     let shown = 0;
@@ -1189,7 +1222,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       ? isPt && h('span', { class: 'pill status reply' }, 'Needs a reply')
       : h('span', { class: 'pill status ' + item.status }, !isPt && item.status === 'built' ? 'Ready to test' : statusName(item)));
     const shipsIn = tracked && item.release_id && !item.done && h('span', { class: 'pill phase' }, 'Ships in ' + phaseName({ name: item.release_name, number: item.release_number }));
-    const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), statusPill, shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
+    const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), statusPill, estimatePill(item), shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
     // Positive Tribes picks the status in one tap. Not doing closes it; anything else reopens a declined one.
     const picker = isPt && tracked && (!item.done || declined) && h('select', { class: 'status-pick', 'aria-label': 'Status for ' + item.title, onchange: e => act(base() + '/items/' + item.id, patch({ status: e.target.value })) },
       STATUS_NAMES[item.kind].map(([k]) => h('option', { value: k, ...(item.status === k ? { selected: true } : {}) }, statusName(item, k))));
@@ -1222,7 +1255,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', { class: 'actions' },
         h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : isPt && item.kind === 'change' && !item.answer ? 'Reply' : 'Edit'),
         !declined && !locked && h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind]),
-        picker),
+        picker,
+        isPt && item.kind === 'change' && !item.done && !item.estimate && state.estimating !== item.id && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = item.id; render(); } }, 'Estimate')),
       more,
       state.confirming === item.id && h('div', { class: 'confirm', role: 'alert' }, h('span', {}, 'Delete this for everyone? This cannot be undone.'),
         h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { state.confirming = null; act(base() + '/items/' + item.id, { method: 'DELETE' }); } }, 'Delete'),
