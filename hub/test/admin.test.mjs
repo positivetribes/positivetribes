@@ -311,6 +311,14 @@ test('a meeting in Salesforce and in the synced calendar shows once, with the su
   assert.equal(meetings[0].source, 'salesforce');
 });
 
+test('Recent groups by local day: a Denver evening item (next day in UTC) sorts under its own day, once', () => {
+  const evening = { id: 10, account_id: UEP, kind: 'email', occurred_at: '2026-10-27T01:51:00Z', title: 'Evening email', summary: '', url: '' };
+  const view = buildOverview(SF_ENV, sf, { ...local, activity: [...local.activity, evening] }, today);
+  const days = view.recent.map(i => i.day);
+  assert.deepEqual(days, [...days].sort().reverse(), 'days run newest first with no repeats');
+  assert.equal(view.recent.find(i => i.title === 'Evening email').day, '2026-10-26');
+});
+
 test('a client page splits the timeline at now', () => {
   const view = buildClient(SF_ENV, { account: sf.accounts[0], tasks: sf.tasks.slice(0, 1), events: sf.events, cases: [], contacts: [], history: [] },
     { meta: null, steps: local.steps, notes: local.notes, activity: [] }, today);

@@ -304,8 +304,9 @@ export function buildOverview(env, sf, local, today) {
   }
 
   // Today's items sit under "Coming up" with the rest of the next two weeks; "Recent" ends yesterday.
-  const upcoming = items.filter(i => i.day >= today && i.day <= soon && i.open !== false && !['note', 'stage', 'email'].includes(i.type)).sort((x, y) => x.at.localeCompare(y.at));
-  const recent = items.filter(i => isTouch(i) && i.day >= since && (i.day < today || ['note', 'email'].includes(i.type))).sort((x, y) => y.at.localeCompare(x.at));
+  const upcoming = items.filter(i => i.day >= today && i.day <= soon && i.open !== false && !['note', 'stage', 'email'].includes(i.type)).sort((x, y) => x.day.localeCompare(y.day) || x.at.localeCompare(y.at));
+  // Sorted by Eric's local day first: an evening item in Denver is already the next day in UTC.
+  const recent = items.filter(i => isTouch(i) && i.day >= since && (i.day < today || ['note', 'email'].includes(i.type))).sort((x, y) => y.day.localeCompare(x.day) || y.at.localeCompare(x.at));
   return { today, clients, attention, upcoming, recent, now: rankNow(attention, upcoming, today) };
 }
 
