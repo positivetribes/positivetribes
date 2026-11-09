@@ -38,7 +38,7 @@ test('only Positive Tribes can list a client\'s people, for previewing as them',
   const r = await call('eric@positivetribes.org', '/api/c/uep/people');
   assert.equal(r.status, 200);
   // Directors first; only this client's people; Positive Tribes itself is not listed.
-  assert.deepEqual((await r.json()).people, [{ email: 'molly@uep.org', name: 'Molly', role: 'ed' }, { email: 'sam@uep.org', name: 'Sam', role: 'staff' }]);
+  assert.deepEqual((await r.json()).people, [{ email: 'molly@uep.org', name: 'Molly', role: 'ed', decides: true }, { email: 'sam@uep.org', name: 'Sam', role: 'staff', decides: false }]);
   assert.deepEqual((await (await call('eric@positivetribes.org', '/api/c/safe/people')).json()).people.map(p => p.email), ['dana@safe.org']);
   assert.equal((await call('molly@uep.org', '/api/c/uep/people')).status, 404);
   assert.equal((await call('sam@uep.org', '/api/c/uep/people')).status, 404);

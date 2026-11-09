@@ -877,11 +877,14 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (e && (e.status === 'offered' || ['approved_now', 'approved_later', 'not_now'].includes(e.status))) {
       nodes.push(h('b', {}, 'Estimate for this change'), summary(), ...notes());
       if (e.status === 'offered') {
-        if (e.can_decide && !state.preview) {
+        // In "Preview as", the buttons show (switched off) for whoever really gets them; Positive Tribes never decides.
+        const shows = state.preview ? Boolean(state.preview.decides) : e.can_decide;
+        if (shows) {
+          const off = state.preview ? { disabled: true, title: 'Preview only' } : {};
           nodes.push(h('div', { class: 'actions' },
-            h('button', { class: 'btn small', type: 'button', onclick: () => decideEstimate(item, 'now') }, 'Add it now · ' + (e.donated ? 'free' : e.price_label)),
-            e.later_ok && h('button', { class: 'btn ghost small', type: 'button', onclick: () => decideEstimate(item, 'later') }, 'After launch · ' + e.credits_label),
-            h('button', { class: 'btn ghost small', type: 'button', onclick: () => decideEstimate(item, 'not_now') }, 'Not now')));
+            h('button', { class: 'btn small', type: 'button', ...off, onclick: () => decideEstimate(item, 'now') }, 'Add it now · ' + (e.donated ? 'free' : e.price_label)),
+            e.later_ok && h('button', { class: 'btn ghost small', type: 'button', ...off, onclick: () => decideEstimate(item, 'later') }, 'After launch · ' + e.credits_label),
+            h('button', { class: 'btn ghost small', type: 'button', ...off, onclick: () => decideEstimate(item, 'not_now') }, 'Not now')));
           nodes.push(h('p', { class: 'meta' }, e.donated ? 'Positive Tribes covers this one: adding it puts it into the build, with nothing on your invoice.' : 'Adding it now puts ' + e.price_label + ' on your next invoice and into the build.' + (e.later_ok ? ' After launch uses ' + e.credits_label + ' from your care plan.' : '')));
           if (e.later_note) nodes.push(h('p', { class: 'meta' }, e.later_note));
         } else nodes.push(h('p', { class: 'meta' }, ptNow ? 'Waiting for the client’s director to decide.' : 'Your director decides whether to add this.'));

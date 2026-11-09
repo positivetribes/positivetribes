@@ -404,6 +404,14 @@ test('an item with an approved estimate or donated time stays on record; one wit
   assert.equal((await call(PT, 'c/uep/items/3', 'DELETE')).status, 409);
 });
 
+test('"Preview as" knows who gets the estimate buttons, and only Positive Tribes gets the list', async () => {
+  const { call, PT } = setup();
+  const people = (await call(PT, 'c/uep/people')).body.people;
+  assert.deepEqual(people.map(p => [p.name, p.decides]), [['Molly', true], ['Kim', true], ['Sam', false]]);
+  assert.ok(people.every(p => p.id === undefined), 'no user ids leave the server');
+  assert.equal((await call('molly@uep.org', 'c/uep/people')).status, 404);
+});
+
 test('Patch is never given an estimate', () => {
   for (const file of ['../src/reply.js', '../src/patch.js']) {
     assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), 'utf8'), /change_estimates|estimatesFor|estimateView/, file);
