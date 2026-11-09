@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -325,4 +325,33 @@ test('system status: scoped to the client, states only, safe when the status Wor
     assert.deepEqual((await (await call('molly@uep.org', '/api/c/uep/status')).json()).checks, []);
   } finally { globalThis.fetch = realFetch; }
   assert.deepEqual(seen.filter(u => u.includes('safe') === false && u.includes('uep.json')).length, 1);
+});
+
+test('status: only Positive Tribes replies; not doing closes it, another pick or a reopen brings it back; the client hears it', async () => {
+  const { call, sqlite } = setup();
+  await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Bigger buttons', kind: 'change', tier: 'must', project_id: 1 });
+  await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Dark mode', kind: 'change', tier: 'nice', project_id: 1 });
+  await call('molly@uep.org', '/api/c/uep/items', 'POST', { title: 'Question', kind: 'question', project_id: 1 });
+  let items = (await (await call('molly@uep.org', '/api/c/uep/items')).json()).items;
+  assert.deepEqual(items.map(i => i.status), ['new', 'new', 'new']);
+  // The client cannot set it, and kinds without a status refuse it.
+  assert.equal((await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { status: 'planned' })).status, 403);
+  assert.equal((await call('eric@positivetribes.org', '/api/c/uep/items/3', 'PATCH', { status: 'planned' })).status, 400);
+  assert.equal((await call('eric@positivetribes.org', '/api/c/uep/items/1', 'PATCH', { status: 'maybe' })).status, 400);
+  await call('eric@positivetribes.org', '/api/c/uep/items/1', 'PATCH', { status: 'built' });
+  await call('eric@positivetribes.org', '/api/c/uep/items/2', 'PATCH', { status: 'planned' });
+  // Not doing closes it, with the reason logged as its own answered event.
+  await call('eric@positivetribes.org', '/api/c/uep/items/1', 'PATCH', { status: 'declined', answer: 'Out of scope for now.' });
+  const row = id => sqlite.prepare('SELECT status, done FROM items WHERE id = ?').get(id);
+  assert.deepEqual({ ...row(1) }, { status: 'declined', done: 1 });
+  // Picking another status reopens it; a plain reopen starts over as new.
+  await call('eric@positivetribes.org', '/api/c/uep/items/1', 'PATCH', { status: 'planned' });
+  assert.deepEqual({ ...row(1) }, { status: 'planned', done: 0 });
+  await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { done: true });
+  await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { done: false });
+  assert.deepEqual({ ...row(1) }, { status: 'new', done: 0 });
+  const bell = await (await call('molly@uep.org', '/api/notifications')).json();
+  assert.deepEqual(bell.items.filter(i => i.action === 'status').map(i => [i.title, i.detail]),
+    [['Bigger buttons', 'Planned'], ['Bigger buttons', 'Not doing'], ['Dark mode', 'On the wishlist'], ['Bigger buttons', 'Built, ready to test']]);
+  assert.ok(bell.items.some(i => i.action === 'answered' && i.detail === 'Out of scope for now.'));
 });

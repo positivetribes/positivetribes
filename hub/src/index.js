@@ -20,6 +20,12 @@ const PHASES = ['review', 'prototype', 'full', 'later'];
 const KINDS = ['question', 'change', 'problem', 'request'];
 const TIER_NAMES = { must: 'Must have', nice: 'Nice to have', idea: 'Idea for now' };
 const PHASE_NAMES = { review: 'To review', prototype: 'Prototype', full: 'Full build', later: 'Later' };
+const STATUSES = ['new', 'planned', 'built', 'declined'];
+// What each status reads as, per kind. Only suggested changes and test problems carry one.
+const STATUS_NAMES = {
+  change: { new: 'New', planned: 'Planned', built: 'Built, ready to test', declined: 'Not doing' },
+  problem: { new: 'Reported', planned: 'Fixing', built: 'Fixed, ready to retest', declined: 'Not fixing' }
+};
 const FIELD_NAMES = { title: 'title', details: 'details', owner: 'who answers', project_id: 'list' };
 
 // Remembers that this person has the hub open: once per 10 minutes at most, so a page left open costs little.
@@ -44,6 +50,7 @@ const oneOf = (list, message) => value => { if (!list.includes(value)) throw new
 const tierOf = oneOf(TIERS, 'Choose must, nice, or idea.');
 const phaseOf = oneOf(PHASES, 'Choose review, prototype, full, or later.');
 const kindOf = oneOf(KINDS, 'Choose question, change, problem, or request.');
+const statusOf = oneOf(STATUSES, 'Choose new, planned, built, or declined.');
 
 async function body(request) {
   let result;
@@ -80,7 +87,7 @@ async function listDocuments(db, clientId, everything) {
 async function listItems(db, clientId) {
   const { results } = await db.prepare(
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
-            i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id
+            i.status, i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id
      FROM items i JOIN projects p ON p.id = i.project_id
      WHERE i.client_id = ?
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
@@ -580,20 +587,33 @@ export default {
         const owner = b.owner === undefined ? item.owner : text(b.owner, 60, { label: 'Who answers' });
         const answer = b.answer === undefined ? item.answer : text(b.answer, 2000, { label: 'Answer' });
         const projectId = b.project_id === undefined ? item.project_id : (await requireProject(db, client.id, b.project_id)).id;
+        // Status is Positive Tribes' reply to a suggestion or problem. Not doing it closes the item; picking any other
+        // status reopens one that was declined; reopening an item by hand starts it over as new.
+        let status = item.status;
+        let doneNow = done;
+        if (b.status !== undefined) {
+          if (user.role !== 'pt') throw new InputError('Only Positive Tribes sets the status.', 403);
+          if (!STATUS_NAMES[item.kind]) throw new InputError('Only suggested changes and test problems have a status.');
+          status = statusOf(b.status);
+          if (b.done === undefined) doneNow = status === 'declined' ? 1 : item.status === 'declined' ? 0 : item.done;
+        } else if (item.done && !done) status = 'new';
         // A care request finishes through its own steps (ship, cancel, decline) and stays on the tool it was asked for,
         // so its credits and the "shipped this month" meter always match what really happened.
-        if (done !== item.done || projectId !== item.project_id) {
+        if (doneNow !== item.done || projectId !== item.project_id) {
           const care = await db.prepare('SELECT 1 FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id).first();
           if (care) throw new InputError('This is a care request: it closes when it ships or is cancelled, and stays on its tool.', 409);
         }
         const position = tier === item.tier && projectId === item.project_id ? item.position : await nextPosition(db, client.id, projectId, item.kind, tier);
-        const change = changeOf(item, { title, details, owner, answer, done, tier, phase, project_id: projectId });
+        // A status pick logs its own event (and the open/closed change it implies is part of it); a reply sent with it logs too.
+        const wish = item.kind === 'change' && tier !== 'must' && status === 'planned';
+        const statusEvent = b.status !== undefined && status !== item.status ? ['status', wish ? 'On the wishlist' : STATUS_NAMES[item.kind][status]] : null;
+        const change = changeOf(item, { title, details, owner, answer, done: statusEvent ? item.done : doneNow, tier, phase, project_id: projectId });
         await db.batch([
           db.prepare(
-            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP
+            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND client_id = ?`
-          ).bind(title, details, owner, answer, done, tier, phase, projectId, position, item.id, client.id),
-          ...change ? [logEvent(db, client.id, item.id, change[0], { title, kind: item.kind }, change[1], user)] : []
+          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, item.id, client.id),
+          ...[statusEvent, change].filter(Boolean).map(([action, detail]) => logEvent(db, client.id, item.id, action, { title, kind: item.kind }, detail, user))
         ]);
         return json({ ok: true, items: await listItems(db, client.id) });
       }

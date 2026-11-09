@@ -131,6 +131,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         <span class="muted small">Due ${esc(longDate(r.due))} (${esc(r.days)}${business ? ' business' : ''} days from ${esc(r.started)})${r.autoAccept ? ' · accepted automatically unless problems are listed' : ''}</span></span></a>`;
     }).join('');
   }
+  // Suggestions and problems waiting for our reply, per client: one line, each name opens that client's list.
+  const needsReplyLine = data => (data.needsReply || []).length ? `<p class="panel needs-reply"><strong>Needs a reply:</strong> ${data.needsReply.map(r =>
+    `<a href="#/${esc(r.workspace)}/backlog">${esc(r.client)} ${esc(r.count)}</a>`).join(' · ')} <span class="muted small">suggested changes and test problems with no answer yet</span></p>` : '';
   const countdownRow = data => (data.testing || []).length ? `<div class="countdowns">${countdowns(data)}</div>` : '';
 
   // "Not now" only hides an item for the rest of today, in this browser.
@@ -176,7 +179,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
     const hour = new Date().getHours();
     box.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h2 class="greet">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}</h2></div></div>
-    ${nowCard(data)}${countdownRow(data)}
+    ${nowCard(data)}${needsReplyLine(data)}${countdownRow(data)}
     <div class="cols${attention.length ? '' : ' two'}">
       ${attention.length ? `<section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2><ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', tick: doneControl })).join('')}</ul></section>` : ''}
       <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { tick: doneControl })}</section>
