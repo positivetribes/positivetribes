@@ -49,17 +49,25 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   const NOT_SEEN = 'No hub visit since Nov 2';
   const longDate = day => new Date(day + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
-  function item(i, { showClient = true, showDay = false, controls = null } = {}) {
+  function item(i, { showClient = true, showDay = false, controls = null, tick = null } = {}) {
     const url = safeUrl(i.url);
     const title = i.type === 'stale' ? `<a href="${to.client(i.accountId)}">${esc(i.title)}</a>` : url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(i.title)}</a>` : esc(i.title);
     const client = showClient && i.accountId && i.client ? `<a class="client-link" href="${to.client(i.accountId)}">${esc(i.client)}</a>` : '';
     const when = i.type === 'stale' ? (i.day ? 'Last contact ' + ago(i.day) : '') : [showDay ? dayName(i.day) : '', timeOf(i.at)].filter(Boolean).join(', ');
     const chip = i.reason ? `<span class="chip warn">${esc(i.reason)}</span>` : `<span class="chip${i.source === 'claude' ? ' claude' : ''}">${esc(TYPE[i.type] || i.type)}${i.source === 'claude' ? ' · suggested' : ''}</span>`;
     return `<li><div class="row"><div class="grow"><div class="title">${title}</div>
-      <div class="meta">${[client, when ? esc(when) : '', i.detail ? esc(i.detail) : ''].filter(Boolean).join(' · ')}</div></div>${chip}</div>${controls ? controls(i) : ''}</li>`;
+      <div class="meta">${[client, when ? esc(when) : '', i.detail ? esc(i.detail) : ''].filter(Boolean).join(' · ')}</div></div>${chip}${tick ? tick(i) : ''}</div>${controls ? controls(i) : ''}</li>`;
   }
   // Steps are Eric's own, so they can be completed from any list. Salesforce tasks stay read-only.
-  const doneControl = i => i.type === 'step' && i.id ? `<div class="step-actions"><button type="button" data-today-done="${esc(i.id)}">Mark done</button></div>` : '';
+  // A small check at the end of the row, so each step stays one compact row.
+  const doneControl = i => i.type === 'step' && i.id ? `<button type="button" class="tick" data-today-done="${esc(i.id)}" title="Mark done" aria-label="Mark done: ${esc(i.title)}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : '';
+  // Long lists show the newest few, with the rest one click away.
+  const RECENT_SHOWN = 10;
+  function shortList(items, opts) {
+    if (items.length <= RECENT_SHOWN + 2) return byDay(items, opts);
+    const rest = items.slice(RECENT_SHOWN);
+    return byDay(items.slice(0, RECENT_SHOWN), opts) + `<details class="more"><summary>Show ${rest.length} more</summary>${byDay(rest, opts)}</details>`;
+  }
   function byDay(items, opts) {
     if (!items.length) return '<p class="empty">Nothing here.</p>';
     let html = '', last = null;
@@ -115,12 +123,15 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       const business = r.dayType === 'business', left = daysLeft(data.today, r.due, business);
       const cls = left < 0 ? 'over' : left <= (business ? 3 : 7) ? 'soon' : '';
       const unit = business ? ' business day' : ' day';
-      const label = left < 0 ? `${-left}${unit}${left === -1 ? '' : 's'} over` : left === 0 ? 'Due today' : `${left}${unit}${left === 1 ? '' : 's'} left`;
-      return `<a class="panel countdown ${cls}" href="#/${esc(r.workspace)}/home" aria-label="${esc(r.client)}: ${esc(r.phase)} testing countdown"><span class="days">${esc(label)}</span>
+      // The number large, its words small beneath, like the client's own countdown.
+      const days = left === 0 ? '<span class="num">Due today</span>'
+        : `<span class="num">${Math.abs(left)}</span><span class="unit">${esc(unit.trim())}${Math.abs(left) === 1 ? '' : 's'} ${left < 0 ? 'over' : 'left'}</span>`;
+      return `<a class="panel countdown ${cls}" href="#/${esc(r.workspace)}/home" aria-label="${esc(r.client)}: ${esc(r.phase)} testing countdown"><span class="days">${days}</span>
         <span><strong>${esc(r.client)} · ${esc(r.project)} ${esc(r.phase)} testing and sign-off</strong><br>
         <span class="muted small">Due ${esc(longDate(r.due))} (${esc(r.days)}${business ? ' business' : ''} days from ${esc(r.started)})${r.autoAccept ? ' · accepted automatically unless problems are listed' : ''}</span></span></a>`;
     }).join('');
   }
+  const countdownRow = data => (data.testing || []).length ? `<div class="countdowns">${countdowns(data)}</div>` : '';
 
   // "Not now" only hides an item for the rest of today, in this browser.
   const skipKey = () => 'now-skipped-' + (overview?.today || '');
@@ -133,7 +144,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   function nowCard(data) {
     const skip = skipped(), dones = doneMap(), isDone = i => (dones[nowId(i)] || '') > data.today;
     const list = (data.now || []).filter(i => !skip.includes(nowId(i)) && !isDone(i));
-    if (!list.length) return `<section class="panel nowcard"><p class="label">Now</p><h2>Nothing needs you right now</h2><p class="muted why">${skip.length || (data.now || []).some(isDone) ? 'You have skipped or finished everything for now. <button type="button" class="link" id="now-reset">Bring them back</button>' : 'No deadlines, waiting clients or revenue items. Pick something from Coming up.'}</p></section>`;
+    // Nothing to do is one quiet line; with nothing needing attention either, it says so here instead of in its own panel.
+    if (!list.length) return `<section class="panel nowcard quiet" aria-label="Now"><p class="why"><strong>Nothing needs you right now.</strong> <span class="muted">${skip.length || (data.now || []).some(isDone) ? 'You have skipped or finished everything for now. <button type="button" class="link" id="now-reset">Bring them back</button>' : (data.attention.length ? 'Nothing urgent.' : 'Nothing overdue or waiting.') + ' Pick something from Coming up.'}</span></p></section>`;
     const [top, ...rest] = list, url = top.type === 'stale' ? to.client(top.accountId) : esc(safeUrl(top.url));
     const title = url ? `<a href="${url}"${top.type === 'stale' ? '' : ' target="_blank" rel="noopener"'}>${esc(top.title)}</a>` : esc(top.title);
     const client = top.client && top.type !== 'stale' ? `<a class="client-link" href="${to.client(top.accountId)}">${esc(top.client)}</a> · ` : '';
@@ -164,11 +176,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
     const hour = new Date().getHours();
     box.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h2 class="greet">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}</h2></div></div>
-    ${nowCard(data)}${countdowns(data)}
-    <div class="cols">
-      <section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2>${attention.length ? `<ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', controls: doneControl })).join('')}</ul>` : '<p class="empty">All clear.</p>'}</section>
-      <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { controls: doneControl })}</section>
-      <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${byDay(data.recent)}</section>
+    ${nowCard(data)}${countdownRow(data)}
+    <div class="cols${attention.length ? '' : ' two'}">
+      ${attention.length ? `<section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2><ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', tick: doneControl })).join('')}</ul></section>` : ''}
+      <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { tick: doneControl })}</section>
+      <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${shortList(data.recent)}</section>
     </div>`;
     wireNow(box);
     box.onclick = async e => {

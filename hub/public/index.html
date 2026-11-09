@@ -266,12 +266,17 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .head{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:22px}
 .cc .head .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .cc .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;align-items:start}
+.cc .cols.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .cc .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow)}
 .cc .count{font-size:13px;color:var(--muted);margin-left:6px}
 .cc ul.items{list-style:none;margin:0;padding:0}
 .cc ul.items li{padding:10px 0;border-top:1px solid var(--line)}
 .cc ul.items li:first-child{border-top:0;padding-top:0}
 .cc .step-actions{margin-top:6px}
+.cc .tick{flex:none;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--muted);cursor:pointer;align-self:center}
+.cc .tick:hover{border-color:var(--client);color:var(--client)}.cc .tick:disabled{opacity:.4}
+.cc .tick svg{width:14px;height:14px}
+.cc details.more{margin-top:12px}.cc details.more>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--muted)}
 .cc .day{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--rust);font-weight:700;margin:16px 0 4px}
 .cc .day:first-child{margin-top:0}
 .cc .row{display:flex;gap:4px 8px;align-items:baseline;flex-wrap:wrap}
@@ -345,15 +350,19 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .empty{font-size:14px}
 .cc #meta p{margin:10px 0 4px}
 .cc .err{color:var(--rust);font-size:13px;min-height:1em}
-.cc .countdown{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:22px;text-decoration:none;border-left:6px solid var(--rust)}
+.cc .countdowns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;margin-bottom:22px}
+.cc .countdown{display:flex;align-items:center;gap:18px;text-decoration:none;border-left:6px solid var(--rust)}
+.cc .countdown .days{display:flex;flex-direction:column;flex:none}
+.cc .countdown .unit{font-family:var(--font);font-size:13px;font-weight:600;color:var(--muted);margin-top:4px;white-space:nowrap}
 .cc .countdown:hover{border-color:var(--ink)}
-.cc .countdown .days{font-family:var(--display);font-size:40px;line-height:1}
-.cc .countdown.soon .days{color:var(--nice)}.cc .countdown.over .days{color:var(--rust)}
+.cc .countdown .num{font-family:var(--display);font-size:44px;line-height:1}
+.cc .countdown.soon .num{color:var(--nice)}.cc .countdown.over .num{color:var(--rust)}
 .cc .nowcard{border-left:6px solid var(--rust);margin-bottom:22px}
 .cc .nowcard .label{margin:0 0 6px}
 .cc .nowcard h2{font-size:26px;margin-bottom:6px;overflow-wrap:anywhere}
 .cc .nowcard h2 a{text-decoration:none}.cc .nowcard h2 a:hover{text-decoration:underline}
 .cc .nowcard .why{margin:0 0 12px}
+.cc .nowcard.quiet{padding-top:14px;padding-bottom:14px}.cc .nowcard.quiet .why{margin:0}
 .cc .nowcard .later{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
 .cc .said{margin:6px 0 0;font-size:13.5px;white-space:pre-wrap;overflow-wrap:anywhere;border-left:3px solid var(--line);padding-left:10px}
 @media (max-width:1000px){.cc .cols,.cc .detail{grid-template-columns:minmax(0,1fr)}}
