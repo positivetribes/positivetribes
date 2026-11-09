@@ -10,7 +10,7 @@ import {
 } from './care.js';
 import { InputError, PENDING, PENDING_STATUSES, clip, logEvent, spendRow, applyTriage, askQuestion } from './triage.js';
 import { scoreManualTriage, careAnswer, runPatch } from './patch.js';
-import { estimatesFor, donatedTimeFor, decideEstimate } from './estimates.js';
+import { estimatesFor, donatedTimeFor, decideEstimate, canDecideEstimate } from './estimates.js';
 export { windowEnd };
 
 // Credit routes take JSON only (the Origin check for every client write is in fetch below).
@@ -483,9 +483,11 @@ export default {
       if (resource === 'people' && !rawId && method === 'GET') {
         if (user.role !== 'pt') return json({ error: 'Not found.' }, 404);
         const { results } = await db.prepare(
-          "SELECT email, name, role FROM users WHERE client_id = ? ORDER BY CASE role WHEN 'ed' THEN 0 ELSE 1 END, name"
+          "SELECT id, email, name, role FROM users WHERE client_id = ? ORDER BY CASE role WHEN 'ed' THEN 0 ELSE 1 END, name"
         ).bind(client.id).all();
-        return json({ people: results });
+        // Whether each person gets the estimate buttons, so "Preview as" shows what they really see.
+        const plan = await planFor(db, client.id);
+        return json({ people: results.map(({ id, ...u }) => ({ ...u, decides: canDecideEstimate({ id, role: u.role }, plan) })) });
       }
 
       // Positive Tribes previewing the bell as one of the client's people. Read-only: nothing is marked read.
