@@ -10,6 +10,7 @@ import {
 } from './care.js';
 import { InputError, PENDING, PENDING_STATUSES, clip, logEvent, spendRow, applyTriage, askQuestion } from './triage.js';
 import { scoreManualTriage, careAnswer, runPatch } from './patch.js';
+import { estimatesFor, decideEstimate } from './estimates.js';
 export { windowEnd };
 
 // Credit routes take JSON only (the Origin check for every client write is in fetch below).
@@ -84,7 +85,7 @@ async function listDocuments(db, clientId, everything) {
   return results.map(d => ({ ...d, visible: Boolean(d.visible) }));
 }
 
-async function listItems(db, clientId) {
+async function listItems(db, clientId, user) {
   const { results } = await db.prepare(
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
             i.status, i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id,
@@ -94,7 +95,8 @@ async function listItems(db, clientId) {
      WHERE i.client_id = ?
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
   ).bind(clientId).all();
-  return results.map(item => ({ ...item, done: Boolean(item.done) }));
+  const estimates = await estimatesFor(db, clientId, user);
+  return results.map(item => ({ ...item, done: Boolean(item.done), estimate: estimates.get(item.id) || null }));
 }
 
 async function listReleases(db, clientId) {
@@ -459,6 +461,17 @@ export default {
         return json({ error: 'Not found.' }, 404);
       }
 
+      // The client's decision on an estimate: only the director or the named contact, JSON only, same-origin only.
+      const decide = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/items\/(\d+)\/estimate\/decide$/);
+      if (decide) {
+        if (method !== 'POST') return json({ error: 'Not found.' }, 404);
+        if (!isJson(request)) throw new InputError('Send JSON.', 415);
+        const client = await scope(db, user, decide[1]);
+        const item = await requireItem(db, client.id, decide[2]);
+        const result = await decideEstimate({ db, env, url, client, user, item, input: await body(request) });
+        return json({ ok: true, ...result, items: await listItems(db, client.id, user) });
+      }
+
       const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications|status|care)(?:\/(\d+))?(?:\/(move|signoff|triage|answer|confirm|decline|ship|cancel))?$/);
       if (!match) return json({ error: 'Not found.' }, 404);
       const [, slug, resource, rawId, action] = match;
@@ -528,7 +541,7 @@ export default {
       }
       if (resource !== 'items') return json({ error: 'Not found.' }, 404);
 
-      if (!rawId && method === 'GET') return json({ items: await listItems(db, client.id) });
+      if (!rawId && method === 'GET') return json({ items: await listItems(db, client.id, user) });
 
       if (!rawId && method === 'POST') {
         const b = await body(request);
@@ -554,7 +567,7 @@ export default {
             db.prepare('INSERT INTO care_requests (item_id, client_id, care_plan_id) VALUES (last_insert_rowid(), ?, ?)').bind(client.id, plan.id),
             logEvent(db, client.id, null, 'added', { title, kind: 'request' }, clip(details), user)
           ]);
-          return json({ ok: true, items: await listItems(db, client.id), care: await careView(db, client, user) }, 201);
+          return json({ ok: true, items: await listItems(db, client.id, user), care: await careView(db, client, user) }, 201);
         }
         await db.batch([
           db.prepare(
@@ -563,7 +576,7 @@ export default {
           ).bind(client.id, project.id, kind, title, details, owner, tier, phase, client.id, project.id, kind, tier, user.name || user.email),
           logEvent(db, client.id, null, 'added', { title, kind }, clip(details), user)
         ]);
-        return json({ ok: true, items: await listItems(db, client.id) }, 201);
+        return json({ ok: true, items: await listItems(db, client.id, user) }, 201);
       }
 
       if (rawId && action === 'move' && method === 'POST') {
@@ -583,7 +596,7 @@ export default {
             db.prepare('UPDATE items SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND client_id = ?').bind(item.position, neighbor.id, client.id)
           ]);
         }
-        return json({ ok: true, items: await listItems(db, client.id) });
+        return json({ ok: true, items: await listItems(db, client.id, user) });
       }
 
       if (rawId && method === 'PATCH' && !action) {
@@ -633,7 +646,7 @@ export default {
           ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, releaseId, item.id, client.id),
           ...[statusEvent, change].filter(Boolean).map(([action, detail]) => logEvent(db, client.id, item.id, action, { title, kind: item.kind }, detail, user))
         ]);
-        return json({ ok: true, items: await listItems(db, client.id) });
+        return json({ ok: true, items: await listItems(db, client.id, user) });
       }
 
       if (rawId && method === 'DELETE' && !action) {
@@ -648,7 +661,7 @@ export default {
           db.prepare('DELETE FROM items WHERE id = ? AND client_id = ?').bind(item.id, client.id),
           logEvent(db, client.id, item.id, 'deleted', item, '', user)
         ]);
-        return json({ ok: true, items: await listItems(db, client.id) });
+        return json({ ok: true, items: await listItems(db, client.id, user) });
       }
 
       return json({ error: 'Not found.' }, 404);
