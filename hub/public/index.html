@@ -964,9 +964,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         h('p', { class: 'why' }, launched
           ? 'Good ideas, not promised. Now that this tool is live, ask for one with Request an improvement on your care plan.'
           : "Good ideas we'll weigh at each phase review. Not promised, and they never hold up sign-off."),
-        h('div', { class: 'stack' }, wishes.map(([key, label, group, active]) => [
+        h('div', { class: 'stack' }, wishes.flatMap(([key, label, group, active]) => [
           h('h3', { class: 'sub' }, h('span', { class: 'pill ' + key }, label), h('span', { class: 'meaning' }, tiers.find(t => t[0] === key)[2])),
-          active.map(i => card(i, group, isPt))]))));
+          ...active.map(i => card(i, group, isPt))]))));
     }
     // Newest first: most recently answered (or edited) on top.
     const finished = mine.filter(i => i.done).sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '') || b.id - a.id);
