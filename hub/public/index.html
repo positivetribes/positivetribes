@@ -110,6 +110,22 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .next h2{font-size:clamp(24px,4.5vw,32px)}
 .label{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--rust)}
 .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}
+/* A project with several client phases spans the row, its phases side by side; the others sit beneath. */
+.grid>.card.wide{grid-column:1/-1}
+.card.wide .steps-wrap{max-width:620px}
+.card.wide .releases{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:12px 0}
+.card.wide .releases li{border-top:0;padding:0 14px;border-left:1px solid var(--line)}
+.card.wide .releases li:first-child{border-left:0;padding-left:0}
+.card.wide .rel-head{flex-direction:column;gap:6px}
+/* When nothing waits on the client, and when every system is up, each is one quiet line. */
+.next.caught{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding-top:14px;padding-bottom:14px}
+.next.caught p{margin:0}
+.status-line>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.status-line>summary::-webkit-details-marker{display:none}
+.status-line>summary .ok-dot{width:10px;height:10px;border-radius:50%;background:#2e8b57;flex:none}
+.status-line>summary .more{margin-left:auto;font-size:14px;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
+.status-line[open]>summary .more{display:none}
+.status-line .docs{margin-top:10px}
 .steps{display:flex;gap:0;margin:12px 0 4px;list-style:none;padding:0}
 .steps li{flex:1;min-width:0;text-align:center;font-size:12px;color:var(--muted);position:relative;padding-top:22px;line-height:1.2;white-space:nowrap}
 .steps li span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
@@ -127,7 +143,7 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .steps li.done:before,.steps li.done:after,.steps li.now:after{background:var(--client)}
 .steps li.done:before{background:var(--client)}
 .steps li.now:before{background:var(--card);border:3px solid var(--client);width:16px;height:16px;top:3px}
-.steps li.now{color:var(--ink);font-weight:700;overflow:visible}
+.steps li.now{color:var(--ink);font-weight:700;overflow:visible;font-size:13px}
 /* Testing countdown: a client phase in UAT, at most 30 days, then signed off. */
 .uat{border-left:6px solid var(--client);display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px}
 .uat .left{font-family:var(--display);font-size:clamp(44px,9vw,64px);line-height:1;white-space:nowrap}
@@ -135,22 +151,11 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .uat .what{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:4px}
 .uat .what h2{font-size:22px;font-family:var(--font);font-weight:700}
 .uat .actions{flex-basis:100%}
+.uat .actions .signoff{margin-left:auto}
 .track{height:6px;border-radius:3px;background:var(--line);overflow:hidden;flex-basis:100%}
 .track span{display:block;height:100%;background:var(--client)}
 .uat.soon .track span,.uat.late .track span{background:var(--rust)}
-/* Build and Testing repeat once per client phase: a bracket under those two steps with one pip per phase. */
 .steps-wrap{position:relative;display:flow-root}
-.steps-wrap .zone{position:absolute;top:11px;height:24px;left:calc(var(--from) * 100% / var(--steps) + 4px);width:calc(var(--span) * 100% / var(--steps) - 8px);border-radius:12px;background:color-mix(in srgb,var(--client) 18%,transparent)}
-.steps-wrap .steps{position:relative}
-.loop{margin:2px 0 0 calc(var(--from) * 100% / var(--steps));width:calc(var(--span) * 100% / var(--steps));display:flex;flex-direction:column;align-items:center;gap:5px}
-.loop .bracket{width:calc(100% - 24px);height:8px;border:2px solid var(--client);border-top:0;border-radius:0 0 8px 8px;opacity:.7}
-.loop .pips{display:flex;gap:5px;list-style:none;margin:0;padding:0}
-.loop .pips li{width:10px;height:10px;border-radius:50%;background:var(--line)}
-.loop .pips li.done{background:var(--client)}
-.loop .pips li.now{background:var(--card);box-shadow:inset 0 0 0 3px var(--client)}
-.loop .pips li.ready{background:color-mix(in srgb,var(--client) 40%,var(--line))}
-.loop .note{font-size:12px;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:4px}
-.loop .note svg{width:12px;height:12px;flex:none}
 .doc-folder{border-top:1px solid var(--line);padding:10px 0}.doc-folder:first-of-type{border-top:0}
 .doc-folder>summary{cursor:pointer;font-weight:700;font-size:16px}
 .releases{list-style:none;margin:14px 0 0;padding:0;font-size:15px}
@@ -384,7 +389,6 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const COMMAND = 'command';
   let command = null;
   const LOOP = ['build', 'uat'];
-  const loopIcon = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = '<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'; return s; };
   const STAGES = { planned: 'Planned', building: 'Being built', waiting: 'Built, waiting its turn', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
   const state = { me: null, slug: '', client: null, projects: [], releases: [], signing: null, items: [], view: 'home', project: null, kind: 'question', filter: 'all', editing: null, confirming: null, flash: null, people: [], preview: null, documents: [], status: null, ideas: [], ideaFilter: 'new', ideaEditing: null, ideaFiles: [] };
 
@@ -606,13 +610,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           h('h2', {}, focus.title),
           focus.details && h('p', { class: 'muted' }, focus.details),
           h('div', {}, h('a', { class: 'btn', href: link('backlog', focus.id) }, focus.kind === 'question' ? 'Answer this' : 'See the problem')))
-      : h('div', { class: 'card next' },
-          h('div', { class: 'label' }, 'You’re all caught up'),
-          h('h2', {}, 'Nothing is waiting on you right now.'),
-          h('p', { class: 'muted' }, 'We’ll tell you here, and by email, as soon as we need something from you.'),
-          h('div', {}, h('a', { class: 'btn ghost', href: link('backlog') }, 'Suggest a change or ask a question')));
+      : h('div', { class: 'card next caught' },
+          h('p', {}, h('b', {}, 'You’re all caught up.'), h('span', { class: 'muted' }, ' We’ll tell you here, and by email, when we need something.')),
+          h('a', { class: 'btn ghost small', href: link('backlog') }, 'Suggest a change or ask a question'));
     return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero, carePlan(),
-      h('div', { class: 'grid' }, state.projects.map(p => {
+      // Projects with several client phases come first and span the row.
+      h('div', { class: 'grid' }, [...state.projects].sort((a, b) => (state.releases.filter(r => r.project_id === b.id).length > 1) - (state.releases.filter(r => r.project_id === a.id).length > 1)).map(p => {
         // A project without a prototype (such as a data migration) skips that step in its progress line.
         const steps = p.has_prototype === 0 ? STEPS.filter(s => s[0] !== 'prototype') : STEPS;
         const at = steps.findIndex(s => s[0] === p.phase);
@@ -623,20 +626,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         const loops = phases.length > 1;
         const current = phases.find(r => r.stage === 'uat') || phases.find(r => r.stage === 'building') || phases.find(r => !['signed_off', 'live'].includes(r.stage));
         const inLoop = loops && LOOP.includes(steps[Math.max(at, 0)][0]);
-        const loopVars = '--from:' + steps.findIndex(s => s[0] === LOOP[0]) + ';--span:' + LOOP.length + ';--steps:' + steps.length;
         const tip = (key, label, n) => (n < at ? label + ' \u00b7 done' : n > at ? label + ' \u00b7 coming up' : label) + (loops && LOOP.includes(key) && n !== at ? ', repeats for each phase' : '');
-        return h('div', { class: 'card' },
+        return h('div', { class: 'card' + (loops ? ' wide' : '') },
           h('h2', {}, p.name),
           h('p', { class: 'muted' }, 'Now: ' + steps[Math.max(at, 0)][1] + (inLoop && current ? ' ' + phaseName(current) + ' of ' + phases.length : '')),
-          h('div', { class: 'steps-wrap', style: loopVars },
-            loops && h('div', { class: 'zone', 'aria-hidden': 'true' }),
+          // A short line set per project, such as when the next step starts.
+          p.next_note && h('p', { class: 'meta' }, p.next_note),
+          h('div', { class: 'steps-wrap' },
             h('ol', { class: 'steps', 'aria-label': 'Progress for ' + p.name },
               steps.map(([key, label], n) => h('li', { class: n < at ? 'done' : n === at ? 'now' : '', ...(n === at ? { 'aria-current': 'step' } : { tabindex: '0' }) }, h('span', {}, tip(key, label, n)))))),
-          loops && h('div', { class: 'loop', style: loopVars },
-            h('div', { class: 'bracket', 'aria-hidden': 'true' }),
-            h('ul', { class: 'pips', 'aria-label': 'Build and testing, once per phase' }, phases.map(r =>
-              h('li', { class: ['signed_off', 'live'].includes(r.stage) ? 'done' : r.stage === 'uat' ? 'now' : r.stage === 'waiting' ? 'ready' : '', title: phaseName(r) + ': ' + STAGES[r.stage], 'aria-label': phaseName(r) + ': ' + STAGES[r.stage] }))),
-            h('div', { class: 'note' }, loopIcon(), 'Each of ' + phases.length + ' phases')),
           phases.length > 0 && h('ul', { class: 'releases', 'aria-label': 'Phases of ' + p.name }, phases.map(r =>
             h('li', {},
               h('div', { class: 'rel-head' },
@@ -647,7 +645,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
                 r.stage === 'signed_off' && r.signed_off_at && h('span', { class: 'meta' }, 'Signed off by ' + r.signed_off_by + ', ' + longDate(r.signed_off_at.slice(0, 10))),
                 isPt && r.url && h('a', { class: 'admin-link', href: r.url, target: '_blank', rel: 'noopener' }, 'Open'),
                 isPt && r.script_url && h('a', { class: 'admin-link', href: r.script_url, target: '_blank', rel: 'noopener' }, 'Test script'))))),
-          h('p', { class: 'meta' }, counts.length + ' open item' + (counts.length === 1 ? '' : 's')),
+          counts.length > 0 && h('p', { class: 'meta' }, counts.length + ' open item' + (counts.length === 1 ? '' : 's')),
           // Once launched, the live app replaces the prototype link; before then the production address stays hidden.
           isLive(p, phases) ? h('p', {}, h('a', { class: 'btn small', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Open ' + p.name))
             : p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')),
@@ -753,11 +751,20 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const st = state.status;
     if (!st || !st.checks || !st.checks.length) return null;
     const WORDS = { up: 'Running', down: 'Having problems', unknown: 'Unknown' };
-    return h('div', { class: 'card' }, h('h2', {}, 'System status'),
-      h('ul', { class: 'docs' }, st.checks.map(c => h('li', {},
-        h('div', { class: 'doc-title' }, h('b', {}, c.name), c.pct !== null && h('span', { class: 'meta' }, c.pct.toFixed(2) + '% up, last 90 days')),
-        h('span', { class: 'pill sys ' + c.state }, WORDS[c.state])))),
-      st.page_url && h('p', {}, h('a', { class: 'btn ghost small', href: st.page_url, target: '_blank', rel: 'noopener' }, 'Open the status page')));
+    const list = h('ul', { class: 'docs' }, st.checks.map(c => h('li', {},
+      h('div', { class: 'doc-title' }, h('b', {}, c.name), c.pct !== null && h('span', { class: 'meta' }, c.pct.toFixed(2) + '% up, last 90 days')),
+      h('span', { class: 'pill sys ' + c.state }, WORDS[c.state]))));
+    const page = st.page_url && h('p', {}, h('a', { class: 'btn ghost small', href: st.page_url, target: '_blank', rel: 'noopener' }, 'Open the status page'));
+    // All up: one line that opens to the details. Anything else: the full card, so a problem is never folded away.
+    if (st.checks.every(c => c.state === 'up')) {
+      const pcts = st.checks.map(c => c.pct).filter(n => n !== null);
+      return h('details', { class: 'card status-line' },
+        h('summary', {}, h('span', { class: 'ok-dot', 'aria-hidden': 'true' }), h('b', {}, 'All systems running'),
+          pcts.length > 0 && h('span', { class: 'meta' }, 'at least ' + Math.min(...pcts).toFixed(2) + '% up, last 90 days'),
+          h('span', { class: 'more' }, 'Details')),
+        list, page);
+    }
+    return h('div', { class: 'card' }, h('h2', {}, 'System status'), list, page);
   }
 
   // ---- Documents: proposals and other papers, as links ----
@@ -840,7 +847,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.project = r.project_id; state.kind = 'problem'; state.filter = 'all'; location.hash = link('backlog'); } }, 'Report a problem'),
             r.script_url && h('a', { class: 'btn ghost small', href: r.script_url, target: '_blank', rel: 'noopener' }, 'Test script'),
             r.url && h('a', { class: 'btn ghost small', href: r.url, target: '_blank', rel: 'noopener' }, 'Open ' + phaseName(r)),
-            canSign && h('button', { class: 'btn small', type: 'button', disabled: blocking.length > 0, title: blocking.length ? 'Fix the problems that stop sign-off first' : null, onclick: () => { state.signing = r.id; render(); } }, 'Sign off ' + phaseName(r))));
+            canSign && h('button', { class: 'btn small signoff', type: 'button', disabled: blocking.length > 0, title: blocking.length ? 'Fix the problems that stop sign-off first' : null, onclick: () => { state.signing = r.id; render(); } }, 'Sign off ' + phaseName(r))));
   }
 
   async function signOff(r) {
