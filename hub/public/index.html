@@ -650,6 +650,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const mine = open(state.items).filter(i => i.kind === 'question' && i.owner && i.owner.toLowerCase().includes(firstName()) && firstName());
     const focus = mine.find(i => i.tier === 'must') || mine[0]
       || open(state.items).find(i => i.kind === 'problem' && i.tier === 'must');
+    const testingNow = state.releases.some(r => r.stage === 'uat');
     const hero = focus
       ? h('div', { class: 'card next' },
           h('div', { class: 'label' }, 'Your next step'),
@@ -657,7 +658,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           focus.details && h('p', { class: 'muted' }, focus.details),
           h('div', {}, h('a', { class: 'btn', href: link('backlog', focus.id) }, focus.kind === 'question' ? 'Answer this' : 'See the problem')))
       : h('div', { class: 'card next caught' },
-          h('p', {}, h('b', {}, 'You’re all caught up.'), h('span', { class: 'muted' }, ' We’ll tell you here, and by email, when we need something.')),
+          // While a phase is in testing, the card above is the next step, so don't say "all caught up".
+          testingNow
+            ? h('p', {}, h('b', {}, 'Anything else?'), h('span', { class: 'muted' }, ' Questions and change ideas go here, apart from testing.'))
+            : h('p', {}, h('b', {}, 'You’re all caught up.'), h('span', { class: 'muted' }, ' We’ll tell you here, and by email, when we need something.')),
           h('a', { class: 'btn ghost small', href: link('backlog') }, 'Suggest a change or ask a question'));
     return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero, carePlan(),
       // Projects with several client phases come first and span the row; the rest share the next row evenly.
