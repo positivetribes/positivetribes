@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -354,4 +354,86 @@ test('status: only Positive Tribes replies; not doing closes it, another pick or
   assert.deepEqual(bell.items.filter(i => i.action === 'status').map(i => [i.title, i.detail]),
     [['Bigger buttons', 'Planned'], ['Bigger buttons', 'Not doing'], ['Dark mode', 'On the wishlist'], ['Bigger buttons', 'Built, ready to test']]);
   assert.ok(bell.items.some(i => i.action === 'answered' && i.detail === 'Out of scope for now.'));
+});
+
+
+// ---- Items follow their release ----
+
+function releaseSetup() {
+  const s = setup();
+  s.sqlite.exec(`
+    INSERT INTO releases (client_id, project_id, number, stage, uat_started) VALUES (1, 1, 1, 'waiting', NULL), (1, 1, 2, 'waiting', NULL);
+    INSERT INTO items (client_id, project_id, kind, title, tier, phase, status, done, position, added_by, release_id) VALUES
+      (1, 1, 'change', 'planned in 1', 'must', 'full', 'planned', 0, 1, 'Molly', 1),
+      (1, 1, 'change', 'planned in 2', 'must', 'full', 'planned', 0, 2, 'Molly', 2),
+      (1, 1, 'change', 'new in 1', 'must', 'full', 'new', 0, 3, 'Molly', 1),
+      (1, 1, 'change', 'not doing in 1', 'nice', 'full', 'declined', 1, 4, 'Molly', 1),
+      (1, 1, 'change', 'planned, no release', 'must', 'full', 'planned', 0, 5, 'Molly', NULL),
+      (1, 1, 'problem', 'fixing in 1', 'nice', 'full', 'planned', 0, 6, 'Molly', 1),
+      (1, 1, 'change', 'Eric added', 'idea', 'full', 'planned', 0, 7, 'Eric', 1);
+  `);
+  const row = title => ({ ...s.sqlite.prepare('SELECT status, done FROM items WHERE title = ?').get(title) });
+  return { ...s, row };
+}
+
+test('a release going to testing moves its Planned items to Built, and tells the client about their own', async () => {
+  const { sqlite, row } = releaseSetup();
+  sqlite.exec("UPDATE releases SET stage = 'uat', uat_started = date('now') WHERE id = 1");
+  assert.deepEqual(row('planned in 1'), { status: 'built', done: 0 });
+  assert.deepEqual(row('fixing in 1'), { status: 'built', done: 0 });
+  assert.deepEqual(row('planned in 2'), { status: 'planned', done: 0 }, 'another release is untouched');
+  assert.deepEqual(row('new in 1'), { status: 'new', done: 0 }, 'new stays new');
+  assert.deepEqual(row('not doing in 1'), { status: 'declined', done: 1 }, 'not doing stays closed');
+  assert.deepEqual(row('planned, no release'), { status: 'planned', done: 0 }, 'no release, no change');
+  const events = sqlite.prepare("SELECT item_title, detail FROM events WHERE action = 'status' ORDER BY item_title").all().map(e => ({ ...e }));
+  assert.deepEqual(events.map(e => e.item_title), ['Eric added', 'fixing in 1', 'planned in 1']);
+  assert.equal(events.find(e => e.item_title === 'fixing in 1').detail, 'Fixed, ready to retest');
+  // Moving the same release to testing again changes nothing more.
+  sqlite.exec("UPDATE releases SET stage = 'waiting' WHERE id = 1; UPDATE releases SET stage = 'uat' WHERE id = 1;");
+  assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM events WHERE action = 'status'").get().n, 3);
+});
+
+test('sign-off finishes the release\'s items, and the next phase starting moves its own', async () => {
+  const { call, sqlite, row } = releaseSetup();
+  sqlite.exec("UPDATE releases SET stage = 'uat', uat_started = date('now') WHERE id = 1");
+  const r = await call('molly@uep.org', '/api/c/uep/releases/1/signoff', 'POST', {});
+  assert.equal(r.status, 200, JSON.stringify(await r.clone().json()));
+  assert.deepEqual(row('planned in 1'), { status: 'built', done: 1 });
+  assert.deepEqual(row('fixing in 1'), { status: 'built', done: 1 });
+  assert.deepEqual(row('new in 1'), { status: 'new', done: 0 });
+  // Sign-off started Phase 2 testing in the same step, so its Planned item is now Built.
+  assert.deepEqual(row('planned in 2'), { status: 'built', done: 0 });
+});
+
+test('a care request is never closed by a release', async () => {
+  const { sqlite, row } = releaseSetup();
+  sqlite.exec(`
+    INSERT INTO care_plans (client_id, tier, monthly_credits, status, starts_on) VALUES (1, 'care', 6, 'setup', '2026-11-01');
+    INSERT INTO care_requests (client_id, care_plan_id, item_id) SELECT 1, 1, id FROM items WHERE title = 'planned in 1';
+  `);
+  sqlite.exec("UPDATE releases SET stage = 'signed_off' WHERE id = 1");
+  assert.deepEqual(row('planned in 1'), { status: 'planned', done: 0 });
+  assert.deepEqual(row('fixing in 1'), { status: 'built', done: 1 });
+});
+
+test('only Positive Tribes tags an item with a phase, and only one on the item\'s own list', async () => {
+  const { call, sqlite } = releaseSetup();
+  sqlite.exec("INSERT INTO releases (client_id, project_id, number, stage) VALUES (1, 2, 1, 'waiting'), (2, 3, 1, 'waiting')");
+  const id = sqlite.prepare("SELECT id FROM items WHERE title = 'planned, no release'").get().id;
+  assert.equal((await call('molly@uep.org', `/api/c/uep/items/${id}`, 'PATCH', { release_id: 1 })).status, 403);
+  assert.equal((await call('eric@positivetribes.org', `/api/c/uep/items/${id}`, 'PATCH', { release_id: 3 })).status, 400, 'another list');
+  assert.equal((await call('eric@positivetribes.org', `/api/c/uep/items/${id}`, 'PATCH', { release_id: 4 })).status, 400, 'another client');
+  const ok = await call('eric@positivetribes.org', `/api/c/uep/items/${id}`, 'PATCH', { release_id: 2 });
+  assert.equal(ok.status, 200);
+  const item = (await ok.json()).items.find(i => i.id === id);
+  assert.equal(item.release_id, 2);
+  assert.equal(item.release_number, 2);
+  // Tagging is internal: it logs nothing for the client's bell.
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM events WHERE item_id = ?').get(id).n, 0);
+  // Moving the item to another list clears the tag; clearing it by hand works too.
+  await call('eric@positivetribes.org', `/api/c/uep/items/${id}`, 'PATCH', { project_id: 2 });
+  assert.equal(sqlite.prepare('SELECT release_id FROM items WHERE id = ?').get(id).release_id, null);
+  await call('eric@positivetribes.org', `/api/c/uep/items/${id}`, 'PATCH', { project_id: 1, release_id: 1 });
+  await call('eric@positivetribes.org', `/api/c/uep/items/${id}`, 'PATCH', { release_id: null });
+  assert.equal(sqlite.prepare('SELECT release_id FROM items WHERE id = ?').get(id).release_id, null);
 });

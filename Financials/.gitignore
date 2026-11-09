@@ -1,0 +1,4 @@
+# Financial records never go in git; only the guidance file is tracked.
+*
+!.gitignore
+!CLAUDE.md

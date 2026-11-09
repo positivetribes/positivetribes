@@ -87,8 +87,10 @@ async function listDocuments(db, clientId, everything) {
 async function listItems(db, clientId) {
   const { results } = await db.prepare(
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
-            i.status, i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id
+            i.status, i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id,
+            i.release_id, r.number AS release_number, r.name AS release_name
      FROM items i JOIN projects p ON p.id = i.project_id
+     LEFT JOIN releases r ON r.id = i.release_id AND r.client_id = i.client_id
      WHERE i.client_id = ?
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
   ).bind(clientId).all();
@@ -110,6 +112,15 @@ async function requireItem(db, clientId, value) {
     && await db.prepare('SELECT * FROM items WHERE id = ? AND client_id = ?').bind(id, clientId).first();
   if (!item) throw new InputError('Item not found.', 404);
   return item;
+}
+
+// A release an item can ship in: one of this client's, on the item's own list.
+async function requireRelease(db, clientId, projectId, value) {
+  const id = Number(value);
+  const release = Number.isSafeInteger(id) && id > 0
+    && await db.prepare('SELECT id FROM releases WHERE id = ? AND client_id = ? AND project_id = ?').bind(id, clientId, projectId).first();
+  if (!release) throw new InputError('Choose one of this list\'s phases.');
+  return release;
 }
 
 async function requireProject(db, clientId, value) {
@@ -587,6 +598,13 @@ export default {
         const owner = b.owner === undefined ? item.owner : text(b.owner, 60, { label: 'Who answers' });
         const answer = b.answer === undefined ? item.answer : text(b.answer, 2000, { label: 'Answer' });
         const projectId = b.project_id === undefined ? item.project_id : (await requireProject(db, client.id, b.project_id)).id;
+        // Which phase it ships in: only Positive Tribes sets it, and it follows the item to another list only by being cleared.
+        let releaseId = item.release_id ?? null;
+        if (b.release_id !== undefined) {
+          if (user.role !== 'pt') throw new InputError('Only Positive Tribes sets the phase it ships in.', 403);
+          if (!STATUS_NAMES[item.kind]) throw new InputError('Only suggested changes and test problems ship in a phase.');
+          releaseId = b.release_id === null ? null : (await requireRelease(db, client.id, projectId, b.release_id)).id;
+        } else if (projectId !== item.project_id) releaseId = null;
         // Status is Positive Tribes' reply to a suggestion or problem. Not doing it closes the item; picking any other
         // status reopens one that was declined; reopening an item by hand starts it over as new.
         let status = item.status;
@@ -610,9 +628,9 @@ export default {
         const change = changeOf(item, { title, details, owner, answer, done: statusEvent ? item.done : doneNow, tier, phase, project_id: projectId });
         await db.batch([
           db.prepare(
-            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, release_id = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND client_id = ?`
-          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, item.id, client.id),
+          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, releaseId, item.id, client.id),
           ...[statusEvent, change].filter(Boolean).map(([action, detail]) => logEvent(db, client.id, item.id, action, { title, kind: item.kind }, detail, user))
         ]);
         return json({ ok: true, items: await listItems(db, client.id) });

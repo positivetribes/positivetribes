@@ -1074,7 +1074,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const statusPill = tracked && !(item.done && !declined) && (item.status === 'new'
       ? isPt && h('span', { class: 'pill status reply' }, 'Needs a reply')
       : h('span', { class: 'pill status ' + item.status }, !isPt && item.status === 'built' ? 'Ready to test' : statusName(item)));
-    const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), statusPill, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
+    const shipsIn = tracked && item.release_id && !item.done && h('span', { class: 'pill phase' }, 'Ships in ' + phaseName({ name: item.release_name, number: item.release_number }));
+    const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), statusPill, shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
     // Positive Tribes picks the status in one tap. Not doing closes it; anything else reopens a declined one.
     const picker = isPt && tracked && (!item.done || declined) && h('select', { class: 'status-pick', 'aria-label': 'Status for ' + item.title, onchange: e => act(base() + '/items/' + item.id, patch({ status: e.target.value })) },
       STATUS_NAMES[item.kind].map(([k]) => h('option', { value: k, ...(item.status === k ? { selected: true } : {}) }, statusName(item, k))));
@@ -1119,6 +1120,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const answer = h('textarea', { maxlength: 2000, id: 'e-answer' }, item.answer);
     const done = h('input', { type: 'checkbox', id: 'e-done', ...(item.done ? { checked: true } : {}) });
     const list = h('select', { id: 'e-project' }, state.projects.map(p => h('option', { value: p.id, ...(p.id === item.project_id ? { selected: true } : {}) }, p.name)));
+    // Positive Tribes tags a change or problem with the phase it ships in; the status then follows that phase by itself.
+    const taggable = viewer().role === 'pt' && Boolean(STATUS_NAMES[item.kind]);
+    const shipsSel = h('select', { id: 'e-release' }, h('option', { value: '' }, 'Not tied to a phase'),
+      state.releases.filter(r => r.project_id === item.project_id && r.stage !== 'signed_off' && r.stage !== 'live' || r.id === item.release_id)
+        .map(r => h('option', { value: r.id, ...(r.id === item.release_id ? { selected: true } : {}) }, phaseName(r))));
     // Patch drafts a reply and suggests a status. Positive Tribes reads, edits and saves; nothing is sent by Patch itself.
     const canDraft = viewer().role === 'pt' && !state.preview && (item.kind === 'change' || item.kind === 'problem');
     const STATUS_WORD = { planned: 'Planned', built: 'Built, ready to test', declined: 'Not doing' };
@@ -1150,6 +1156,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       const c = { title: title.value, details: details.value, project_id: Number(list.value) };
       if (asks) Object.assign(c, { owner: owner.value, answer: answer.value, done: done.checked });
       if (replies) c.answer = answer.value;
+      if (taggable && Number(list.value) === item.project_id && String(item.release_id || '') !== shipsSel.value) c.release_id = shipsSel.value ? Number(shipsSel.value) : null;
       const used = draft, setStatus = used && statusPick.checked && STATUS_WORD[used.status] ? used.status : '';
       if (setStatus) c.status = setStatus;
       await act(base() + '/items/' + item.id, patch(c));
@@ -1162,6 +1169,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       (asks || replies) && h('div', {}, h('label', { for: 'e-answer' }, replies ? 'Our reply' : item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
       canDraft && h('div', { class: 'stack' }, draftButton, suggestion),
       state.projects.length > 1 && h('div', {}, h('label', { for: 'e-project' }, 'Project'), list),
+      taggable && h('div', {}, h('label', { for: 'e-release' }, 'Ships in'), shipsSel, h('p', { class: 'muted' }, 'When this phase goes to testing, a Planned item becomes Ready to test; when it is signed off, the item is done.')),
       asks && h('label', { for: 'e-done', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, done, 'This is ' + DONE_WORD[item.kind]),
       h('div', { class: 'row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.editing = null; render(); } }, 'Cancel')));
   }
