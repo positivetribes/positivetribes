@@ -82,6 +82,8 @@ p{margin:0}
 .hero:before{content:"";display:block;width:56px;height:5px;border-radius:3px;background:var(--client);margin-bottom:14px}
 .eyebrow{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 h1{font-size:clamp(30px,6vw,44px);margin-top:4px}
+/* In a client workspace the name is a label; the testing countdown below it is what people come for. */
+.hero.ws{padding:12px 0 16px}.hero.ws h1{font-size:clamp(26px,4.5vw,36px)}
 nav.tabs{display:flex;gap:4px;margin:6px 0 22px;overflow-x:auto}
 nav.tabs a{padding:12px 16px;text-decoration:none;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
 nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
@@ -579,7 +581,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     renderBar();
     const waiting = open(state.items).filter(i => i.kind === 'question').length;
     $('main').replaceChildren(
-      h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Your workspace',
+      h('div', { class: 'hero ws' }, h('div', { class: 'eyebrow' }, 'Your workspace',
         state.client.salesforce_url && [' \u00b7 ', h('a', { class: 'eb-sf', href: state.client.salesforce_url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Open Salesforce (opens in a new tab)' }, 'Salesforce \u2197')]), h('h1', {}, state.client.name)),
       h('nav', { class: 'tabs', 'aria-label': 'Sections' },
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
@@ -804,7 +806,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const waiting = state.releases.find(x => x.project_id === r.project_id && x.number > r.number && x.stage === 'waiting');
     const problems = open(state.items.filter(i => i.project_id === r.project_id && i.kind === 'problem'));
     const blocking = problems.filter(i => i.tier === 'must');
-    const big = left == null ? 'Testing' : left > 1 ? left + ' days left' : left === 1 ? '1 day left' : left === 0 ? 'Due today' : -left + (left === -1 ? ' day' : ' days') + ' over';
+    // The big number counts the same days as the due line under it (business days for business-day windows).
+    const unit = business ? ' business day' : ' day';
+    const big = left == null ? 'Testing' : left === 0 ? 'Due today' : left > 0 ? left + unit + (left === 1 ? '' : 's') + ' left' : -left + unit + (left === -1 ? '' : 's') + ' over';
     // Under the agreement, a phase with auto_accept is accepted on its due date unless problems are listed by then.
     const acceptance = r.auto_accept && r.uat_due && (problems.length
       ? (problems.length === 1 ? 'A problem is' : problems.length + ' problems are') + ' listed, so ' + phaseName(r) + ' is accepted once ' + (problems.length === 1 ? 'it is' : 'they are') + ' fixed and signed off.'
