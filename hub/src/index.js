@@ -329,7 +329,8 @@ export default {
         const { results: clients } = user.role === 'pt'
           ? await db.prepare('SELECT slug, name, accent, status FROM clients ORDER BY name').all()
           : await db.prepare('SELECT slug, name, accent, status FROM clients WHERE id = ?').bind(user.client_id).all();
-        return json({ user: { email: user.email, name: user.name, role: user.role }, clients });
+        // Positive Tribes' own Salesforce, for the command center link; only Positive Tribes is told it.
+        return json({ user: { email: user.email, name: user.name, role: user.role }, clients, ...(user.role === 'pt' ? { salesforce_url: safeSalesforceUrl(env.SF_DOMAIN) } : {}) });
       }
 
       // The bell, for a client's people. Positive Tribes' bell is the command center Inbox.
