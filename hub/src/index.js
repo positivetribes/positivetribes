@@ -632,6 +632,12 @@ export default {
         } else if (item.done && !done) status = 'new';
         // A care request finishes through its own steps (ship, cancel, decline) and stays on the tool it was asked for,
         // so its credits and the "shipped this month" meter always match what really happened.
+        // While an estimate waits for the director, the client decides through it, not around it: no closing the item,
+        // moving its phase (Full build would add it without approving the price) or moving it to another list.
+        if (user.role !== 'pt' && (doneNow !== item.done || phase !== item.phase || projectId !== item.project_id)) {
+          const waiting = await db.prepare("SELECT 1 FROM change_estimates WHERE item_id = ? AND client_id = ? AND status = 'offered'").bind(item.id, client.id).first();
+          if (waiting) throw new InputError('This change has an estimate waiting. Your director decides with Add it now or Not now.', 409);
+        }
         if (doneNow !== item.done || projectId !== item.project_id) {
           const care = await db.prepare('SELECT 1 FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id).first();
           if (care) throw new InputError('This is a care request: it closes when it ships or is cancelled, and stays on its tool.', 409);
