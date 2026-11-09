@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 import { database } from './helpers.mjs';
-import { minutesFromHours, priceCentsOf, creditsOf, hoursLabel, moneyLabel, canDecideEstimate } from '../src/estimates.js';
+import { minutesFromHours, priceCentsOf, creditsOf, hoursLabel, moneyLabel, canDecideEstimate, donatedTotals } from '../src/estimates.js';
 
 const OPP = '006Pr00000c8GsvIAE', ACCOUNT = '001Pr00000yy8o9IAA';
 
@@ -286,6 +286,18 @@ test('approving creates one Salesforce Task on the project\'s Opportunity, and n
   assert.equal(calls.filter(c => c.url.endsWith('/sobjects/Task')).length, 1);
 });
 
+test('a donated change\'s Salesforce Task says schedule it, no invoice', async t => {
+  const { env, estimate, offer, decide } = setup();
+  sfEnv(env);
+  const calls = withSalesforce(t, u => u.includes('/oauth2/token') ? ok({ access_token: 'x', instance_url: 'https://sf.example' }) : ok({ id: '00TPr0000181mxGMAQ' }));
+  await estimate(1, 1, { donated: true });
+  await offer(1);
+  await decide('molly@uep.org', 1, 'now');
+  const task = JSON.parse(calls.find(c => c.url.endsWith('/sobjects/Task')).body);
+  assert.match(task.Subject, /\(1 hour, donated, \$50 value\)/);
+  assert.match(task.Description, /no invoice/);
+});
+
 test('a Salesforce failure keeps the decision, records why, and can be retried', async t => {
   const { env, call, sent, decide, row, PT } = setup();
   sfEnv(env);
@@ -314,6 +326,82 @@ test('a preview host never writes Salesforce Tasks', async t => {
   await sent();
   assert.equal((await decide('molly@uep.org', 1, 'now')).status, 200);
   assert.equal(calls.length, 0);
+});
+
+// ---- Donated changes ----
+
+test('a donated estimate shows its value as donated, offers no after-launch, and counts once approved', async () => {
+  const { env, call, estimate, offer, decide, row, item, events, PT } = setup();
+  assert.equal((await estimate(1, 1, { donated: 'yes' })).status, 400, 'donated is true or false');
+  assert.equal((await estimate(1, 1, { donated: true })).status, 201);
+  await offer(1);
+  assert.equal(events('estimate_offered')[0].detail, 'About 1 hour · donated ($50 value)');
+  const molly = (await call('molly@uep.org', 'c/uep/items')).body.items.find(i => i.id === 1).estimate;
+  assert.equal(molly.donated, true);
+  assert.equal(molly.price_label, '$50', 'the value, not a charge');
+  assert.equal(molly.later_ok, false, 'nothing to put off to the care plan');
+  assert.equal((await decide('molly@uep.org', 1, 'later')).status, 409);
+  assert.deepEqual(await donatedTotals(env.DB), [], 'offered is not donated yet');
+  assert.equal((await decide('molly@uep.org', 1, 'now')).status, 200);
+  assert.equal(row(1).status, 'approved_now');
+  assert.equal(item(1).phase, 'full');
+  assert.equal(events('estimate_decided')[0].detail, 'Add it now · 1 hour · donated ($50 value)');
+  const totals = await donatedTotals(env.DB);
+  assert.deepEqual(totals.map(t => [t.slug, t.minutes, t.value_cents]), [['uep', 60, 5000]]);
+  assert.equal((await call(PT, 'admin/estimates')).body.toHandle[0].donated, 1);
+});
+
+test('re-estimating can turn a donation on or off; not now and withdrawn never count', async () => {
+  const { env, estimate, offer, decide, row, call, PT } = setup();
+  await estimate(1, 2, { donated: true });
+  await estimate(1, 2);
+  assert.equal(row(1).donated, 0, 'leaving it out means charged');
+  await estimate(1, 2, { donated: true });
+  await offer(1);
+  await decide('molly@uep.org', 1, 'not_now', 3);
+  await estimate(2, 1, { donated: true });
+  await offer(2);
+  await call(PT, 'admin/items/2/estimate/withdraw', 'POST', {});
+  assert.deepEqual(await donatedTotals(env.DB), []);
+});
+
+test('donated time: only Positive Tribes logs it, any item, everyone on the hub sees it, and it is totalled by year', async () => {
+  const { env, sqlite, call, events, PT } = setup();
+  const log = (who, id, payload) => call(who, `admin/items/${id}/donated-time`, 'POST', payload);
+  assert.equal((await log('molly@uep.org', 3, { hours: 1 })).status, 404, 'clients cannot reach the command center');
+  assert.equal((await log(PT, 3, { hours: 0.25 })).status, 400);
+  assert.equal((await log(PT, 999, { hours: 1 })).status, 404);
+  assert.equal((await log(PT, 3, { hours: 1.5, note: 'Matching-gift prompt' })).status, 201, 'a problem fix counts too');
+  assert.equal((await log(PT, 4, { hours: 1 })).status, 201, 'another client');
+  assert.equal(events('donated_time')[0].detail, '1.5 hours donated ($75 value)');
+  const sam = (await call('sam@uep.org', 'c/uep/items')).body.items.find(i => i.id === 3);
+  assert.deepEqual(sam.donated_time.map(d => [d.hours_label, d.value_label, d.note, d.created_by]), [['1.5 hours', '$75', 'Matching-gift prompt', undefined]]);
+  assert.equal((await call('sam@uep.org', 'c/uep/items')).body.items.find(i => i.id === 1).donated_time.length, 0);
+  assert.equal((await call('dana@safe.org', 'c/safe/items')).body.items.find(i => i.id === 4).donated_time.length, 1);
+  assert.ok(!(await call('dana@safe.org', 'c/safe/items')).body.items.some(i => i.id === 3), 'no other client\'s time');
+  const bell = (await call('sam@uep.org', 'notifications')).body.items.find(i => i.action === 'donated_time');
+  assert.equal(bell.detail, '1.5 hours donated ($75 value)');
+  let totals = await donatedTotals(env.DB);
+  assert.deepEqual(totals.map(t => [t.slug, t.value_label]), [['uep', '$75'], ['safe', '$50']]);
+  sqlite.exec("UPDATE donated_time SET created_at = '2025-12-31 10:00:00' WHERE item_id = 4");
+  totals = await donatedTotals(env.DB, '2026-01-01');
+  assert.deepEqual(totals.map(t => t.slug), ['uep'], 'last year is left out');
+  const id = sqlite.prepare('SELECT id FROM donated_time WHERE item_id = 3').get().id;
+  assert.equal((await call('molly@uep.org', `admin/donated-time/${id}`, 'DELETE')).status, 404);
+  assert.equal((await call(PT, `admin/donated-time/${id}`, 'DELETE')).status, 200);
+  assert.equal((await call(PT, `admin/donated-time/${id}`, 'DELETE')).status, 404);
+});
+
+test('an item with an approved estimate or donated time stays on record; one with only a draft can be deleted', async () => {
+  const { call, sent, estimate, decide, row, PT } = setup();
+  await estimate(2, 1);
+  assert.equal((await call(PT, 'c/uep/items/2', 'DELETE')).status, 200, JSON.stringify((await call(PT, 'c/uep/items')).body.error || ''));
+  assert.equal(row(2), undefined, 'its draft goes with it');
+  await sent(1, 1);
+  await decide('molly@uep.org', 1, 'now');
+  assert.equal((await call(PT, 'c/uep/items/1', 'DELETE')).status, 409);
+  await call(PT, 'admin/items/3/donated-time', 'POST', { hours: 1 });
+  assert.equal((await call(PT, 'c/uep/items/3', 'DELETE')).status, 409);
 });
 
 test('Patch is never given an estimate', () => {

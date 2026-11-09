@@ -833,25 +833,60 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       state.items = data.items; render();
     } catch (e) { showError(e.message); try { await reloadItems(); render(); } catch {} }
   }
+  // Time Positive Tribes gave on this card without an estimate. Everyone on the client's hub sees it.
+  function donatedBlock(item) {
+    const list = item.donated_time || [], ptNow = viewer().role === 'pt' && !state.preview;
+    const nodes = list.map(d => h('p', { class: 'meta' }, h('b', {}, 'Donated by Positive Tribes: '), d.hours_label + ' (' + d.value_label + ' value)', d.note ? ' · ' + d.note : '',
+      ptNow && ' ', ptNow && h('button', { class: 'btn ghost small', type: 'button', onclick: () => donatedAct('/admin/donated-time/' + d.id, 'DELETE') }, 'Remove')));
+    if (ptNow && state.giving === item.id) {
+      const hours = h('input', { type: 'number', min: 0.5, max: 200, step: 0.5, 'aria-label': 'Hours donated' });
+      const note = h('input', { type: 'text', maxlength: 200, placeholder: 'What it covered (the client sees this)', 'aria-label': 'What it covered' });
+      nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours donated ', hours), note, h('div', { class: 'actions' },
+        h('button', { class: 'btn small', type: 'button', onclick: () => hours.value ? donatedAct('/admin/items/' + item.id + '/donated-time', 'POST', { hours: Number(hours.value), note: note.value }) : showError('Enter the hours first.') }, 'Log donated time'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.giving = null; render(); } }, 'Cancel'))));
+    }
+    return nodes.length ? h('div', { class: 'estimate stack' }, nodes) : null;
+  }
+  async function donatedAct(path, method, payload) {
+    showError('');
+    try {
+      await api(path, { method, body: payload ? JSON.stringify(payload) : undefined });
+      state.giving = null;
+      await reloadItems(); render();
+    } catch (e) { showError(e.message); }
+  }
+  // Donated so far on one project: approved donated changes plus logged donated time.
+  function donatedTotal(items) {
+    let minutes = 0, cents = 0;
+    for (const i of items) {
+      if (i.estimate && i.estimate.donated && i.estimate.status === 'approved_now') { minutes += i.estimate.hours * 60; cents += i.estimate.price_cents; }
+      for (const d of i.donated_time || []) { minutes += d.minutes; cents += d.value_cents; }
+    }
+    if (!minutes) return null;
+    const hrs = minutes / 60, dollars = cents / 100;
+    return h('p', { class: 'meta donated-total' }, h('b', {}, 'Donated by Positive Tribes so far: '),
+      (hrs === 1 ? '1 hour' : (Number.isInteger(hrs) ? hrs : hrs.toFixed(1)) + ' hours') + ' · $' + dollars.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' value');
+  }
+
   function estimateBlock(item) {
     if (item.kind !== 'change' || item.done) return null;
     const e = item.estimate, ptNow = viewer().role === 'pt' && !state.preview;
     const nodes = [];
-    const summary = () => h('p', { class: 'big' }, 'About ' + e.hours_label + ' · ' + e.price_label);
+    const summary = () => h('p', { class: 'big' }, 'About ' + e.hours_label + ' · ' + (e.donated ? e.price_label + ' value, donated by Positive Tribes' : e.price_label));
     const notes = () => [e.schedule_note && h('p', { class: 'muted' }, e.schedule_note), e.scope_note && h('p', { class: 'muted' }, e.scope_note)];
     if (e && (e.status === 'offered' || ['approved_now', 'approved_later', 'not_now'].includes(e.status))) {
       nodes.push(h('b', {}, 'Estimate for this change'), summary(), ...notes());
       if (e.status === 'offered') {
         if (e.can_decide && !state.preview) {
           nodes.push(h('div', { class: 'actions' },
-            h('button', { class: 'btn small', type: 'button', onclick: () => decideEstimate(item, 'now') }, 'Add it now · ' + e.price_label),
+            h('button', { class: 'btn small', type: 'button', onclick: () => decideEstimate(item, 'now') }, 'Add it now · ' + (e.donated ? 'free' : e.price_label)),
             e.later_ok && h('button', { class: 'btn ghost small', type: 'button', onclick: () => decideEstimate(item, 'later') }, 'After launch · ' + e.credits_label),
             h('button', { class: 'btn ghost small', type: 'button', onclick: () => decideEstimate(item, 'not_now') }, 'Not now')));
-          nodes.push(h('p', { class: 'meta' }, 'Adding it now puts ' + e.price_label + ' on your next invoice and into the build.' + (e.later_ok ? ' After launch uses ' + e.credits_label + ' from your care plan.' : '')));
+          nodes.push(h('p', { class: 'meta' }, e.donated ? 'Positive Tribes covers this one: adding it puts it into the build, with nothing on your invoice.' : 'Adding it now puts ' + e.price_label + ' on your next invoice and into the build.' + (e.later_ok ? ' After launch uses ' + e.credits_label + ' from your care plan.' : '')));
           if (e.later_note) nodes.push(h('p', { class: 'meta' }, e.later_note));
         } else nodes.push(h('p', { class: 'meta' }, ptNow ? 'Waiting for the client’s director to decide.' : 'Your director decides whether to add this.'));
       } else {
-        const words = { approved_now: 'Added to the build · ' + e.price_label, approved_later: 'Planned for after launch · ' + e.credits_label, not_now: 'Not now: it stays on the wishlist' }[e.status];
+        const words = { approved_now: 'Added to the build · ' + (e.donated ? 'donated (' + e.price_label + ' value)' : e.price_label), approved_later: 'Planned for after launch · ' + e.credits_label, not_now: 'Not now: it stays on the wishlist' }[e.status];
         nodes.push(h('p', {}, h('b', {}, words), e.decided_by ? ' · ' + e.decided_by : '', e.decided_at ? ', ' + shortDate(e.decided_at.slice(0, 10)) : ''));
       }
     }
@@ -868,8 +903,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           const hours = h('input', { type: 'number', min: 0.5, max: 200, step: 0.5, value: e ? e.hours : '', 'aria-label': 'Hours' });
           const schedule = h('input', { type: 'text', maxlength: 200, value: e ? e.schedule_note : '', placeholder: 'Schedule impact, e.g. adds about a week', 'aria-label': 'Schedule impact' });
           const scope = h('input', { type: 'text', maxlength: 200, value: e ? e.scope_note : '', placeholder: 'Why it is outside the agreement (optional)', 'aria-label': 'Why it is outside the agreement' });
-          nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours ', hours), schedule, scope, h('div', { class: 'actions' },
-            h('button', { class: 'btn small', type: 'button', onclick: () => hours.value ? estimateAct(item, '', 'PUT', { hours: Number(hours.value), schedule_note: schedule.value, scope_note: scope.value }) : showError('Enter the hours first.') }, 'Save estimate'),
+          const gift = h('input', { type: 'checkbox', ...(e && e.donated ? { checked: true } : {}) });
+          nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours ', hours), schedule, scope, h('label', {}, gift, ' Donate this (Positive Tribes covers it)'), h('div', { class: 'actions' },
+            h('button', { class: 'btn small', type: 'button', onclick: () => hours.value ? estimateAct(item, '', 'PUT', { hours: Number(hours.value), schedule_note: schedule.value, scope_note: scope.value, donated: gift.checked }) : showError('Enter the hours first.') }, 'Save estimate'),
             h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = null; render(); } }, 'Cancel'))));
         } else {
           nodes.push(h('div', { class: 'actions' },
@@ -1011,6 +1047,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       const n = tally(here.filter(i => i.kind === key)).length;
       return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, label, n > 0 && h('span', { class: 'n' }, String(n)));
     })));
+    const given = donatedTotal(here);
+    if (given) nodes.push(given);
     // The form stays closed behind one button until someone wants it, so the list comes first.
     const careMode = kind === 'request' && state.care && state.care.plan;
     const opener = careMode ? 'Request an improvement' : { question: 'Ask a question', change: 'Suggest a change', problem: 'Report a problem', request: 'Ask for help' }[kind];
@@ -1164,6 +1202,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position <= 0, 'aria-label': 'Move up: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('up')) }, 'Move up'),
           !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open(group).length - 1, 'aria-label': 'Move down: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('down')) }, 'Move down'),
           h('span', { class: 'spacer' }),
+          isPt && !state.preview && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.giving = item.id; render(); } }, 'Log donated time'),
           isPt && h('button', { class: 'btn ghost small danger', type: 'button', onclick: () => { state.confirming = item.id; render(); } }, 'Delete')))) : null;
     return h('article', { id: 'item-' + item.id, class: 'card item' + (item.done ? ' is-done' : '') },
       h('div', { class: 'actions' }, h('a', { class: 'item-no', href: item.legacy_id ? link('old', item.legacy_id) : link('backlog', item.id), title: 'Link to this card', 'aria-label': 'Item ' + itemNo(item) }, '#' + itemNo(item)), pills),
@@ -1173,6 +1212,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         long && h('button', { type: 'button', class: 'show-all', onclick: e => { const shut = answerText.classList.toggle('clamp'); e.target.textContent = shut ? 'Show all' : 'Show less'; } }, 'Show all')),
       careBlock(item, isPt),
       estimateBlock(item),
+      donatedBlock(item),
       h('div', { class: 'who' }, who, (item.kind === 'question' ? 'asked by ' : 'added by ') + (item.added_by || 'someone') + ', ' + date),
       h('div', { class: 'actions' },
         h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : isPt && item.kind === 'change' && !item.answer ? 'Reply' : 'Edit'),
@@ -1485,10 +1525,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         case 'care_answered': return `${who} answered the question about ${q(i.title)}`;
         case 'estimate_offered': return `Positive Tribes sent an estimate for ${q(i.title)}`;
         case 'estimate_decided': return `${who} decided on the estimate for ${q(i.title)}`;
+        case 'donated_time': return `Positive Tribes donated time to ${q(i.title)}`;
         default: return q(i.title);
       }
     }
-    const clientDetail = i => ['answered', 'idea_status', 'triaged', 'confirmed', 'shipped', 'cancelled', 'care_question', 'care_answered', 'estimate_offered', 'estimate_decided'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
+    const clientDetail = i => ['answered', 'idea_status', 'triaged', 'confirmed', 'shipped', 'cancelled', 'care_question', 'care_answered', 'estimate_offered', 'estimate_decided', 'donated_time'].includes(i.action) || (i.action === 'added' && i.kind === 'question') ? i.detail : '';
     // Inbox rows, for Positive Tribes.
     function ptText(i) {
       const who = i.actor || 'Someone';
@@ -1500,7 +1541,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         triaged: `sorted the care request ${q(i.title)}`, confirmed: `confirmed ${q(i.title)}`, declined: `chose not to go ahead with ${q(i.title)}`,
         shipped: `shipped ${q(i.title)}`, cancelled: `cancelled ${q(i.title)}`,
         care_question: `asked the client about ${q(i.title)}`, care_answered: `answered the question on ${q(i.title)}`,
-        estimate_decided: `decided on the estimate for ${q(i.title)}: ${i.detail}`, estimate_offered: `was sent an estimate for ${q(i.title)}`
+        estimate_decided: `decided on the estimate for ${q(i.title)}: ${i.detail}`, estimate_offered: `was sent an estimate for ${q(i.title)}`,
+        donated_time: `logged donated time on ${q(i.title)}: ${i.detail}`
       }[i.action] || `changed ${q(i.title)}`;
       return `${who} ${verb}` + (i.eventIds.length > 1 ? ` (${i.eventIds.length} changes)` : '');
     }

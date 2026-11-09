@@ -10,7 +10,7 @@ import {
 } from './care.js';
 import { InputError, PENDING, PENDING_STATUSES, clip, logEvent, spendRow, applyTriage, askQuestion } from './triage.js';
 import { scoreManualTriage, careAnswer, runPatch } from './patch.js';
-import { estimatesFor, decideEstimate } from './estimates.js';
+import { estimatesFor, donatedTimeFor, decideEstimate } from './estimates.js';
 export { windowEnd };
 
 // Credit routes take JSON only (the Origin check for every client write is in fetch below).
@@ -95,8 +95,8 @@ async function listItems(db, clientId, user) {
      WHERE i.client_id = ?
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
   ).bind(clientId).all();
-  const estimates = await estimatesFor(db, clientId, user);
-  return results.map(item => ({ ...item, done: Boolean(item.done), estimate: estimates.get(item.id) || null }));
+  const [estimates, donated] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user)]);
+  return results.map(item => ({ ...item, done: Boolean(item.done), estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [] }));
 }
 
 async function listReleases(db, clientId) {
@@ -656,8 +656,15 @@ export default {
         // A care request with credits held is cancelled (credits returned) before it can go; its ledger rows stay.
         const care = await db.prepare('SELECT status FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id).first();
         if (care?.status === 'queued') throw new InputError('Cancel this request first, so any credits are returned.', 409);
+        // An approved estimate or donated time is a record of what was agreed or given, so the item stays (mark it done).
+        const kept = await db.prepare(
+          `SELECT (SELECT COUNT(*) FROM change_estimates WHERE item_id = ?1 AND client_id = ?2 AND status IN ('approved_now', 'approved_later'))
+                + (SELECT COUNT(*) FROM donated_time WHERE item_id = ?1 AND client_id = ?2) AS n`
+        ).bind(item.id, client.id).first();
+        if (kept.n) throw new InputError('This item has an approved estimate or donated time on record. Mark it done instead.', 409);
         await db.batch([
           db.prepare('DELETE FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
+          db.prepare('DELETE FROM change_estimates WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
           db.prepare('DELETE FROM items WHERE id = ? AND client_id = ?').bind(item.id, client.id),
           logEvent(db, client.id, item.id, 'deleted', item, '', user)
         ]);

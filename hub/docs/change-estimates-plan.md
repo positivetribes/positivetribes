@@ -91,3 +91,69 @@ Client (the existing Origin check applies to all client writes):
 - Deploy, set UEP's rate (the $50 default), then estimate #133 and #134 so Molly can decide on the Nov 18 call.
 - Effort: about 5 to 6 hours, most of it the card UI and tests.
 - Afterwards: a Build inventory row in the Productization doc, and a pricing experiments row for the first approved estimate.
+
+## Addendum: donated changes (approved by Eric 2026-11-09, built on branch `donated-changes`)
+
+### Why
+
+Positive Tribes already gives work away (UEP's matching-gift prompt and Donate link went in "at no price change"), and none of it is recorded. Marking a change as donated keeps the same estimate record, shows the client what they received, and gives both sides a number: the client can report it as an in-kind contribution (their accountant decides whether it qualifies), and Positive Tribes can report it to funders. Donated services are generally not tax-deductible for the giver, so the value is in reporting, not a write-off.
+
+### What each person sees
+
+**Eric**, on a draft estimate: a "Donate this (Positive Tribes covers it)" checkbox. Only Positive Tribes can set it.
+
+**The client**, once sent:
+```
+Estimate
+About 1 hour · $50 value, donated by Positive Tribes
+[Add it now · free]  [Not now]
+```
+- The optional schedule note stays (decided 2026-11-09) and shows as on any estimate. A donated change still changes scope, so the director still approves it.
+- "After launch" is not offered: nothing is charged and no credits are used.
+- Bell: "Estimate: about 1 hour, donated ($50 value)".
+- Approval creates the Salesforce Task worded "schedule it (donated)", not "bill it".
+
+**Running totals**
+- On the client's hub (Questions & changes, per project): "Donated by Positive Tribes so far: 3.5 hours · $175 value". Everyone on the client's hub sees it, like prices.
+- In the command center: the total across clients for the year, for funder reports.
+
+**Donated time without an estimate.** "Log donated time" under More options on any card (Positive Tribes only): hours plus a short note. Covers extras given away without an estimate.
+
+**At project end (optional).** A one-page in-kind letter in the client's Documents listing each donated item, its hours and value.
+
+### Rules
+
+- Value uses the same hours × rate snapshot as a priced estimate; a donated estimate's `price_cents` is still the full value, and a flag says it is not charged.
+- Approved-and-donated plus logged donated time are the only things counted. Offered, withdrawn and Not now are not.
+- Patch never sees donations.
+
+### Data (migration 0027, additive)
+
+```sql
+ALTER TABLE change_estimates ADD COLUMN donated INTEGER NOT NULL DEFAULT 0 CHECK(donated IN (0,1));
+
+CREATE TABLE donated_time (            -- time given without an estimate
+  id INTEGER PRIMARY KEY,
+  client_id INTEGER NOT NULL REFERENCES clients(id),
+  item_id INTEGER REFERENCES items(id),
+  minutes INTEGER NOT NULL CHECK(minutes BETWEEN 30 AND 12000 AND minutes % 30 = 0),
+  rate_cents INTEGER NOT NULL,          -- snapshot
+  value_cents INTEGER NOT NULL,
+  note TEXT NOT NULL DEFAULT '',        -- max 200
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Decisions (Eric, 2026-11-09)
+
+1. The running total shows on the client's hub (per project) and in the command center (all clients, this year).
+2. "Log donated time" is built now.
+3. No soft limit.
+4. The in-kind letter waits until UEP's first project end.
+
+Built differently from the sketch above: `donated_time.item_id` is required (time is always logged on a card), and an item with an approved estimate or donated time can't be deleted (mark it done instead). That guard also fixed a bug from 0026: deleting an item with any estimate failed on D1, which enforces foreign keys.
+
+### Effort
+
+About 2 to 3 hours (flag, card wording, totals, Log donated time, tests), plus about an hour for the letter.

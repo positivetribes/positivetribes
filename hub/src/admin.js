@@ -10,7 +10,7 @@ import { TIERS, BOOST, planFor, ensureGrants, ledgerOf, balanceOf, careRequests,
 import { InputError } from './triage.js';
 import { patchAdmin, patchInbox, aiCost } from './patch.js';
 import { replyAdmin } from './reply.js';
-import { estimateAdmin, estimateLists } from './estimates.js';
+import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
 const TIME_ZONE = 'America/Denver';
@@ -758,7 +758,9 @@ export async function handleAdmin(request, env, url, who) {
       const carePending = env.DB ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM patch_decisions WHERE status = 'pending'").first()).n : 0;
       // A broken estimate query never hides Today.
       const estimates = env.DB ? await estimateLists(env.DB).catch(error => { console.error('admin_estimates_failed', error.message); return { waiting: [], toHandle: [], taskFailed: [] }; }) : { waiting: [], toHandle: [], taskFailed: [] };
-      return json({ ...view, testing, needsReply, estimates, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
+      // Donated by Positive Tribes this calendar year, per client, for funder reports.
+      const donated = env.DB ? await donatedTotals(env.DB, today.slice(0, 4) + '-01-01').catch(error => { console.error('admin_donated_failed', error.message); return []; }) : [];
+      return json({ ...view, testing, needsReply, estimates, donated, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });
