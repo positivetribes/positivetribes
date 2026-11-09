@@ -42,6 +42,18 @@ p{margin:0}
 .bell-wrap{position:relative}
 .bell{position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);cursor:pointer}
 .bell svg{width:22px;height:22px}
+.idea-btn{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-size:15px;font-weight:600;text-decoration:none;white-space:nowrap}
+.idea-btn:hover{border-color:var(--ink)}
+.idea-btn svg{width:20px;height:20px;flex:none}
+.idea-btn[aria-current=page]{border-color:var(--client);box-shadow:inset 0 -3px 0 var(--client)}
+.idea-btn .badge{margin-left:2px}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+.icon-btn:hover{border-color:var(--ink)}
+.icon-btn svg{width:20px;height:20px}
+.theme-moon{display:none}
+:root[data-theme=dark] .theme-sun{display:none}:root[data-theme=dark] .theme-moon{display:block}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .theme-sun{display:none}:root:not([data-theme=light]) .theme-moon{display:block}}
+@media (max-width:720px){.idea-btn .idea-text{display:none}.idea-btn{padding:0 11px}}
 .bell[aria-expanded=true]{border-color:var(--ink)}
 .bell-count{position:absolute;top:-6px;right:-6px;min-width:20px;padding:0 5px;border-radius:10px;background:var(--rust);color:#fff;font-size:12px;font-weight:700;line-height:20px;text-align:center}
 .bell-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:min(420px,calc(100vw - 28px));max-height:min(70vh,560px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px -8px rgba(0,0,0,.28);font-size:15px}
@@ -73,10 +85,6 @@ h1{font-size:clamp(30px,6vw,44px);margin-top:4px}
 nav.tabs{display:flex;gap:4px;margin:6px 0 22px;overflow-x:auto}
 nav.tabs a{padding:12px 16px;text-decoration:none;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
 nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
-nav.tabs a.tab-end{margin-left:auto;align-self:center;padding:6px 14px;min-height:36px;display:inline-flex;align-items:center;color:var(--bg);background:var(--ink);border:1px solid var(--ink);border-radius:10px;font-size:14px}
-nav.tabs a.tab-end:hover{opacity:.88}
-nav.tabs a.tab-end[aria-current=page]{color:var(--bg);border-color:var(--ink);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--client)}
-nav.tabs a.tab-end .badge{background:var(--bg);color:var(--ink)}
 .badge{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12px;line-height:20px;text-align:center}
 .stack{display:flex;flex-direction:column;gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
@@ -213,8 +221,9 @@ section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wra
 .empty{color:var(--muted);font-style:italic}
 details.done-list>summary{cursor:pointer;font-weight:600;padding:6px 0}
 select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;padding:5px 30px 5px 10px;text-overflow:ellipsis}
-.admin-bar{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;background:var(--soft);border-radius:12px;padding:8px 12px;margin:0 0 8px;font-size:14px;color:var(--muted)}
-.admin-label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-right:auto}
+/* The pickers keep a calm focus ring: browsers show it after every mouse pick, and rust reads as a warning there. */
+select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset:1px}
+.admin-bar{display:flex;align-items:center;justify-content:flex-end;gap:8px 16px;flex-wrap:wrap;background:var(--soft);border-radius:12px;padding:8px 12px;margin:0 0 8px;font-size:14px;color:var(--muted)}
 .admin-field{display:flex;align-items:center;gap:8px;font-weight:600}
 .admin-field select[hidden]{display:none}
 .admin-field:has(select[hidden]){display:none}
@@ -223,10 +232,6 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 .cc-bar{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:6px 0 22px}
 .cc-bar nav.tabs{margin:0;flex:1 1 auto}
 .cc-sync.late{color:var(--nice)}
-.cc-ideas{display:inline-flex;align-items:center;font-size:14px;font-weight:600;color:var(--bg);background:var(--ink);border:1px solid var(--ink);border-radius:10px;padding:6px 14px;min-height:36px;text-decoration:none;white-space:nowrap}
-.cc-ideas:hover{opacity:.88}
-.cc-ideas[aria-current=page]{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--client)}
-.cc-ideas .badge{background:var(--bg);color:var(--ink)}
 .seg.subnav{margin-bottom:18px}
 .seg a{padding:4px 12px;border-radius:9px;font-weight:600;font-size:14px;text-decoration:none;min-height:32px;display:inline-flex;align-items:center;color:var(--muted)}
 .seg a[aria-current=page]{background:var(--ink);color:var(--bg)}
@@ -345,10 +350,9 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 <div class="shell">
   <header class="top">
     <a class="brand" href="#/"><svg viewBox="0 0 152 152" aria-hidden="true"><circle cx="76" cy="22" r="22"/><circle cx="130" cy="76" r="22"/><circle cx="76" cy="130" r="22"/><circle cx="22" cy="76" r="22"/><circle class="core" cx="76" cy="76" r="22"/></svg><span>Positive Tribes</span></a>
-    <div class="tools"><div class="bell-wrap" id="bell-wrap" hidden><button class="bell" id="bell" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bell-panel" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="bell-count" id="bell-count" hidden></span></button><div class="bell-panel" id="bell-panel" role="region" aria-label="Notifications" hidden></div></div><span class="who" id="who"></span><button class="btn ghost small" id="theme" type="button" aria-label="Switch between light and dark">Light / dark</button></div>
+    <div class="tools"><a class="idea-btn" id="idea-btn" href="#/" hidden title="Suggest an improvement to this hub"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3Z"/></svg><span class="idea-text">Improve this hub</span><span class="badge" id="idea-count"></span></a><div class="bell-wrap" id="bell-wrap" hidden><button class="bell" id="bell" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bell-panel" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="bell-count" id="bell-count" hidden></span></button><div class="bell-panel" id="bell-panel" role="region" aria-label="Notifications" hidden></div></div><span class="who" id="who"></span><button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark" title="Light or dark"><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg></button></div>
   </header>
   <div class="admin-bar" id="admin-bar" hidden>
-    <span class="admin-label">Positive Tribes</span>
     <label class="admin-field">Client <select id="switch" class="client-switch" hidden></select></label>
     <label class="admin-field">Preview as <select id="preview" class="client-switch" hidden></select></label>
   </div>
@@ -503,6 +507,22 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('span', {}, 'Previewing as ', h('b', {}, state.preview.name), ' (' + ROLE_NAMES[state.preview.role] + ') \u00b7 read-only. They also need to be on the Access list to sign in.'),
       h('button', { type: 'button', onclick: () => setPreview('') }, 'Exit preview')] : []));
     $('who').textContent = viewer().name || viewer().email;
+    ideaButton();
+  }
+
+  // Improve this hub lives in the top bar: it is about the hub itself, like the bell. Positive Tribes sees new ideas waiting.
+  function ideaButton() {
+    const btn = $('idea-btn');
+    if (!btn || !state.me) return;
+    const inCommand = state.mode === COMMAND;
+    const here = inCommand ? state.ccView === 'ideas' : state.view === 'ideas';
+    btn.hidden = !inCommand && !state.slug;
+    btn.href = inCommand ? '#/command/ideas' : link('ideas');
+    if (here) btn.setAttribute('aria-current', 'page'); else btn.removeAttribute('aria-current');
+    const waiting = state.me.user.role === 'pt' && !state.preview ? newIdeas() : 0;
+    $('idea-count').textContent = waiting ? String(waiting) : '';
+    $('idea-count').hidden = !waiting;
+    btn.setAttribute('aria-label', 'Improve this hub' + (waiting ? ', ' + waiting + ' new' : ''));
   }
 
   // ---- Command center (Positive Tribes only): Today, Inbox, Clients and each client's page ----
@@ -520,13 +540,11 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
     // Five daily tabs; Improve this hub sits apart at the right end, its new ideas also reach the Inbox.
     const tabs = (inboxBadge, careBadge) => [tab('today', '#/command', 'Today'), tab('inbox', '#/command/inbox', 'Inbox', inboxBadge), tab('clients', '#/command/clients', 'Clients', null, 'client'),
       tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents')];
-    const ideasLink = () => h('a', { class: 'cc-ideas', id: 'cc-ideas', href: '#/command/ideas', ...current('ideas') }, 'Improve this hub', h('span', { class: 'badge', id: 'cc-ideas-count' }));
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {
       // Moving between command center views keeps the hero and tab row; only the view below changes.
       $('cc-tabs').replaceChildren(...tabs($('cc-inbox-count'), $('cc-care-count')));
-      $('cc-ideas').replaceWith(ideasLink());
       $('cc').replaceWith(box);
     } else {
       $('main').replaceChildren(
@@ -534,12 +552,12 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
           state.me.salesforce_url && [' \u00b7 ', h('a', { class: 'eb-sf', href: state.me.salesforce_url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Open Salesforce (opens in a new tab)' }, 'Salesforce \u2197')]), h('h1', {}, 'Positive Tribes')),
         h('div', { class: 'cc-bar' },
           h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' }, ...tabs(h('span', { class: 'badge', id: 'cc-inbox-count' }), h('span', { class: 'badge', id: 'cc-care-count' }))),
-          ideasLink(),
           h('span', { class: 'meta cc-sync', id: 'cc-sync' }),
           h('button', { class: 'btn ghost small', type: 'button', onclick: () => state.ccView === 'ideas' ? loadCommandIdeas() : command.refresh() }, 'Refresh')),
         box);
     }
     state.ccView = view;
+    ideaButton();
     // Improve this hub is the same view as in a client workspace, showing every client's ideas and Positive Tribes' own.
     if (view === 'ideas') { document.title = 'Improve this hub | Command center'; loadCommandIdeas(); }
     else { command.show(box, sub); loadCommandIdeas(true); }
@@ -552,8 +570,7 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
 
   function render() {
     if (state.mode === COMMAND) {
-      const badge = $('cc-ideas-count');
-      if (badge) badge.textContent = newIdeas() ? String(newIdeas()) : '';
+      ideaButton();
       if (state.ccView === 'ideas' && $('cc')) $('cc').replaceChildren(ideas(true));
       return;
     }
@@ -567,10 +584,9 @@ select.client-switch{width:auto;max-width:15em;font-size:15px;min-height:36px;pa
       h('nav', { class: 'tabs', 'aria-label': 'Sections' },
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
         h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : '')),
-        h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents'),
-        h('a', { class: 'tab-end', href: link('ideas'), ...(state.view === 'ideas' ? { 'aria-current': 'page' } : {}) }, 'Improve this hub', h('span', { class: 'badge' }, isPt && newIdeas() ? String(newIdeas()) : ''))),
+        h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents')),
       state.view === 'home' ? home() : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt));
-    document.querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
+    $('main').querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
   }
 
   // ---- Home: what happens next ----
