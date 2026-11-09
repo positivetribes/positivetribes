@@ -208,8 +208,21 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 10px;border-radius:99px;white-space:nowrap}
 .pill.must{background:var(--must-bg);color:var(--must)}.pill.nice{background:var(--nice-bg);color:var(--nice)}.pill.idea{background:var(--idea-bg);color:var(--idea)}.pill.done{background:var(--ok-bg);color:var(--ok)}
 .pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
-.legend{display:grid;gap:8px;margin:0;padding:0;list-style:none;font-size:15px}
-.legend li{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.seg .n{display:inline-block;margin-left:6px;min-width:20px;padding:0 6px;border-radius:99px;background:var(--soft);color:var(--ink);font-size:12px;line-height:20px;text-align:center}
+.seg button[aria-pressed=true] .n{background:var(--bg);color:var(--ink)}
+.seg button.zero:not([aria-pressed=true]){color:var(--muted);font-weight:500}
+.show-by{display:flex;align-items:center;gap:8px}.show-by label{margin:0;font-weight:500;color:var(--muted)}
+.show-by select{width:auto;min-height:36px;padding:5px 30px 5px 10px;font-size:15px}
+.tier .meaning{font-family:var(--font);font-size:14px;color:var(--muted);font-weight:400}
+.answer p.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.answer .show-all{border:0;background:none;padding:4px 0 0;font-weight:600;font-size:14px;color:var(--ink);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.item .who{font-size:15px;color:var(--muted)}.item .who b{color:var(--ink);font-weight:600}
+details.more-actions{flex-basis:100%}
+details.more-actions>summary{cursor:pointer;list-style:none;display:inline-block;font-size:14px;font-weight:600;color:var(--muted);padding:4px 0}
+details.more-actions>summary::-webkit-details-marker{display:none}
+details.more-actions>summary:hover{color:var(--ink)}
+details.more-actions[open]>summary{margin-bottom:8px}
+details.more-actions .stack{gap:10px;padding:10px 12px;background:var(--soft);border-radius:10px}
 .filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .filters button{border:1px solid var(--line);background:var(--card);padding:5px 12px;border-radius:99px;font-size:15px}
 .filters button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -482,7 +495,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     // #/uep/problems opens the test problems of the project being tested (the link in UAT scripts).
     if (view === 'problems') {
       const testing = state.releases.find(r => r.stage === 'uat');
-      state.kind = 'problem'; state.filter = 'all';
+      state.kind = 'problem'; state.filter = 'all'; state.adding = true;
       if (testing) state.project = testing.project_id;
     }
     if (id) {
@@ -672,7 +685,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const c = state.care;
     if (!c || !c.plan) return null;
     const b = c.balance;
-    const startRequest = () => { state.kind = 'request'; if (c.live[0]) state.project = c.live[0].id; };
+    const startRequest = () => { state.kind = 'request'; state.adding = true; if (c.live[0]) state.project = c.live[0].id; };
     return h('div', { class: 'card', id: 'care-plan' },
       h('div', { class: 'label' }, 'Care plan'),
       h('h2', {}, c.plan.name + ' plan'),
@@ -853,7 +866,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             h('button', { class: 'btn small', type: 'button', onclick: () => signOff(r) }, 'Yes, sign off'),
             h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.signing = null; render(); } }, 'Not yet'))
         : h('div', { class: 'actions' },
-            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.project = r.project_id; state.kind = 'problem'; state.filter = 'all'; location.hash = link('backlog'); } }, 'Report a problem'),
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.project = r.project_id; state.kind = 'problem'; state.filter = 'all'; state.adding = true; location.hash = link('backlog'); } }, 'Report a problem'),
             r.script_url && h('a', { class: 'btn ghost small', href: r.script_url, target: '_blank', rel: 'noopener' }, 'Test script'),
             r.url && h('a', { class: 'btn ghost small', href: r.url, target: '_blank', rel: 'noopener' }, 'Open ' + phaseName(r)),
             canSign && h('button', { class: 'btn small signoff', type: 'button', disabled: blocking.length > 0, title: blocking.length ? 'Fix the problems that stop sign-off first' : null, onclick: () => { state.signing = r.id; render(); } }, 'Sign off ' + phaseName(r))));
@@ -875,22 +888,25 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (state.projects.length > 1) {
       nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a project' }, state.projects.map(p => {
         const n = open(state.items.filter(i => i.project_id === p.id)).length;
-        return h('button', { type: 'button', 'aria-pressed': String(p.id === project), onclick: () => { state.project = p.id; state.filter = 'all'; state.editing = null; render(); } }, p.name + ' (' + n + ')');
+        return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(p.id === project), onclick: () => { state.project = p.id; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, p.name, n > 0 && h('span', { class: 'n' }, String(n)));
       })));
     }
     nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a kind of item' }, KIND_TABS.map(([key, label]) => {
       const n = open(here.filter(i => i.kind === key)).length;
-      return h('button', { type: 'button', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; render(); } }, label + ' (' + n + ')');
+      return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, label, n > 0 && h('span', { class: 'n' }, String(n)));
     })));
-    nodes.push(h('ul', { class: 'legend card' }, tiers.map(([key, label, meaning]) => h('li', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'muted' }, meaning)))));
-    nodes.push(kind === 'request' && state.care && state.care.plan ? careForm() : addForm());
-    if (kind !== 'problem' && kind !== 'request') {
-      nodes.push(h('div', { class: 'filters', role: 'group', 'aria-label': 'Show by phase' }, h('span', { class: 'meta' }, 'Show:'),
-        [['all', 'All'], ...PHASES].map(([key, label]) => {
-          const n = open(mine).filter(i => key === 'all' || i.phase === key).length;
-          return h('button', { type: 'button', 'aria-pressed': String(filter === key), onclick: () => { state.filter = key; render(); } }, label + ' (' + n + ')');
-        })));
-    }
+    // The form stays closed behind one button until someone wants it, so the list comes first.
+    const careMode = kind === 'request' && state.care && state.care.plan;
+    const opener = careMode ? 'Request an improvement' : { question: 'Ask a question', change: 'Suggest a change', problem: 'Report a problem', request: 'Ask for help' }[kind];
+    const phaseCount = key => open(mine).filter(i => key === 'all' || i.phase === key).length;
+    const showBy = kind !== 'problem' && kind !== 'request' && open(mine).length > 0 && h('div', { class: 'show-by' },
+      h('label', { for: 'show-by' }, 'Show'),
+      h('select', { id: 'show-by', onchange: e => { state.filter = e.target.value; render(); } },
+        [['all', 'All phases'], ...PHASES].map(([key, label]) => h('option', { value: key, ...(filter === key ? { selected: true } : {}) }, label + ' (' + phaseCount(key) + ')'))));
+    nodes.push(state.adding
+      ? (careMode ? careForm() : addForm())
+      : h('div', { class: 'bar' }, h('button', { class: 'btn', type: 'button', onclick: () => { state.adding = true; render(); const f = $('f-title') || $('c-title'); if (f) f.focus(); } }, opener), showBy || null));
+    if (state.adding && showBy) nodes.push(showBy);
     // The phase filter applies to open items only. Finished items all go in one
     // list at the bottom, whatever their tier or phase, and empty tiers are hidden.
     let shown = 0;
@@ -900,7 +916,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       if (!active.length) continue;
       shown += active.length;
       nodes.push(h('section', { class: 'tier' },
-        h('h2', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'count' }, active.length + (active.length === 1 ? ' item' : ' items'))),
+        h('h2', {}, h('span', { class: 'pill ' + key }, label), h('span', { class: 'count' }, active.length + (active.length === 1 ? ' item' : ' items')),
+          h('span', { class: 'meaning' }, '· ' + tiers.find(t => t[0] === key)[2])),
         active.map(i => card(i, group, isPt))));
     }
     if (!shown) {
@@ -928,7 +945,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       try {
         const payload = { kind, project_id: state.project, title: title.value, details: details.value, tier: tier.value };
         if (kind === 'question' || kind === 'problem') payload.owner = owner.value;
-        state.items = (await api(base() + '/items', post(payload))).items; render();
+        state.items = (await api(base() + '/items', post(payload))).items; state.adding = false; render();
       } catch (err) { showError(err.message); }
     } },
       h('h2', {}, verb[0]),
@@ -936,7 +953,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', {}, h('label', { for: 'f-details' }, 'More detail (optional)'), details),
       h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier),
         (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner)),
-      h('div', {}, h('button', { class: 'btn', type: 'submit' }, verb[2])));
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.adding = false; render(); } }, 'Cancel')));
   }
 
   // "Request an improvement": for tools that are live on an active care plan. Other tools keep the plain help request.
@@ -957,7 +974,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       e.preventDefault(); showError('');
       try {
         const data = await api(base() + '/items', post({ care: true, kind: 'request', project_id: tool, title: title.value, details: why.value }));
-        state.items = data.items; state.care = data.care; state.project = tool; render();
+        state.items = data.items; state.care = data.care; state.project = tool; state.adding = false; render();
       } catch (err) { showError(err.message); }
     } },
       h('h2', {}, 'Request an improvement'),
@@ -972,8 +989,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           h('li', {}, 'You test it on a safe copy, then sign off.')),
         b ? h('p', { class: 'meta' }, 'This month: ' + plural(b.available, 'credit') + ' left') : null),
       h('p', { class: 'muted' }, h('b', {}, 'Something broken? '), 'Report it as a problem instead. Fixes are always free. ',
-        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { state.kind = 'problem'; state.filter = 'all'; render(); } }, 'Report a problem')),
-      h('div', {}, h('button', { class: 'btn', type: 'submit' }, 'Send request')));
+        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { state.kind = 'problem'; state.filter = 'all'; state.adding = true; render(); } }, 'Report a problem')),
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Send request'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.adding = false; render(); } }, 'Cancel')));
   }
 
   function card(item, group, isPt) {
@@ -982,27 +999,41 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const position = open(group).indexOf(item);
     const phaseless = item.kind === 'problem' || item.kind === 'request';
     const moveBody = d => post({ direction: d, ...(state.filter === 'all' ? {} : { phase: state.filter }) });
-    const date = item.created_at.slice(0, 10);
+    const date = shortDate(item.created_at.slice(0, 10));
+    // Long answers show a few lines first; the rest is one click away.
+    const long = item.answer && (item.answer.length > 320 || item.answer.split('\n').length > 4);
+    const answerText = item.answer && h('p', { class: long ? 'clamp' : '' }, item.answer);
+    // Whose move it is, in plain words: who it waits on (or where a problem happened), who asked, and when.
+    const who = item.owner
+      ? (item.kind === 'problem' ? [h('b', {}, item.owner), ' · '] : [item.done ? 'Answered by ' : 'Waiting on ', h('b', {}, item.owner), ' · '])
+      : [];
+    // Open items sit under their priority heading already, so only finished ones carry a status pill.
+    const pills = [item.done && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
+    // Sorting controls (phase, priority, order) and Delete wait behind "More"; the card leads with its one main action.
+    const more = !item.done || isPt ? h('details', { class: 'more-actions', ...(state.moreOpen === item.id ? { open: true } : {}), ontoggle: e => { if (e.target.open) state.moreOpen = item.id; else if (state.moreOpen === item.id) state.moreOpen = null; } },
+      h('summary', {}, 'More options'),
+      h('div', { class: 'stack' },
+        !item.done && !phaseless && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'When:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Phase for ' + item.title },
+          PHASES.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.phase === k), onclick: () => item.phase !== k && act(base() + '/items/' + item.id, patch({ phase: k })) }, l)))),
+        !item.done && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'Priority:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Priority for ' + item.title },
+          tiers.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.tier === k), onclick: () => item.tier !== k && act(base() + '/items/' + item.id, patch({ tier: k })) }, l)))),
+        h('div', { class: 'actions' },
+          !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position <= 0, 'aria-label': 'Move up: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('up')) }, 'Move up'),
+          !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open(group).length - 1, 'aria-label': 'Move down: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('down')) }, 'Move down'),
+          h('span', { class: 'spacer' }),
+          isPt && h('button', { class: 'btn ghost small danger', type: 'button', onclick: () => { state.confirming = item.id; render(); } }, 'Delete')))) : null;
     return h('article', { id: 'item-' + item.id, class: 'card item' + (item.done ? ' is-done' : '') },
-      h('div', { class: 'actions' },
-        h('span', { class: 'pill ' + (item.done ? 'done' : item.tier) }, item.done ? DONE_WORD[item.kind] : tiers.find(t => t[0] === item.tier)[1]),
-        !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])),
+      pills.length > 0 && h('div', { class: 'actions' }, pills),
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
-      item.answer && h('div', { class: 'answer' }, h('b', {}, item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), h('p', {}, item.answer)),
+      item.answer && h('div', { class: 'answer' }, h('b', {}, item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), answerText,
+        long && h('button', { type: 'button', class: 'show-all', onclick: e => { const shut = answerText.classList.toggle('clamp'); e.target.textContent = shut ? 'Show all' : 'Show less'; } }, 'Show all')),
       careBlock(item, isPt),
-      h('div', { class: 'meta' }, (item.owner ? (item.kind === 'problem' ? item.owner : 'For ' + item.owner) + ' · ' : '') + (item.added_by || 'Someone') + ' · ' + date),
-      !item.done && !phaseless && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'When:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Phase for ' + item.title },
-        PHASES.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.phase === k), onclick: () => item.phase !== k && act(base() + '/items/' + item.id, patch({ phase: k })) }, l)))),
+      h('div', { class: 'who' }, who, (item.kind === 'question' ? 'asked by ' : 'added by ') + (item.added_by || 'someone') + ', ' + date),
       h('div', { class: 'actions' },
-        !item.done && h('span', { class: 'seg small', role: 'group', 'aria-label': 'Priority for ' + item.title },
-          tiers.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.tier === k), onclick: () => item.tier !== k && act(base() + '/items/' + item.id, patch({ tier: k })) }, l))),
-        !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position <= 0, 'aria-label': 'Move up: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('up')) }, 'Up'),
-        !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open(group).length - 1, 'aria-label': 'Move down: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('down')) }, 'Down'),
-        h('span', { class: 'spacer' }),
-        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer or edit' : 'Edit'),
-        h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind]),
-        isPt && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.confirming = item.id; render(); } }, 'Delete')),
+        h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : 'Edit'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind])),
+      more,
       state.confirming === item.id && h('div', { class: 'confirm', role: 'alert' }, h('span', {}, 'Delete this for everyone? This cannot be undone.'),
         h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { state.confirming = null; act(base() + '/items/' + item.id, { method: 'DELETE' }); } }, 'Delete'),
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.confirming = null; render(); } }, 'Keep it')));
