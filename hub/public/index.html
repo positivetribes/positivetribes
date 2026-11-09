@@ -117,6 +117,9 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .card.wide .releases li{border-top:0;padding:0 14px;border-left:1px solid var(--line)}
 .card.wide .releases li:first-child{border-left:0;padding-left:0}
 .card.wide .rel-head{flex-direction:column;gap:6px}
+.proj-foot{display:flex;flex-direction:column;gap:8px}.proj-foot:empty{display:none}
+.card.wide .proj-foot{flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 18px;border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.proj-foot p{margin:0}
 /* When nothing waits on the client, and when every system is up, each is one quiet line. */
 .next.caught{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding-top:14px;padding-bottom:14px}
 .next.caught p{margin:0}
@@ -647,12 +650,14 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
                 r.stage === 'signed_off' && r.signed_off_at && h('span', { class: 'meta' }, 'Signed off by ' + r.signed_off_by + ', ' + longDate(r.signed_off_at.slice(0, 10))),
                 isPt && r.url && h('a', { class: 'admin-link', href: r.url, target: '_blank', rel: 'noopener' }, 'Open'),
                 isPt && r.script_url && h('a', { class: 'admin-link', href: r.script_url, target: '_blank', rel: 'noopener' }, 'Test script'))))),
+          // The project's own count and links, set apart below the phases (a ruled single line on a wide card).
+          h('div', { class: 'proj-foot' },
           counts.length > 0 && h('p', { class: 'meta' }, counts.length + ' open item' + (counts.length === 1 ? '' : 's')),
           // Once launched, the live app replaces the prototype link; before then the production address stays hidden.
           isLive(p, phases) ? h('p', {}, h('a', { class: 'btn small', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Open ' + p.name))
             : p.poc_url && h('p', {}, h('a', { class: 'btn ghost small', href: p.poc_url, target: '_blank', rel: 'noopener' }, 'Try the prototype')),
           isPt && p.live_url && !isLive(p, phases) && h('p', { class: 'admin-only' }, h('span', { class: 'meta' }, 'Only Positive Tribes sees this: '),
-            h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production')));
+            h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production'))));
       })); }),
       systemStatus(),
       mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
