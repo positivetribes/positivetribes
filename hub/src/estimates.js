@@ -47,15 +47,17 @@ export function estimateView(row, user, plan) {
   if (!pt && (row.status === 'draft' || row.status === 'withdrawn')) return null;
   const offered = row.status === 'offered';
   const planned = Boolean(plan) && plan.status !== 'ended';
+  const donated = Boolean(row.donated);
   return {
-    status: row.status, version: row.version,
+    status: row.status, version: row.version, donated,
     hours: row.minutes / 60, hours_label: hoursLabel(row.minutes),
     price_cents: row.price_cents, price_label: moneyLabel(row.price_cents),
     credits: row.credits, credits_label: creditsLabel(row.credits),
     schedule_note: row.schedule_note, scope_note: row.scope_note,
     // "After launch" only for a client with a care plan, and only up to the largest care size.
-    later_ok: offered && planned && row.minutes <= LATER_MAX_MINUTES,
-    later_note: offered && planned && row.minutes > LATER_MAX_MINUTES ? 'Larger than one care-plan request, so better added now.' : '',
+    // A donated change costs nothing, so there is nothing to put off to the care plan.
+    later_ok: offered && planned && !donated && row.minutes <= LATER_MAX_MINUTES,
+    later_note: offered && planned && !donated && row.minutes > LATER_MAX_MINUTES ? 'Larger than one care-plan request, so better added now.' : '',
     can_decide: offered && canDecideEstimate(user, plan),
     offered_at: row.offered_at, decided_at: row.decided_at, decided_by: row.decided_by || '',
     ...pt ? { rate_label: moneyLabel(row.rate_cents) + '/h', handled_at: row.handled_at, sf_task_id: row.sf_task_id, sf_error: row.sf_error } : {}
@@ -76,6 +78,34 @@ export async function estimatesFor(db, clientId, user) {
     if (view) map.set(row.item_id, view);
   }
   return map;
+}
+
+// Time Positive Tribes gave on a client's items without an estimate, keyed by item id. Everyone on the client's hub
+// sees it, like prices; who logged it is Positive Tribes' own detail.
+export async function donatedTimeFor(db, clientId, user) {
+  const { results } = await db.prepare(
+    'SELECT id, item_id, minutes, value_cents, note, created_by, created_at FROM donated_time WHERE client_id = ? ORDER BY id'
+  ).bind(clientId).all();
+  const map = new Map();
+  for (const r of results) {
+    const entry = { id: r.id, minutes: r.minutes, hours_label: hoursLabel(r.minutes), value_cents: r.value_cents, value_label: moneyLabel(r.value_cents),
+      note: r.note, created_at: r.created_at, ...user.role === 'pt' ? { created_by: r.created_by } : {} };
+    map.set(r.item_id, [...map.get(r.item_id) || [], entry]);
+  }
+  return map;
+}
+
+// Donated so far, per client: approved donated changes plus logged donated time. Offered, withdrawn and Not now
+// estimates do not count. `since` (YYYY-MM-DD) limits it to a year for funder reports.
+export async function donatedTotals(db, since = '0000-01-01') {
+  const { results } = await db.prepare(
+    `SELECT c.id AS client_id, c.slug, c.name AS client, SUM(t.minutes) AS minutes, SUM(t.value_cents) AS value_cents
+     FROM (SELECT client_id, minutes, price_cents AS value_cents, decided_at AS at FROM change_estimates WHERE donated = 1 AND status = 'approved_now'
+           UNION ALL SELECT client_id, minutes, value_cents, created_at AS at FROM donated_time) t
+     JOIN clients c ON c.id = t.client_id
+     WHERE t.at >= ? GROUP BY c.id ORDER BY value_cents DESC`
+  ).bind(since).all();
+  return results.map(r => ({ ...r, hours_label: hoursLabel(r.minutes), value_label: moneyLabel(r.value_cents) }));
 }
 
 // ---- Salesforce Task for an approved change ----
@@ -104,11 +134,12 @@ export async function pushEstimateTask(env, db, url, itemId) {
   try {
     const what = oppId(row.salesforce_opportunity_id) || acctId(row.salesforce_account_id);
     if (!what) throw new Error('no Opportunity or Account is linked to this client in the hub');
-    const now = row.status === 'approved_now';
+    const now = row.status === 'approved_now', donated = Boolean(row.donated);
+    const terms = donated ? `donated, ${moneyLabel(row.price_cents)} value` : now ? moneyLabel(row.price_cents) + ', add now' : creditsLabel(row.credits) + ', after launch';
     const task = {
-      Subject: clip(`Change approved: ${row.title} (${hoursLabel(row.minutes)}, ${now ? moneyLabel(row.price_cents) + ', add now' : creditsLabel(row.credits) + ', after launch'})`, 250),
+      Subject: clip(`Change approved: ${row.title} (${hoursLabel(row.minutes)}, ${terms})`, 250),
       ActivityDate: addDaysIso(7), WhatId: what, Status: 'Not Started',
-      Description: `${row.decided_by || 'The client'} approved this change in the Tribe Hub.\n${now ? 'Bill it and schedule it in the build.' : 'Add it to the care queue once the tool is live.'}`
+      Description: `${row.decided_by || 'The client'} approved this change in the Tribe Hub.\n${donated ? 'Donated by Positive Tribes: schedule it in the build, no invoice.' : now ? 'Bill it and schedule it in the build.' : 'Add it to the care queue once the tool is live.'}`
     };
     if (env.SF_TASK_OWNER_ID) task.OwnerId = env.SF_TASK_OWNER_ID;
     const { id } = await sf(await salesforceToken(env), 'POST', '/sobjects/Task', task);
@@ -134,6 +165,7 @@ export async function decideEstimate({ db, env, url, client, user, item, input }
   if (est.status !== 'offered') throw new InputError('This estimate has already been decided.', 409);
   if (est.version !== input.version) throw new InputError('The estimate changed. Reload the page to see the new one.', 409);
   if (choice === 'later') {
+    if (est.donated) throw new InputError('This change is donated, so there is nothing to put off. Add it now or choose not now.', 409);
     if (!plan || plan.status === 'ended') throw new InputError('After launch needs a care plan.', 409);
     if (est.minutes > LATER_MAX_MINUTES) throw new InputError('This is larger than one care-plan request. Add it now instead.', 409);
   }
@@ -141,7 +173,7 @@ export async function decideEstimate({ db, env, url, client, user, item, input }
   const phase = choice === 'now' ? 'full' : choice === 'later' ? 'later' : item.phase;
   const tier = choice === 'not_now' && item.tier === 'must' ? 'idea' : item.tier;
   const token = crypto.randomUUID();
-  const detail = choice === 'now' ? `Add it now · ${hoursLabel(est.minutes)} · ${moneyLabel(est.price_cents)}`
+  const detail = choice === 'now' ? `Add it now · ${hoursLabel(est.minutes)} · ${est.donated ? `donated (${moneyLabel(est.price_cents)} value)` : moneyLabel(est.price_cents)}`
     : choice === 'later' ? `After launch · ${hoursLabel(est.minutes)} · ${creditsLabel(est.credits)}` : 'Not now';
   const [won] = await db.batch([
     db.prepare(
@@ -166,10 +198,14 @@ export async function decideEstimate({ db, env, url, client, user, item, input }
 
 // ---- Positive Tribes' side ----
 
-const rowOf = async (db, itemId) => {
+const itemOf = async (db, itemId) => {
   const id = Number(itemId);
   const item = Number.isSafeInteger(id) && id > 0 && await db.prepare('SELECT * FROM items WHERE id = ?').bind(id).first();
   if (!item) throw new InputError('Item not found.', 404);
+  return item;
+};
+const rowOf = async (db, itemId) => {
+  const item = await itemOf(db, itemId);
   if (item.kind !== 'change') throw new InputError('Only suggested changes get estimates.', 409);
   return item;
 };
@@ -178,7 +214,7 @@ const rowOf = async (db, itemId) => {
 export async function estimateLists(db) {
   const { results } = await db.prepare(
     `SELECT e.item_id, e.client_id, c.slug, c.name AS client, i.title, e.minutes, e.price_cents, e.credits, e.status, e.offered_at, e.decided_at,
-            e.handled_at, e.sf_error, e.sf_task_id, u.name AS decided_by,
+            e.handled_at, e.sf_error, e.sf_task_id, e.donated, u.name AS decided_by,
             CAST(julianday('now') - julianday(e.offered_at) AS INTEGER) AS days_waiting
      FROM change_estimates e JOIN items i ON i.id = e.item_id AND i.client_id = e.client_id JOIN clients c ON c.id = e.client_id
      LEFT JOIN users u ON u.id = e.decided_by_user_id
@@ -196,7 +232,9 @@ export async function estimateLists(db) {
 export async function estimateAdmin({ request, env, url, route, path, method, who, json, body, text }) {
   const mine = /^\/api\/admin\/items\/(\d+)\/estimate(?:\/(offer|withdraw|handled|retry-task))?$/.exec(path);
   const rate = /^\/api\/admin\/clients\/(\d+)\/rate$/.exec(path);
-  if (!mine && !rate && route !== 'GET /api/admin/estimates') return null;
+  const give = /^\/api\/admin\/items\/(\d+)\/donated-time$/.exec(path);
+  const ungive = /^\/api\/admin\/donated-time\/(\d+)$/.exec(path);
+  if (!mine && !rate && !give && !ungive && route !== 'GET /api/admin/estimates') return null;
   if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
   const db = env.DB;
   const actor = { email: who.email || '', name: who.name || who.email || 'Positive Tribes' };
@@ -215,6 +253,28 @@ export async function estimateAdmin({ request, env, url, route, path, method, wh
       return json({ ok: true, rate_cents: Math.round(dollars * 100) });
     }
 
+    if (give) {
+      if (method !== 'POST') return json({ error: 'Not found.' }, 404);
+      const item = await itemOf(db, give[1]);
+      const input = await body(request);
+      const minutes = minutesFromHours(input.hours);
+      const note = text(input.note, 200, { label: 'Note' });
+      const rateCents = (await db.prepare('SELECT hourly_rate_cents FROM clients WHERE id = ?').bind(item.client_id).first()).hourly_rate_cents;
+      const value = priceCentsOf(minutes, rateCents);
+      await db.batch([
+        db.prepare('INSERT INTO donated_time (client_id, item_id, minutes, rate_cents, value_cents, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .bind(item.client_id, item.id, minutes, rateCents, value, note, actor.name),
+        logEvent(db, item.client_id, item.id, 'donated_time', { title: item.title, kind: item.kind }, `${hoursLabel(minutes)} donated (${moneyLabel(value)} value)`, actor)
+      ]);
+      return json({ ok: true }, 201);
+    }
+    if (ungive) {
+      if (method !== 'DELETE') return json({ error: 'Not found.' }, 404);
+      const done = await db.prepare('DELETE FROM donated_time WHERE id = ?').bind(Number(ungive[1])).run();
+      if (!done.meta.changes) throw new InputError('That entry is not in the hub.', 404);
+      return json({ ok: true });
+    }
+
     const item = await rowOf(db, mine[1]);
     const action = mine[2];
     const current = await db.prepare('SELECT * FROM change_estimates WHERE item_id = ?').bind(item.id).first();
@@ -230,20 +290,22 @@ export async function estimateAdmin({ request, env, url, route, path, method, wh
       const minutes = minutesFromHours(input.hours);
       const schedule = text(input.schedule_note, 200, { label: 'Schedule note' });
       const scope = text(input.scope_note, 200, { label: 'Why it is outside the agreement' });
+      if (input.donated !== undefined && typeof input.donated !== 'boolean') throw new InputError('Donated must be true or false.');
+      const donated = input.donated ? 1 : 0;
       if (current && ['approved_now', 'approved_later'].includes(current.status)) throw new InputError('The client already approved this one. Add a new change for anything else.', 409);
       const price = priceCentsOf(minutes, clientRate), credits = creditsOf(minutes);
       if (!current) {
         await db.prepare(
-          `INSERT INTO change_estimates (item_id, client_id, minutes, rate_cents, price_cents, credits, schedule_note, scope_note, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(item.id, item.client_id, minutes, clientRate, price, credits, schedule, scope, actor.name).run();
+          `INSERT INTO change_estimates (item_id, client_id, minutes, rate_cents, price_cents, credits, schedule_note, scope_note, donated, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(item.id, item.client_id, minutes, clientRate, price, credits, schedule, scope, donated, actor.name).run();
       } else {
         // Re-estimating goes back to a draft with a new version, so an old decision can never apply to a new number.
         await db.prepare(
-          `UPDATE change_estimates SET minutes = ?, rate_cents = ?, price_cents = ?, credits = ?, schedule_note = ?, scope_note = ?, status = 'draft',
+          `UPDATE change_estimates SET minutes = ?, rate_cents = ?, price_cents = ?, credits = ?, schedule_note = ?, scope_note = ?, donated = ?, status = 'draft',
              version = version + 1, offered_at = NULL, decided_at = NULL, decided_by_user_id = NULL, decided_version = NULL, decided_token = '', updated_at = CURRENT_TIMESTAMP
            WHERE item_id = ? AND status IN ('draft', 'offered', 'not_now', 'withdrawn')`
-        ).bind(minutes, clientRate, price, credits, schedule, scope, item.id).run();
+        ).bind(minutes, clientRate, price, credits, schedule, scope, donated, item.id).run();
       }
       return reply(current ? 200 : 201);
     }
@@ -258,7 +320,7 @@ export async function estimateAdmin({ request, env, url, route, path, method, wh
       ).bind(clientRate, price, item.id).run();
       if (!done.meta.changes) throw new InputError('Only a draft can be sent to the client.', 409);
       await logEvent(db, item.client_id, item.id, 'estimate_offered', { title: item.title, kind: item.kind },
-        `About ${hoursLabel(current.minutes)} · ${moneyLabel(price)}`, actor).run();
+        `About ${hoursLabel(current.minutes)} · ${current.donated ? `donated (${moneyLabel(price)} value)` : moneyLabel(price)}`, actor).run();
       return reply();
     }
     if (action === 'withdraw' && method === 'POST') {

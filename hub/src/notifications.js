@@ -11,7 +11,9 @@ export const CLIENT_ACTIONS = ['added', 'answered', 'done', 'reopened', 'phase',
   // A question about a request ("needs more info") and the client's answer; details carry the text only.
   'care_question', 'care_answered',
   // An estimate for a suggested change, and the director's decision on it (details carry hours and price or credits).
-  'estimate_offered', 'estimate_decided'];
+  'estimate_offered', 'estimate_decided',
+  // Time Positive Tribes gave on an item without an estimate (detail carries hours and value).
+  'donated_time'];
 export const NOTIFY_DAYS = 30;
 // The bell went live here; what was logged before (including history imported from the old backlog sites) is not
 // news. A person invited later starts from the day they were invited.

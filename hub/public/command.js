@@ -152,12 +152,19 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const e = data.estimates || { waiting: [], toHandle: [], taskFailed: [] };
     if (!e.waiting.length && !e.toHandle.length) return '';
     const wait = r => `<li><a href="${esc(r.url)}"><span class="who">${esc(r.client)}</span> <span class="what">${esc(r.title)}</span></a>
-      <span class="meta">${esc(r.hours_label)} · ${esc(r.price_label)} · ${r.days_waiting > 0 ? esc(r.days_waiting) + (r.days_waiting === 1 ? ' day' : ' days') + ' waiting' : 'sent today'}</span></li>`;
+      <span class="meta">${esc(r.hours_label)} · ${esc(r.price_label)}${r.donated ? ' donated' : ''} · ${r.days_waiting > 0 ? esc(r.days_waiting) + (r.days_waiting === 1 ? ' day' : ' days') + ' waiting' : 'sent today'}</span></li>`;
     const handle = r => `<li><a href="${esc(r.url)}"><span class="who">${esc(r.client)}</span> <span class="what">${esc(r.title)}</span></a>
-      <span class="meta">${r.status === 'approved_now' ? 'Add now · ' + esc(r.price_label) : 'After launch · ' + esc(r.credits_label)}${r.sf_error ? ' · <strong>Salesforce Task failed</strong>' : ''}</span></li>`;
+      <span class="meta">${r.status === 'approved_now' ? 'Add now · ' + esc(r.price_label) + (r.donated ? ' donated, schedule only' : '') : 'After launch · ' + esc(r.credits_label)}${r.sf_error ? ' · <strong>Salesforce Task failed</strong>' : ''}</span></li>`;
     return `<section class="panel needs-reply" aria-label="Estimates">
       ${e.waiting.length ? `<p class="label"><strong>Estimates waiting for the client</strong> <span class="muted small">${e.waiting.length}</span></p><ul class="reply-list">${e.waiting.map(wait).join('')}</ul>` : ''}
       ${e.toHandle.length ? `<p class="label"><strong>Approved changes to bill and schedule</strong> <span class="muted small">${e.toHandle.length}${e.taskFailed.length ? ' · ' + e.taskFailed.length + ' without a Salesforce Task' : ''}</span></p><ul class="reply-list">${e.toHandle.map(handle).join('')}</ul>` : ''}</section>`;
+  };
+  // Donated by Positive Tribes this year, across clients: one quiet line for funder reports.
+  const donatedLine = data => {
+    const d = data.donated || [];
+    if (!d.length) return '';
+    const minutes = d.reduce((n, r) => n + r.minutes, 0), cents = d.reduce((n, r) => n + r.value_cents, 0), hrs = minutes / 60;
+    return `<p class="muted small donated-line"><strong>Donated this year:</strong> ${esc(Number.isInteger(hrs) ? hrs : hrs.toFixed(1))} hours · $${esc((cents / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }))} value (${d.map(r => esc(r.client) + ' ' + esc(r.value_label)).join(', ')})</p>`;
   };
   const countdownRow = data => (data.testing || []).length ? `<div class="countdowns">${countdowns(data)}</div>` : '';
 
@@ -205,7 +212,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
     const hour = new Date().getHours();
     box.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h2 class="greet">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}</h2></div></div>
-    ${nowCard(data)}${needsReplyLine(data)}${estimatesLine(data)}${countdownRow(data)}
+    ${nowCard(data)}${needsReplyLine(data)}${estimatesLine(data)}${donatedLine(data)}${countdownRow(data)}
     <div class="cols${attention.length ? '' : ' two'}">
       ${attention.length ? `<section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2><ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', tick: doneControl })).join('')}</ul></section>` : ''}
       <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { tick: doneControl })}</section>
