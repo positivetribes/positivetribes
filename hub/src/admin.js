@@ -753,7 +753,9 @@ export async function handleAdmin(request, env, url, who) {
       ]);
       const seen = lastSeenBy(people);
       const view = buildOverview(env, sf, { meta: meta.results, steps: steps.results, notes: notes.results, activity: activity.results }, today);
-      view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id), hubSeen: seen[workspaceOf(c.id)] || null }));
+      // hubNew: the client's changes in the hub not yet cleared (the bell's list), shown on their card in Clients.
+      const hubNew = inbox.items.reduce((n, i) => { if (i.accountId) n[i.accountId] = (n[i.accountId] || 0) + 1; return n; }, {});
+      view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id), hubSeen: seen[workspaceOf(c.id)] || null, hubNew: hubNew[c.id] || 0 }));
       // Patch's suggestions waiting for a decision: the count on the Care plans tab.
       const carePending = env.DB ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM patch_decisions WHERE status = 'pending'").first()).n : 0;
       // A broken estimate query never hides Today.
