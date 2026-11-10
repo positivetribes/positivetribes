@@ -153,10 +153,21 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     if (!e.waiting.length && !e.toHandle.length) return '';
     const wait = r => `<li><a href="${esc(r.url)}"><span class="who">${esc(r.client)}</span> <span class="what">${esc(r.title)}</span></a>
       <span class="meta">${esc(r.hours_label)} · ${esc(r.price_label)}${r.donated ? ' donated' : ''} · ${r.days_waiting > 0 ? esc(r.days_waiting) + (r.days_waiting === 1 ? ' day' : ' days') + ' waiting' : 'sent today'}</span></li>`;
+    // The client decides these, so each client folds to one line (count, hours, value, oldest); open it for the items.
+    const money = c => '$' + (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const waitGroups = rows => Object.values(rows.reduce((g, r) => { (g[r.client_id] ||= []).push(r); return g; }, {}));
+    const waitGroup = rows => {
+      const first = rows[0], mins = rows.reduce((n, r) => n + r.minutes, 0), hrs = mins / 60;
+      const cents = rows.reduce((n, r) => n + r.price_cents, 0), gift = rows.filter(r => r.donated).reduce((n, r) => n + r.price_cents, 0);
+      const oldest = Math.max(...rows.map(r => r.days_waiting || 0));
+      return `<details class="est-group${oldest >= 7 ? ' late' : ''}"><summary><span class="who">${esc(first.client)}</span>
+        <span class="meta">${rows.length} estimate${rows.length === 1 ? '' : 's'} · ${esc(Number.isInteger(hrs) ? hrs : hrs.toFixed(1))} h · ${esc(money(cents))}${gift ? ' (' + esc(money(gift)) + ' donated)' : ''} · ${oldest > 0 ? 'oldest ' + esc(oldest) + (oldest === 1 ? ' day' : ' days') : 'sent today'}</span></summary>
+        <ul class="reply-list">${rows.map(wait).join('')}</ul></details>`;
+    };
     const handle = r => `<li><a href="${esc(r.url)}"><span class="who">${esc(r.client)}</span> <span class="what">${esc(r.title)}</span></a>
       <span class="meta">${r.status === 'approved_now' ? 'Add now · ' + esc(r.price_label) + (r.donated ? ' donated, schedule only' : '') : 'After launch · ' + esc(r.credits_label)}${r.sf_error ? ' · <strong>Salesforce Task failed</strong>' : ''}</span></li>`;
     return `<section class="panel needs-reply" aria-label="Estimates">
-      ${e.waiting.length ? `<p class="label"><strong>Estimates waiting for the client</strong> <span class="muted small">${e.waiting.length}</span></p><ul class="reply-list">${e.waiting.map(wait).join('')}</ul>` : ''}
+      ${e.waiting.length ? `<p class="label"><strong>Estimates waiting for the client</strong> <span class="muted small">${e.waiting.length}</span></p>${waitGroups(e.waiting).map(waitGroup).join('')}` : ''}
       ${e.toHandle.length ? `<p class="label"><strong>Approved changes to bill and schedule</strong> <span class="muted small">${e.toHandle.length}${e.taskFailed.length ? ' · ' + e.taskFailed.length + ' without a Salesforce Task' : ''}</span></p><ul class="reply-list">${e.toHandle.map(handle).join('')}</ul>` : ''}</section>`;
   };
   // Donated by Positive Tribes this year, across clients: one quiet line for funder reports.
