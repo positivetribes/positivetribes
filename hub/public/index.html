@@ -1692,11 +1692,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         data.unread ? h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all') }, 'Mark all read') : null,
         h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all', true) }, 'Clear all'));
       const empty = pt ? 'Nothing new from clients.' : 'You’re all caught up.';
+      const more = pt && data.items.length > items.length;
+      const pp = (pt && data.patch) || {};
+      const patchNote = pt && (pp.pending || (pp.demotions || []).length || (pp.answered || []).length || (pp.failedRuns || []).length) ? 'Patch needs a look' : '';
       // replaceChildren would print a null as the word "null", so empty parts are dropped first.
       p.replaceChildren(...[
         h('div', { class: 'bp-head' }, h('h2', {}, preview ? state.preview.name + '’s notifications' : 'Notifications'), action),
         reminders.length || items.length ? h('ul', {}, ...reminders, ...items.map(row)) : h('p', { class: 'bp-empty' }, empty),
-        pt ? h('div', { class: 'bp-foot' }, h('a', { href: '#/command/inbox', onclick: () => open(false) }, data.items.length > items.length ? `See all ${data.items.length}` : 'See all')) : null].filter(Boolean));
+        // The full list only has something the bell lacks when the bell is cut off at 15, or Patch needs a look.
+        pt && (more || patchNote) ? h('div', { class: 'bp-foot' }, h('a', { href: '#/command/inbox', onclick: () => open(false) }, more ? `See all ${data.items.length}` + (patchNote ? ' · ' + patchNote : '') : patchNote)) : null].filter(Boolean));
     }
 
     async function load() {
