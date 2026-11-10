@@ -20,7 +20,7 @@ const TIERS = ['must', 'nice', 'idea'];
 const PHASES = ['review', 'prototype', 'full', 'later'];
 const KINDS = ['question', 'change', 'problem', 'request'];
 const TIER_NAMES = { must: 'Must have', nice: 'Nice to have', idea: 'Idea for now' };
-const PHASE_NAMES = { review: 'To review', prototype: 'Prototype', full: 'Full build', later: 'Later' };
+const PHASE_NAMES = { review: 'Not decided yet', prototype: 'Prototype', full: 'In the build', later: 'After launch' };
 const STATUSES = ['new', 'planned', 'built', 'declined'];
 // What each status reads as, per kind. Only suggested changes and test problems carry one.
 const STATUS_NAMES = {
@@ -646,7 +646,7 @@ export default {
         // A care request finishes through its own steps (ship, cancel, decline) and stays on the tool it was asked for,
         // so its credits and the "shipped this month" meter always match what really happened.
         // While an estimate waits for the director, the client decides through it, not around it: no closing the item,
-        // moving its phase (Full build would add it without approving the price) or moving it to another list.
+        // moving its phase (In the build would add it without approving the price) or moving it to another list.
         if (user.role !== 'pt' && (doneNow !== item.done || phase !== item.phase || projectId !== item.project_id)) {
           const waiting = await db.prepare("SELECT 1 FROM change_estimates WHERE item_id = ? AND client_id = ? AND status = 'offered'").bind(item.id, client.id).first();
           if (waiting) throw new InputError('This change has an estimate waiting. Your director decides with Add it now or Not now.', 409);

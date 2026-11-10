@@ -16,7 +16,7 @@ test('each change writes the event the app would, so the bell matches', () => {
   assert.match(sql, /^UPDATE items SET answer = 'Fixed\.', done = 1, phase = 'full', due_date = '2026-11-20', updated_at = CURRENT_TIMESTAMP WHERE id = 121 AND client_id = 1;/);
   assert.match(sql, /'answered', 'T-shirt sizes', 'change', 'Fixed\.'/);
   assert.match(sql, /'done', 'T-shirt sizes', 'change', ''/);
-  assert.match(sql, /'phase', 'T-shirt sizes', 'change', 'To review → Full build'/);
+  assert.match(sql, /'phase', 'T-shirt sizes', 'change', 'Not decided yet → In the build'/);
   assert.equal(sql.split('\n').length, 4);
 });
 
