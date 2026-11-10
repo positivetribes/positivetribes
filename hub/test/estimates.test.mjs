@@ -452,3 +452,26 @@ test('Patch is never given an estimate', () => {
     assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), 'utf8'), /change_estimates|estimatesFor|estimateView/, file);
   }
 });
+
+test('a change covered by the agreement: only Positive Tribes marks it, it carries no estimate, and bad IDs are refused', async () => {
+  const { call, estimate, item, events, PT } = setup();
+  const mark = (who, ref) => call(who, 'c/uep/items/1', 'PATCH', { agreement_ref: ref });
+  assert.equal((await mark('molly@uep.org', 'F7')).status, 403);
+  assert.equal((await mark(PT, 'seven')).status, 400);
+  assert.equal((await mark(PT, 'f7,r12')).status, 200);
+  assert.equal(item(1).agreement_ref, 'F7, R12');
+  assert.match(events('covered').at(-1).detail, /In the agreement: F7, R12/);
+  const listed = (await call('molly@uep.org', 'c/uep/items')).body.items.find(i => i.id === 1);
+  assert.equal(listed.agreement_ref, 'F7, R12');
+  const refused = await estimate(1, 2);
+  assert.equal(refused.status, 409);
+  assert.match(refused.body.error, /covered by the agreement/);
+  assert.equal((await mark(PT, '')).status, 200);
+  assert.equal(item(1).agreement_ref, '');
+  assert.equal((await estimate(1, 2)).status, 201);
+  // With a live estimate, it must be withdrawn before it can be marked as covered.
+  assert.equal((await mark(PT, 'F7')).status, 409);
+  await call(PT, 'admin/items/1/estimate/withdraw', 'POST', {});
+  assert.equal((await mark(PT, 'F7')).status, 200);
+  assert.equal((await call(PT, 'c/uep/items/3', 'PATCH', { agreement_ref: 'R1' })).status, 400);
+});
