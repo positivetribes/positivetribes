@@ -426,6 +426,27 @@ test('while an estimate waits, the client cannot close it, change its phase or m
   assert.equal((await call('molly@uep.org', 'c/uep/items/1', 'PATCH', { done: true })).status, 200, 'decided, so the lock is gone');
 });
 
+test('a breakdown sets the hours, everyone on the hub can read it once sent, and bad lines are refused', async () => {
+  const { call, estimate, offer, row, PT } = setup();
+  const lines = [{ label: 'Leads flag a possible duplicate', hours: 1.5 }, { label: 'Staff review and merge', hours: 2 }, { label: 'Testing', hours: 0.5 }];
+  const r = await estimate(1, 99, { lines });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(row(1).minutes, 240, 'the lines win over the single number');
+  assert.equal(r.body.estimate.price_label, '$200');
+  assert.deepEqual(r.body.estimate.lines.map(l => [l.label, l.hours_label]), [['Leads flag a possible duplicate', '1.5 hours'], ['Staff review and merge', '2 hours'], ['Testing', '30 minutes']]);
+  assert.equal((await call('sam@uep.org', 'c/uep/items')).body.items.find(i => i.id === 1).estimate, null, 'a draft breakdown is Positive Tribes\' alone');
+  await offer(1);
+  const sam = (await call('sam@uep.org', 'c/uep/items')).body.items.find(i => i.id === 1).estimate;
+  assert.equal(sam.lines.length, 3);
+  for (const bad of [
+    { lines: 'x' }, { lines: [{ label: '', hours: 1 }] }, { lines: [{ label: 'A', hours: 0.25 }] }, { lines: [{ label: 'x'.repeat(121), hours: 1 }] },
+    { lines: Array.from({ length: 9 }, (_, n) => ({ label: 'L' + n, hours: 1 })) }, { lines: [{ label: 'A', hours: 150 }, { label: 'B', hours: 60 }] }, { lines: [null] }
+  ]) assert.equal((await call(PT, 'admin/items/2/estimate', 'PUT', { hours: 1, ...bad })).status, 400, JSON.stringify(bad).slice(0, 60));
+  assert.equal((await estimate(1, 2, { lines: [] })).status, 200, 'an empty breakdown goes back to a single number');
+  assert.equal(row(1).minutes, 120);
+  assert.equal(row(1).lines, '[]');
+});
+
 test('Patch is never given an estimate', () => {
   for (const file of ['../src/reply.js', '../src/patch.js']) {
     assert.doesNotMatch(readFileSync(new URL(file, import.meta.url), 'utf8'), /change_estimates|estimatesFor|estimateView/, file);

@@ -35,6 +35,20 @@ export function minutesFromHours(value) {
   return minutes;
 }
 
+// What an estimate includes, as the client reads it: up to 8 lines of a short label and whole or half hours.
+export const MAX_LINES = 8;
+export function linesFrom(value, text) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new InputError('The breakdown must be a list.');
+  if (value.length > MAX_LINES) throw new InputError(`Use at most ${MAX_LINES} lines.`);
+  return value.map((line, n) => {
+    if (!line || typeof line !== 'object') throw new InputError('Each line needs a description and hours.');
+    const label = text(line.label, 120, { required: true, label: `Line ${n + 1}` });
+    return { label, minutes: minutesFromHours(line.hours) };
+  });
+}
+const parseLines = raw => { try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+
 // Only the director, or the one named contact on the care plan, may decide. Positive Tribes never decides for them.
 export const canDecideEstimate = (user, plan) =>
   user.role !== 'pt' && (user.role === 'ed' || Boolean(plan && user.id === plan.balance_contact_user_id));
@@ -54,6 +68,7 @@ export function estimateView(row, user, plan) {
     price_cents: row.price_cents, price_label: moneyLabel(row.price_cents),
     credits: row.credits, credits_label: creditsLabel(row.credits),
     schedule_note: row.schedule_note, scope_note: row.scope_note,
+    lines: parseLines(row.lines).map(l => ({ label: l.label, hours: l.minutes / 60, hours_label: hoursLabel(l.minutes) })),
     // "After launch" only for a client with a care plan, and only up to the largest care size.
     // A donated change costs nothing, so there is nothing to put off to the care plan.
     later_ok: offered && planned && !donated && row.minutes <= LATER_MAX_MINUTES,
@@ -287,7 +302,12 @@ export async function estimateAdmin({ request, env, url, route, path, method, wh
     if (!action && method === 'PUT') {
       if (item.done) throw new InputError('This change is already done.', 409);
       const input = await body(request);
-      const minutes = minutesFromHours(input.hours);
+      // With a breakdown, the hours are its sum; without one, the single number given.
+      const lines = linesFrom(input.lines, text);
+      const total = lines.reduce((n, l) => n + l.minutes, 0);
+      if (lines.length && (total < MIN_MINUTES || total > MAX_MINUTES)) throw new InputError('The lines add up to more than 200 hours.');
+      const minutes = lines.length ? total : minutesFromHours(input.hours);
+      const linesJson = JSON.stringify(lines);
       const schedule = text(input.schedule_note, 200, { label: 'Schedule note' });
       const scope = text(input.scope_note, 200, { label: 'Why it is outside the agreement' });
       if (input.donated !== undefined && typeof input.donated !== 'boolean') throw new InputError('Donated must be true or false.');
@@ -296,16 +316,16 @@ export async function estimateAdmin({ request, env, url, route, path, method, wh
       const price = priceCentsOf(minutes, clientRate), credits = creditsOf(minutes);
       if (!current) {
         await db.prepare(
-          `INSERT INTO change_estimates (item_id, client_id, minutes, rate_cents, price_cents, credits, schedule_note, scope_note, donated, created_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(item.id, item.client_id, minutes, clientRate, price, credits, schedule, scope, donated, actor.name).run();
+          `INSERT INTO change_estimates (item_id, client_id, minutes, rate_cents, price_cents, credits, schedule_note, scope_note, donated, lines, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(item.id, item.client_id, minutes, clientRate, price, credits, schedule, scope, donated, linesJson, actor.name).run();
       } else {
         // Re-estimating goes back to a draft with a new version, so an old decision can never apply to a new number.
         await db.prepare(
-          `UPDATE change_estimates SET minutes = ?, rate_cents = ?, price_cents = ?, credits = ?, schedule_note = ?, scope_note = ?, donated = ?, status = 'draft',
+          `UPDATE change_estimates SET minutes = ?, rate_cents = ?, price_cents = ?, credits = ?, schedule_note = ?, scope_note = ?, donated = ?, lines = ?, status = 'draft',
              version = version + 1, offered_at = NULL, decided_at = NULL, decided_by_user_id = NULL, decided_version = NULL, decided_token = '', updated_at = CURRENT_TIMESTAMP
            WHERE item_id = ? AND status IN ('draft', 'offered', 'not_now', 'withdrawn')`
-        ).bind(minutes, clientRate, price, credits, schedule, scope, donated, item.id).run();
+        ).bind(minutes, clientRate, price, credits, schedule, scope, donated, linesJson, item.id).run();
       }
       return reply(current ? 200 : 201);
     }

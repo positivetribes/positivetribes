@@ -252,6 +252,9 @@ section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wra
 .estimate .big{font-weight:600;font-size:17px;margin:0}
 .estimate .stack>*{margin:0}
 .estimate input[type=number]{width:6em}
+.est-lines{list-style:none;margin:6px 0 0;padding:0}.est-lines li{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px dotted var(--line)}.est-lines li:last-child{border-bottom:0}.est-lines .h{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums}
+.est-included summary{cursor:pointer;font-weight:600}
+.line-row{display:flex;gap:8px;align-items:center}.line-row input[type=text]{flex:1;min-width:0}
 .care-meter{display:grid;grid-template-columns:repeat(auto-fill,minmax(18px,1fr));gap:5px;max-width:420px}
 .care-meter i{height:14px;border-radius:4px;background:var(--soft)}
 .care-meter i.used{background:var(--ok)}.care-meter i.roll{background:var(--idea-bg);outline:1.5px dashed var(--idea);outline-offset:-1.5px}
@@ -823,7 +826,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     showError('');
     try {
       await api('/admin/items/' + item.id + '/estimate' + (action ? '/' + action : ''), { method, body: JSON.stringify(payload || {}) });
-      if (action !== 'retry-task') state.estimating = null;
+      if (action !== 'retry-task') { state.estimating = null; state.estLinesFor = null; }
       await reloadItems(); render();
     } catch (e) { showError(e.message); }
   }
@@ -896,7 +899,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const e = item.estimate, ptNow = viewer().role === 'pt' && !state.preview;
     const nodes = [];
     const summary = () => h('p', { class: 'big' }, 'About ' + e.hours_label + ' · ' + (e.donated ? e.price_label + ' value, donated by Positive Tribes' : e.price_label));
-    const notes = () => [e.schedule_note && h('p', { class: 'muted' }, e.schedule_note), e.scope_note && h('p', { class: 'muted' }, e.scope_note)];
+    const notes = () => [e.schedule_note && h('p', { class: 'muted' }, e.schedule_note), e.scope_note && h('p', { class: 'muted' }, e.scope_note), included()];
+    // What the hours buy, folded so the card stays short; everyone on the client's hub can open it.
+    const included = () => e.lines && e.lines.length > 0 && h('details', { class: 'est-included' },
+      h('summary', {}, 'What’s included (' + e.lines.length + (e.lines.length === 1 ? ' part)' : ' parts)')),
+      h('ul', { class: 'est-lines' }, e.lines.map(l => h('li', {}, h('span', {}, l.label), h('span', { class: 'h' }, l.hours_label)))));
     if (e && (e.status === 'offered' || ['approved_now', 'approved_later', 'not_now'].includes(e.status))) {
       nodes.push(h('b', {}, 'Estimate for this change'), summary(), ...notes());
       if (e.status === 'offered') {
@@ -927,12 +934,28 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       if (!decided) {
         if (state.estimating === item.id) {
           const hours = h('input', { type: 'number', min: 0.5, max: 200, step: 0.5, value: e ? e.hours : '', 'aria-label': 'Hours' });
+          // The breakdown, in the client's words. With any lines, the hours are their sum.
+          if (state.estLinesFor !== item.id) { state.estLinesFor = item.id; state.estLines = e ? e.lines.map(l => ({ label: l.label, hours: l.hours })) : []; }
+          const rows = state.estLines;
+          const sum = () => rows.reduce((n, l) => n + (Number(l.hours) || 0), 0);
+          const totalNote = h('p', { class: 'meta' });
+          const sync = () => { hours.disabled = rows.length > 0; if (rows.length) hours.value = sum(); totalNote.textContent = rows.length ? 'Total from the lines: ' + sum() + ' hours' : 'Add lines to show the client what the hours include (optional).'; };
+          const lineEditor = h('div', { class: 'stack' },
+            rows.map((l, n) => h('div', { class: 'line-row' },
+              h('input', { type: 'text', maxlength: 120, value: l.label, placeholder: 'What the client gets', 'aria-label': 'Line ' + (n + 1), oninput: ev => { l.label = ev.target.value; } }),
+              h('input', { type: 'number', min: 0.5, max: 200, step: 0.5, value: l.hours, 'aria-label': 'Hours for line ' + (n + 1), oninput: ev => { l.hours = ev.target.value; sync(); } }),
+              h('button', { class: 'btn ghost small', type: 'button', 'aria-label': 'Remove line ' + (n + 1), onclick: () => { rows.splice(n, 1); render(); } }, 'Remove'))),
+            rows.length < 8 && h('div', { class: 'actions' }, h('button', { class: 'btn ghost small', type: 'button', onclick: () => { rows.push({ label: '', hours: '' }); render(); } }, 'Add a line')),
+            totalNote);
+          sync();
           const schedule = h('input', { type: 'text', maxlength: 200, value: e ? e.schedule_note : '', placeholder: 'Schedule impact, e.g. adds about a week', 'aria-label': 'Schedule impact' });
           const scope = h('input', { type: 'text', maxlength: 200, value: e ? e.scope_note : '', placeholder: 'Why it is outside the agreement (optional)', 'aria-label': 'Why it is outside the agreement' });
           const gift = h('input', { type: 'checkbox', ...(e && e.donated ? { checked: true } : {}) });
-          nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours ', hours), schedule, scope, h('label', {}, gift, ' Donate this (Positive Tribes covers it)'), h('div', { class: 'actions' },
-            h('button', { class: 'btn small', type: 'button', onclick: () => hours.value ? estimateAct(item, '', 'PUT', { hours: Number(hours.value), schedule_note: schedule.value, scope_note: scope.value, donated: gift.checked }) : showError('Enter the hours first.') }, 'Save estimate'),
-            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = null; render(); } }, 'Cancel'))));
+          nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours ', hours), lineEditor, schedule, scope, h('label', {}, gift, ' Donate this (Positive Tribes covers it)'), h('div', { class: 'actions' },
+            h('button', { class: 'btn small', type: 'button', onclick: () => rows.length || hours.value
+              ? estimateAct(item, '', 'PUT', { hours: Number(hours.value), lines: rows.map(l => ({ label: l.label, hours: Number(l.hours) })), schedule_note: schedule.value, scope_note: scope.value, donated: gift.checked })
+              : showError('Enter the hours first.') }, 'Save estimate'),
+            h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = null; state.estLinesFor = null; render(); } }, 'Cancel'))));
         } else if (e) {
           // With no estimate yet, "Estimate" sits in the card's button row instead, so an empty box never looks like one.
           nodes.push(h('div', { class: 'actions' },
