@@ -276,7 +276,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     inbox = data;
     inboxBadge(data.items.length);
     if (overview) overview.inboxCount = data.items.length;
-    const panels = data.backlogs.map(b => {
+    // Only workspaces with something new (or a read error) get a panel; an all-quiet page is one line.
+    const panels = data.backlogs.filter(b => data.items.some(i => i.backlog === b.key) || BACKLOG_STATUS[b.status]).map(b => {
       const rows = data.items.map((i, n) => [i, n]).filter(([i]) => i.backlog === b.key);
       return `<section class="panel"><div class="row"><h2 class="grow">${esc(b.name)}<span class="count">${rows.length ? rows.length + ' new' : ''}</span></h2>${rows.length > 1 ? `<button type="button" data-clear-all="${esc(b.key)}">Clear all</button>` : ''}</div>
         <p class="small links"><a class="client-link" href="${to.client(b.accountId)}">Client page</a> · <a class="client-link" href="${esc(appUrl(b.url))}">Open workspace</a></p>
@@ -289,7 +290,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       ${(pt.answered || []).map(a => `<li><a href="#/${esc(a.slug)}/backlog/${a.item_id}">${esc(a.client_name)} answered a question: ${esc(a.title)}</a></li>`).join('')}
       ${(pt.demotions || []).map(c => `<li><a href="#/command/care/triage">${esc(TRUST_NAME[c.trust_kind] || c.trust_kind)} went down to level ${c.to_level}: ${esc(c.reason)}</a></li>`).join('')}
       ${(pt.failedRuns || []).map(r => `<li class="muted">Patch run ${esc(r.started_at)}: ${esc(r.note)}</li>`).join('')}</ul></section>` : '';
-    box.innerHTML = `<div class="head"><div><h2 class="greet">Inbox</h2><p class="muted small">${data.items.length ? 'What clients changed in their workspaces. Your own edits are left out.' : 'Nothing new in the client workspaces.'}</p></div></div>${patchPanel}<div class="cols">${panels}</div>`;
+    box.innerHTML = `<div class="head"><div><h2 class="greet">New from clients</h2><p class="muted small">${data.items.length ? 'What clients changed in their workspaces. Your own edits are left out.' : 'Nothing new in the client workspaces.'}</p></div></div>${patchPanel}<div class="cols">${panels}</div>`;
     wireInbox(box);
   }
 
@@ -780,7 +781,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       } else if (view === 'inbox') {
         const data = await api('/inbox');
         if (current.box !== box) return;
-        document.title = 'Inbox | Command center';
+        document.title = 'New from clients | Command center';
         renderInbox(box, data);
       } else {
         document.title = (view === 'clients' ? 'Clients' : 'Today') + ' | Command center';
