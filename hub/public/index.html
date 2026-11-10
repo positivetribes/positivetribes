@@ -392,6 +392,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .reply-list{list-style:none;margin:0;padding:0;display:grid;gap:2px}
 .cc .reply-list li{display:grid;grid-template-columns:1fr auto auto;gap:4px 12px;align-items:center;padding:8px 0;border-top:1px solid var(--line,rgba(0,0,0,.08))}
 .cc .reply-list li:first-child{border-top:0}
+.cc .est-group summary{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;padding:8px 0;cursor:pointer;font-weight:600}
+.cc .est-group summary .meta{font-weight:400;font-size:.9em;opacity:.8}
+.cc .est-group.late summary .meta{color:var(--rust);opacity:1}
+.cc .est-group+.est-group{border-top:1px solid var(--line,rgba(0,0,0,.08))}
 .cc .reply-list li>a:first-child{display:flex;flex-direction:column;min-width:0;text-decoration:none;font-weight:600}
 .cc .reply-list .who{font-size:.8em;font-weight:500;opacity:.75}
 .cc .reply-list .meta{font-size:.85em;white-space:nowrap}
