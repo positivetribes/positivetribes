@@ -1194,7 +1194,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const verb = { question: ['Ask a question', 'What do we need to know?', 'Add question'], change: ['Suggest a change', 'What should change?', 'Add suggestion'], problem: ['Report a problem', 'What went wrong?', 'Add problem'], request: ['Ask for help', 'What do you need?', 'Send request'] }[kind];
     const title = h('input', { type: 'text', maxlength: 160, required: true, id: 'f-title' });
     const details = h('textarea', { maxlength: 2000, id: 'f-details' });
-    const tier = h('select', { id: 'f-tier' }, TIER_NAMES[kind].map(([k, l]) => h('option', { value: k }, l)));
+    // No default: people pick how much it matters, so nothing becomes a must-have by skipping the field.
+    const meaning = h('p', { class: 'meta', id: 'f-tier-meaning', 'aria-live': 'polite' }, '');
+    const tier = h('select', { id: 'f-tier', required: true, 'aria-describedby': 'f-tier-meaning',
+      onchange: e => { const t = TIER_NAMES[kind].find(x => x[0] === e.target.value); meaning.textContent = t ? t[2] : ''; } },
+      h('option', { value: '', disabled: true, selected: true }, 'Choose one'),
+      TIER_NAMES[kind].map(([k, l]) => h('option', { value: k }, l)));
     const owner = h('input', { type: 'text', maxlength: 60, id: 'f-owner', placeholder: kind === 'problem' ? 'Test 3, step 5' : 'Who can answer?' });
     return h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
@@ -1207,8 +1212,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('h2', {}, verb[0]),
       h('div', {}, h('label', { for: 'f-title' }, verb[1]), title),
       h('div', {}, h('label', { for: 'f-details' }, 'More detail (optional)'), details),
-      h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier),
+      h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier, meaning),
         (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner)),
+      kind === 'change' && h('p', { class: 'meta' }, 'We’ll reply and tell you whether this is already in your agreement or needs an estimate. Nothing is added or charged until you approve it.'),
       h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.adding = false; render(); } }, 'Cancel')));
   }
 
