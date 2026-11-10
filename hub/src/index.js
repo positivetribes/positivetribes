@@ -89,7 +89,7 @@ async function listItems(db, clientId, user) {
   const { results } = await db.prepare(
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
             i.status, i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id,
-            i.release_id, r.number AS release_number, r.name AS release_name
+            i.release_id, r.number AS release_number, r.name AS release_name, i.agreement_ref
      FROM items i JOIN projects p ON p.id = i.project_id
      LEFT JOIN releases r ON r.id = i.release_id AND r.client_id = i.client_id
      WHERE i.client_id = ?
@@ -620,6 +620,19 @@ export default {
           if (!STATUS_NAMES[item.kind]) throw new InputError('Only suggested changes and test problems ship in a phase.');
           releaseId = b.release_id === null ? null : (await requireRelease(db, client.id, projectId, b.release_id)).id;
         } else if (projectId !== item.project_id) releaseId = null;
+        // Covered by the agreement: Positive Tribes names the requirement IDs (e.g. "F7", "R12, R13"); empty clears it.
+        // A covered change never gets its own price, so it can't be marked while an estimate is live.
+        let agreementRef = item.agreement_ref ?? '';
+        if (b.agreement_ref !== undefined) {
+          if (user.role !== 'pt') throw new InputError('Only Positive Tribes marks a change as covered by the agreement.', 403);
+          if (item.kind !== 'change') throw new InputError('Only suggested changes can be marked as covered by the agreement.');
+          agreementRef = text(b.agreement_ref, 40, { label: 'Requirement' }).toUpperCase().replace(/\s*,\s*/g, ', ');
+          if (agreementRef && !/^[A-Z]{1,3}\d{1,4}(, [A-Z]{1,3}\d{1,4}){0,5}$/.test(agreementRef)) throw new InputError('Write the requirement IDs, such as F7 or R12, R13.');
+          if (agreementRef) {
+            const live = await db.prepare("SELECT 1 FROM change_estimates WHERE item_id = ? AND client_id = ? AND status != 'withdrawn'").bind(item.id, client.id).first();
+            if (live) throw new InputError('This change has an estimate. Withdraw it first, then mark it as covered.', 409);
+          }
+        }
         // Status is Positive Tribes' reply to a suggestion or problem. Not doing it closes the item; picking any other
         // status reopens one that was declined; reopening an item by hand starts it over as new.
         let status = item.status;
@@ -647,12 +660,13 @@ export default {
         const wish = item.kind === 'change' && tier !== 'must' && status === 'planned';
         const statusEvent = b.status !== undefined && status !== item.status ? ['status', wish ? 'On the wishlist' : STATUS_NAMES[item.kind][status]] : null;
         const change = changeOf(item, { title, details, owner, answer, done: statusEvent ? item.done : doneNow, tier, phase, project_id: projectId });
+        const covered = agreementRef !== (item.agreement_ref ?? '') ? ['covered', agreementRef ? 'In the agreement: ' + agreementRef : 'No longer marked as in the agreement'] : null;
         await db.batch([
           db.prepare(
-            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, release_id = ?, updated_at = CURRENT_TIMESTAMP
+            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, release_id = ?, agreement_ref = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND client_id = ?`
-          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, releaseId, item.id, client.id),
-          ...[statusEvent, change].filter(Boolean).map(([action, detail]) => logEvent(db, client.id, item.id, action, { title, kind: item.kind }, detail, user))
+          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, releaseId, agreementRef, item.id, client.id),
+          ...[statusEvent, covered, change].filter(Boolean).map(([action, detail]) => logEvent(db, client.id, item.id, action, { title, kind: item.kind }, detail, user))
         ]);
         return json({ ok: true, items: await listItems(db, client.id, user) });
       }

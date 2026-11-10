@@ -843,6 +843,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   // A draft or a withdrawn estimate is Positive Tribes' alone, so clients never get those pills.
   function estimatePill(item) {
     const e = item.estimate;
+    // Covered by the signed agreement: no separate price. Everyone sees which requirement covers it.
+    if (item.kind === 'change' && item.agreement_ref && (!e || e.status === 'withdrawn')) return h('span', { class: 'pill est yes', title: 'Covered by the signed agreement, requirement ' + item.agreement_ref }, 'In the agreement · ' + item.agreement_ref);
     if (item.kind !== 'change' || !e) return null;
     if (e.status === 'offered') {
       const days = e.offered_at ? Math.floor((Date.now() - Date.parse(e.offered_at.replace(' ', 'T') + 'Z')) / 864e5) : 0;
@@ -855,9 +857,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     return words ? h('span', { class: 'pill est ' + cls }, words) : null;
   }
   // Which estimate state a card is in, for Positive Tribes' "Estimate" filter.
-  const ESTIMATE_FILTERS = [['all', 'Any'], ['none', 'Not estimated'], ['draft', 'Draft'], ['sent', 'Sent, waiting'], ['decided', 'Decided']];
+  const ESTIMATE_FILTERS = [['all', 'Any'], ['none', 'Not estimated'], ['covered', 'In the agreement'], ['draft', 'Draft'], ['sent', 'Sent, waiting'], ['decided', 'Decided']];
   const estimateStage = item => {
     const s = item.estimate ? item.estimate.status : '';
+    if (item.agreement_ref && (!s || s === 'withdrawn')) return 'covered';
     return !s || s === 'withdrawn' ? 'none' : s === 'draft' ? 'draft' : s === 'offered' ? 'sent' : 'decided';
   };
 
@@ -1279,6 +1282,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open(group).length - 1, 'aria-label': 'Move down: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('down')) }, 'Move down'),
           h('span', { class: 'spacer' }),
           isPt && !state.preview && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.giving = item.id; render(); } }, 'Log donated time'),
+          isPt && !state.preview && item.kind === 'change' && (!item.estimate || item.estimate.status === 'withdrawn') && h('button', { class: 'btn ghost small', type: 'button', onclick: () => {
+            const ref = window.prompt('Covered by the agreement: which requirement? (e.g. F7, or R12, R13). Leave empty to clear.', item.agreement_ref || '');
+            if (ref !== null) act(base() + '/items/' + item.id, patch({ agreement_ref: ref }));
+          } }, item.agreement_ref ? 'Agreement: ' + item.agreement_ref : 'In the agreement'),
           isPt && h('button', { class: 'btn ghost small danger', type: 'button', onclick: () => { state.confirming = item.id; render(); } }, 'Delete')))) : null;
     return h('article', { id: 'item-' + item.id, class: 'card item' + (item.done ? ' is-done' : '') },
       h('div', { class: 'actions' }, h('a', { class: 'item-no', href: item.legacy_id ? link('old', item.legacy_id) : link('backlog', item.id), title: 'Link to this card', 'aria-label': 'Item ' + itemNo(item) }, '#' + itemNo(item)), pills),
@@ -1294,7 +1301,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : isPt && item.kind === 'change' && !item.answer ? 'Reply' : 'Edit'),
         !declined && !locked && h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind]),
         picker,
-        isPt && item.kind === 'change' && !item.done && !item.estimate && state.estimating !== item.id && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = item.id; render(); } }, 'Estimate')),
+        isPt && item.kind === 'change' && !item.done && !item.estimate && !item.agreement_ref && state.estimating !== item.id && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = item.id; render(); } }, 'Estimate')),
       more,
       state.confirming === item.id && h('div', { class: 'confirm', role: 'alert' }, h('span', {}, 'Delete this for everyone? This cannot be undone.'),
         h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { state.confirming = null; act(base() + '/items/' + item.id, { method: 'DELETE' }); } }, 'Delete'),
@@ -1619,7 +1626,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         shipped: `shipped ${q(i.title)}`, cancelled: `cancelled ${q(i.title)}`,
         care_question: `asked the client about ${q(i.title)}`, care_answered: `answered the question on ${q(i.title)}`,
         estimate_decided: `decided on the estimate for ${q(i.title)}: ${i.detail}`, estimate_offered: `was sent an estimate for ${q(i.title)}`,
-        donated_time: `logged donated time on ${q(i.title)}: ${i.detail}`
+        donated_time: `logged donated time on ${q(i.title)}: ${i.detail}`, covered: `marked ${q(i.title)}: ${i.detail}`
       }[i.action] || `changed ${q(i.title)}`;
       return `${who} ${verb}` + (i.eventIds.length > 1 ? ` (${i.eventIds.length} changes)` : '');
     }
