@@ -84,7 +84,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     if (!el) return;
     if (!lastSync) { el.textContent = 'Activity sync has not run yet'; return; }
     const hours = (Date.now() - Date.parse(lastSync.ran_at)) / 3600e3;
-    el.textContent = 'Synced ' + (hours < 1 ? 'within the hour' : hours < 36 ? Math.round(hours) + ' h ago' : Math.round(hours / 24) + ' days ago');
+    el.textContent = 'Email and meetings synced ' + (hours < 1 ? 'within the hour' : hours < 36 ? Math.round(hours) + ' h ago' : Math.round(hours / 24) + ' days ago');
     el.classList.toggle('late', hours > 36);
   }
   const inboxBadge = n => { const el = $('cc-inbox-count'); if (el) el.textContent = n || ''; };
@@ -96,7 +96,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   const inboxChanged = () => window.dispatchEvent(new Event('hub-inbox-changed'));
   function banners(data) {
     let html = '';
-    if (data.salesforce === 'error') html += '<div class="banner">Salesforce could not be reached, so only your notes, steps and synced activity are shown. Try Refresh in a minute.</div>';
+    if (data.salesforce === 'error') html += '<div class="banner">Salesforce could not be reached, so only your notes, steps and synced activity are shown. Reload the page in a minute.</div>';
     if (data.salesforce === 'off') html += '<div class="banner">Salesforce is not connected on this deployment, so no clients are listed.</div>';
     if (data.lastSync && Date.now() - Date.parse(data.lastSync.ran_at) > 36 * 3600e3) html += '<div class="banner">The daily activity sync has not run in over 36 hours. Check the Claude routine.</div>';
     return html;
@@ -260,7 +260,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     if (i.action === 'done') return i.kind === 'question' ? 'Marked answered' : i.kind === 'problem' ? 'Marked fixed' : 'Marked done';
     return { answered: 'Answered', reopened: 'Reopened', tier: 'Priority changed', phase: 'Phase changed', edited: 'Edited', deleted: 'Deleted', signed_off: 'Signed off' }[i.action] || i.action;
   }
-  const BACKLOG_STATUS = { off: 'The hub database is not connected.', not_ready: 'No change log yet.', error: 'Could not be read just now. Try Refresh.' };
+  const BACKLOG_STATUS = { off: 'The hub database is not connected.', not_ready: 'No change log yet.', error: 'Could not be read just now. Reload the page.' };
 
   function inboxRow(i, n, withStep = true) {
     const inApp = appUrl(i.url), url = inApp || safeUrl(i.url);
