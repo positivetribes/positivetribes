@@ -822,13 +822,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 
   // ---- Change estimates: Positive Tribes enters hours; everyone on the hub sees the price; the director decides ----
   async function reloadItems() { state.items = (await api(base() + '/items')).items; }
-  async function estimateAct(item, action, method, payload) {
-    showError('');
+  // errorBox: an element inside the estimate form, so a refused save is shown where Eric is looking, not at the page top.
+  async function estimateAct(item, action, method, payload, errorBox) {
+    const fail = message => { if (errorBox) { errorBox.textContent = message; errorBox.hidden = !message; } else showError(message); };
+    fail('');
     try {
       await api('/admin/items/' + item.id + '/estimate' + (action ? '/' + action : ''), { method, body: JSON.stringify(payload || {}) });
       if (action !== 'retry-task') { state.estimating = null; state.estLinesFor = null; }
       await reloadItems(); render();
-    } catch (e) { showError(e.message); }
+    } catch (e) { fail(e.message); }
   }
   async function decideEstimate(item, choice) {
     showError('');
@@ -951,10 +953,23 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           const schedule = h('input', { type: 'text', maxlength: 200, value: e ? e.schedule_note : '', placeholder: 'Schedule impact, e.g. adds about a week', 'aria-label': 'Schedule impact' });
           const scope = h('input', { type: 'text', maxlength: 200, value: e ? e.scope_note : '', placeholder: 'Why it is outside the agreement (optional)', 'aria-label': 'Why it is outside the agreement' });
           const gift = h('input', { type: 'checkbox', ...(e && e.donated ? { checked: true } : {}) });
-          nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours ', hours), lineEditor, schedule, scope, h('label', {}, gift, ' Donate this (Positive Tribes covers it)'), h('div', { class: 'actions' },
-            h('button', { class: 'btn small', type: 'button', onclick: () => rows.length || hours.value
-              ? estimateAct(item, '', 'PUT', { hours: Number(hours.value), lines: rows.map(l => ({ label: l.label, hours: Number(l.hours) })), schedule_note: schedule.value, scope_note: scope.value, donated: gift.checked })
-              : showError('Enter the hours first.') }, 'Save estimate'),
+          const formError = h('p', { class: 'error', role: 'alert', hidden: true });
+          const check = () => {
+            if (!rows.length && !hours.value) return 'Enter the hours first.';
+            for (let n = 0; n < rows.length; n++) {
+              const label = (rows[n].label || '').trim();
+              if (!label) return 'Line ' + (n + 1) + ' needs a description.';
+              if (label.length > 120) return 'Line ' + (n + 1) + ' is ' + label.length + ' characters; shorten it to 120 or fewer.';
+              if (!(Number(rows[n].hours) >= 0.5)) return 'Line ' + (n + 1) + ' needs hours (0.5 or more).';
+            }
+            return '';
+          };
+          nodes.push(h('div', { class: 'stack' }, h('label', {}, 'Hours ', hours), lineEditor, schedule, scope, h('label', {}, gift, ' Donate this (Positive Tribes covers it)'), formError, h('div', { class: 'actions' },
+            h('button', { class: 'btn small', type: 'button', onclick: () => {
+              const problem = check();
+              if (problem) { formError.textContent = problem; formError.hidden = false; return; }
+              estimateAct(item, '', 'PUT', { hours: Number(hours.value), lines: rows.map(l => ({ label: l.label, hours: Number(l.hours) })), schedule_note: schedule.value, scope_note: scope.value, donated: gift.checked }, formError);
+            } }, 'Save estimate'),
             h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = null; state.estLinesFor = null; render(); } }, 'Cancel'))));
         } else if (e) {
           // With no estimate yet, "Estimate" sits in the card's button row instead, so an empty box never looks like one.
