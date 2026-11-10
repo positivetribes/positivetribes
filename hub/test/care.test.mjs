@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 import { database } from './helpers.mjs';
-import { balanceOf, courtesyCost, endOfMonth, addMonths, ensureGrants, todayUtc, monthOf } from '../src/care.js';
+import { balanceOf, endOfMonth, addMonths, ensureGrants, todayUtc, monthOf } from '../src/care.js';
 
 const UEP_ACCOUNT = '001Pr00000yy8o9IAA', SAFE_ACCOUNT = '001Pr00000yyXUuIAM';
 const OPP = '006Pr00000AbCdEIAZ', OTHER_OPP = '006Pr00000ZzZzZIAZ';
@@ -49,10 +49,6 @@ test('a refund comes back as credits; an overdraft is owed from the next grant',
   const refunded = [row(1, 'grant', 2, '2026-11-01 00:00:00', '2026-12-31'), row(2, 'spend', -2, '2026-11-03 00:00:00'), row(3, 'refund', 2, '2026-11-04 00:00:00', '2026-12-31')];
   assert.equal(balanceOf(refunded, '2026-11-15').available, 2);
   assert.equal(balanceOf(refunded, '2026-11-15').usedThisMonth, 0);
-});
-
-test('courtesy edits: 5 free, then 1 credit at the start of each block of 5', () => {
-  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 10, 11, 15, 16].map(courtesyCost), [0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1]);
 });
 
 // ---- Through the Worker, against the real migrations ----
@@ -160,7 +156,7 @@ test('running out never blocks: the request waits for credits at no cost', async
   assert.equal((await call('eric@positivetribes.org', 'admin/care/1/boost', 'POST', {})).status, 201);
   const later = await call('molly@uep.org', `c/uep/care/${id}/confirm`, 'POST', {});
   assert.equal(later.body.care.requests[0].status, 'queued');
-  assert.equal(later.body.care.balance.available, 6);
+  assert.equal(later.body.care.balance.available, 4);
 });
 
 test('fixes are free and skip the confirm step; new projects use nothing', async () => {
@@ -177,13 +173,13 @@ test('fixes are free and skip the confirm step; new projects use nothing', async
   assert.equal(shipped.body.care.shippedThisMonth, 1);
 });
 
-test('courtesy edits: the sixth this month uses a credit, and an edit is counted only once', async () => {
+test('courtesy edits are always free, and an edit is counted only once', async () => {
   const { request, triage, ledger } = setup();
   const ids = [];
   for (let n = 1; n <= 6; n++) ids.push(await request('sam@uep.org', 'Typo ' + n));
   for (const id of ids) assert.equal((await triage(id, { type: 'courtesy' })).status, 200);
   assert.equal(ledger().filter(r => r.kind === 'courtesy').length, 6);
-  assert.deepEqual(ledger().filter(r => r.kind === 'spend'), [{ kind: 'spend', credits: -1, item_id: ids[5] }]);
+  assert.deepEqual(ledger().filter(r => r.kind === 'spend'), []);
   assert.equal((await triage(ids[0], { type: 'courtesy' })).status, 409);
 });
 
@@ -225,7 +221,7 @@ test('cancelling a request paid from a boost pack returns boost credits that las
   await triage(id, { type: 'improvement', size: 'L' });
   await call('molly@uep.org', `c/uep/care/${id}/confirm`, 'POST', {});
   const r = await call('eric@positivetribes.org', `c/uep/care/${id}/cancel`, 'POST', {});
-  assert.equal(r.body.care.balance.available, 10);
+  assert.equal(r.body.care.balance.available, 8);
   const boostEnd = sqlite.prepare("SELECT expires_on FROM credit_ledger WHERE kind = 'boost'").get().expires_on;
   assert.equal(sqlite.prepare("SELECT expires_on FROM credit_ledger WHERE kind = 'refund'").get().expires_on, boostEnd);
   // The cancelled request is closed on the list too.

@@ -1,7 +1,7 @@
 // Sorting a care request: the one place a triage decision is applied, whether the Tribe Guide sorts it on the client's
 // page or agrees with (or changes) Patch's suggestion on the Triage tab. Event details say what happened and what it
 // costs, never a balance, so the bell shows nothing staff may not see.
-import { SIZES, courtesyCost, costLabel, ensureGrants, ledgerOf, balanceOf, todayUtc, monthOf } from './care.js';
+import { SIZES, costLabel, ensureGrants, ledgerOf, balanceOf, todayUtc, monthOf } from './care.js';
 
 export class InputError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
@@ -29,7 +29,7 @@ export const spendRow = (db, client, plan, item, credits, month, note, user, gua
 ).bind(client.id, plan.id, -credits, month, item.id, clip(note, 200), user.email, guardCredits, item.id, client.id, guardCredits);
 
 // Sorts one request: a fix goes straight to the queue, a new project is quoted separately (nothing used), an
-// improvement waits for the client's OK at its size, and a courtesy edit is counted (free for the first 5 a month).
+// improvement waits for the client's OK at its size, and a courtesy edit is counted and always free.
 // The caller has already checked that user is Positive Tribes and that client, plan, item and care belong together.
 export async function applyTriage(db, { client, plan, item, care, type, size, note, user, today = todayUtc() }) {
   if (!OPEN_STATUSES.includes(care.status)) throw new InputError('This request has already been decided.', 409);
@@ -56,21 +56,14 @@ export async function applyTriage(db, { client, plan, item, care, type, size, no
     return db.batch([set('awaiting_confirm', credits), event('triaged', withNote(`${costLabel({ type, size, credits })} · waiting for your OK`))]);
   }
   // Courtesy edits are counted when sorted. The count row goes in first (once per request), and its place among this
-  // month's count rows decides its cost, so two edits sorted at the same moment can never get the same number.
+  // month's count rows is its number, so two edits sorted at the same moment can never get the same one.
   await db.prepare(
     `INSERT OR IGNORE INTO credit_ledger (client_id, care_plan_id, kind, credits, month, item_id, note, actor_email) VALUES (?, ?, 'courtesy', 0, ?, ?, 'Courtesy edit', ?)`
   ).bind(client.id, plan.id, month, item.id, user.email).run();
   const mine = await db.prepare("SELECT id, month FROM credit_ledger WHERE item_id = ? AND client_id = ? AND kind = 'courtesy'").bind(item.id, client.id).first();
   const n = (await db.prepare("SELECT COUNT(*) AS n FROM credit_ledger WHERE care_plan_id = ? AND client_id = ? AND kind = 'courtesy' AND month = ? AND id <= ?")
     .bind(plan.id, client.id, mine.month, mine.id).first()).n;
-  const cost = courtesyCost(n);
-  if (!cost) return db.batch([set('queued', 0), event('triaged', withNote(`Courtesy edit ${n} this month · free`))]);
-  await ensureGrants(db, plan, today);
-  if (balanceOf(await ledgerOf(db, plan), today).available >= cost) {
-    return db.batch([spendRow(db, client, plan, item, cost, month, `Courtesy edit ${n} this month`, user), set('queued', cost),
-      event('triaged', `Courtesy edit ${n} this month · 1 credit (past the free 5)`)]);
-  }
-  return db.batch([set('waiting_credits', cost), event('triaged', `Courtesy edit ${n} this month · 1 credit (past the free 5) · waiting for credits`)]);
+  return db.batch([set('queued', 0), event('triaged', withNote(`Courtesy edit ${n} this month · free`))]);
 }
 
 // "Needs more info": one clear question goes on the request; it stays with Positive Tribes (status new) until the

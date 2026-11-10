@@ -785,7 +785,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       const data = await api(base() + '/care/' + item.id + '/' + action, post(payload || {}));
       state.care = data.care;
       state.items = (await api(base() + '/items')).items;
-      if (data.waiting) showError('There are not enough credits right now. Your request is saved and will start when next month\'s credits arrive, at no extra cost. Want it sooner? Ask your Tribe Guide for a boost pack: 8 credits for $300, good for 12 months.');
+      if (data.waiting) showError('There are not enough credits right now. Your request is saved and will start when next month\'s credits arrive, at no extra cost. Want it sooner? Ask your Tribe Guide for a boost pack: 6 credits for $300, good for 12 months.');
       render();
     } catch (e) { showError(e.message); }
   }

@@ -5,7 +5,7 @@
 
 import { salesforceToken, soql, quote, sf as sfRequest } from './salesforce.js';
 import { windowEnd } from './dates.js';
-import { TIERS, BOOST, planFor, ensureGrants, ledgerOf, balanceOf, careRequests, todayUtc, monthOf, addYearsMonths } from './care.js';
+import { TIERS, BOOST, COURTESY_MANY, planFor, ensureGrants, ledgerOf, balanceOf, careRequests, todayUtc, monthOf, addYearsMonths } from './care.js';
 // One error class for the whole Worker, so a check that fails inside a shared helper (triage.js) answers 4xx here too.
 import { InputError } from './triage.js';
 import { patchAdmin, patchInbox, aiCost } from './patch.js';
@@ -960,7 +960,7 @@ async function careOverview(hub, today) {
         if (row.requests.waiting_credits || row.balance.available === 0) row.flags.push('Out of credits');
         if (row.balance.expiringSoon) row.flags.push(`${row.balance.expiringSoon} rolled-over credit${row.balance.expiringSoon === 1 ? '' : 's'} end this month`);
         if (Number(today.slice(8)) >= 20 && !row.balance.usedThisMonth) row.flags.push('No credits used this month');
-        if (row.balance.courtesyThisMonth > 5) row.flags.push('Past the free courtesy edits');
+        if (row.balance.courtesyThisMonth >= COURTESY_MANY) row.flags.push('Many courtesy edits: suggest a settings screen');
         if (row.requests.new) row.flags.push(`${row.requests.new} to sort`);
       }
     }
