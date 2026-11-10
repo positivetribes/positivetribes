@@ -640,8 +640,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           state.me.salesforce_url && [' \u00b7 ', h('a', { class: 'eb-sf', href: state.me.salesforce_url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Open Salesforce (opens in a new tab)' }, 'Salesforce \u2197')]), h('h1', {}, 'Positive Tribes')),
         h('div', { class: 'cc-bar' },
           h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' }, ...tabs(h('span', { class: 'badge', id: 'cc-inbox-count' }), h('span', { class: 'badge', id: 'cc-care-count' }))),
-          h('span', { class: 'meta cc-sync', id: 'cc-sync' }),
-          h('button', { class: 'btn ghost small', type: 'button', onclick: () => state.ccView === 'ideas' ? loadCommandIdeas() : command.refresh() }, 'Refresh')),
+          // No Refresh button: each page load reads Salesforce live (60-second cache, cleared by any change made here),
+          // and the label is the daily email and meeting sync, which only its own routine can run.
+          h('span', { class: 'meta cc-sync', id: 'cc-sync', title: 'When the daily routine last pulled your emails and meetings in. Salesforce itself is read live.' })),
         box);
     }
     state.ccView = view;
