@@ -1,4 +1,5 @@
-// The command center: Positive Tribes' home page in the hub (#/command). Today, Inbox, Clients and each client's
+// The command center: Positive Tribes' home page in the hub (#/command). Today, Clients and each client's (the full Inbox list is
+// the bell's "See all" page, #/command/inbox, with no tab of its own)
 // page, read from /api/admin (Salesforce live, plus Eric's notes, steps and the daily synced activity).
 // index.html draws the hub header and the tab row, then calls show(container, sub) on every #/command/... route.
 window.CommandCenter = function createCommandCenter({ api: hubApi }) {
@@ -246,7 +247,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       return `<a class="card${c.active ? '' : ' inactive'}" href="${to.client(c.id)}"><div class="row"><h2 class="grow">${esc(c.name)}</h2>${c.workspace ? '<span class="chip">In the hub</span>' : ''}${c.pinned ? '<span class="chip">Pinned</span>' : ''}</div>
         <div class="stages">${stages}</div>
         <div class="small"><strong>Next:</strong> ${next}</div>
-        <div class="meta">Last contact ${esc(ago(c.lastTouch))}${c.workspace ? (c.hubSeen ? ' · In the hub ' + esc(seenAgo(c.hubSeen)) : ' · ' + NOT_SEEN) : ''}${c.type ? ' · ' + esc(c.type) : ''}${c.openSteps > 1 ? ` · ${c.openSteps} open steps` : ''}</div></a>`;
+        <div class="meta">${c.hubNew ? `<strong class="hub-new">${esc(c.hubNew)} new in the hub</strong> · ` : ''}Last contact ${esc(ago(c.lastTouch))}${c.workspace ? (c.hubSeen ? ' · In the hub ' + esc(seenAgo(c.hubSeen)) : ' · ' + NOT_SEEN) : ''}${c.type ? ' · ' + esc(c.type) : ''}${c.openSteps > 1 ? ` · ${c.openSteps} open steps` : ''}</div></a>`;
     }).join('');
     box.innerHTML = `${banners(data)}<div class="head"><h2 class="greet">Clients</h2><p class="muted small">${data.clients.filter(c => c.active).length} active of ${data.clients.length}</p></div><div class="grid">${cards || '<p class="empty">No clients yet.</p>'}</div>`;
   }
@@ -261,14 +262,14 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   }
   const BACKLOG_STATUS = { off: 'The hub database is not connected.', not_ready: 'No change log yet.', error: 'Could not be read just now. Try Refresh.' };
 
-  function inboxRow(i, n) {
+  function inboxRow(i, n, withStep = true) {
     const inApp = appUrl(i.url), url = inApp || safeUrl(i.url);
     const title = url && i.action !== 'deleted' ? `<a href="${esc(url)}"${inApp ? '' : ' target="_blank" rel="noopener"'}>${esc(i.title)}</a>` : esc(i.title);
     const meta = [i.actor ? esc(i.actor) : 'Someone', esc([dayName(dayOf(i.at)), timeOf(i.at)].filter(Boolean).join(', ')), i.eventIds.length > 1 ? i.eventIds.length + ' changes' : ''].filter(Boolean).join(' · ');
     const label = actionName(i) + (i.added && i.action !== 'added' ? ' · new' : '');
     return `<li data-row="${n}"><div class="row"><div class="grow"><div class="title">${title}</div><div class="meta">${meta}</div></div><span class="chip${i.action === 'added' || i.added ? ' warn' : ''}">${esc(label)}</span></div>
       ${i.detail ? `<p class="said">${esc(i.detail)}</p>` : ''}
-      <div class="small"><button class="link" data-step-for="${n}">Add next step</button><button class="link" data-clear="${n}">Clear</button></div></li>`;
+      <div class="small">${withStep ? `<button class="link" data-step-for="${n}">Add next step</button>` : ''}<button class="link" data-clear="${n}">Clear</button></div></li>`;
   }
 
   function renderInbox(box, data) {
@@ -338,6 +339,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     box.innerHTML = `<div class="head"><div><p class="small"><a href="${to.clients}" class="client-link">← All clients</a></p><h2 class="greet">${esc(c.name)}</h2><p class="muted small">${[esc(c.type), site].filter(Boolean).join(' · ')}</p></div>
       <div class="actions">${c.workspace ? `<a class="button primary" href="#/${esc(c.workspace)}/home">Open workspace</a>` : ''}<button type="button" id="pin">${c.pinned ? 'Unpin' : 'Pin to top'}</button><a class="button" href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener">Open in Salesforce ↗</a></div></div>
     <div class="detail"><aside>
+      ${(data.hubNew || []).length ? `<section class="panel" id="hub-new"><div class="row"><h2 class="grow">New in the hub<span class="count">${data.hubNew.length}</span></h2>${data.hubNew.length > 1 ? '<button type="button" data-clear-all="1">Clear all</button>' : ''}</div>
+        <ul class="items">${data.hubNew.map(([i, n]) => inboxRow(i, n, false)).join('')}</ul></section>` : ''}
       <section class="panel"><h2>Next steps<span class="count">${data.steps.length}</span></h2>${data.steps.length ? `<ul class="items">${data.steps.map(stepRow).join('')}</ul>` : '<p class="empty">No open steps.</p>'}
         <form class="inline" id="add-step"><input type="text" name="title" placeholder="Add a next step" maxlength="300" required aria-label="Next step"><input type="date" name="dueDate" aria-label="Due date"><button class="primary">Add</button></form><p class="err" id="step-err"></p></section>
       <section class="panel"><h2>Opportunities</h2>${opps ? `<ul class="items">${opps}</ul>` : '<p class="empty">None in Salesforce.</p>'}</section>
@@ -359,6 +362,15 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       ${timeline(data.past, 'No history yet.')}
     </section></div>`;
     wireClient(box, c);
+    // Clearing here clears the bell too (same list); the card count in Clients follows on the next load.
+    const hubPanel = box.querySelector('#hub-new');
+    if (hubPanel) hubPanel.onclick = async e => {
+      const t = e.target.closest('[data-clear],[data-clear-all]');
+      if (!t) return;
+      const rows = t.dataset.clearAll ? data.hubNew.map(([i]) => i) : [inbox.items[t.dataset.clear]];
+      try { await send('/inbox/clear', 'POST', { items: rows.map(i => ({ backlog: i.backlog, eventIds: i.eventIds })) }); overview = null; inboxChanged(); again(); }
+      catch (error) { alert(error.message); }
+    };
   }
 
   function wireClient(box, c) {
@@ -743,6 +755,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       if (view === 'client') {
         const data = await api('/clients/' + id);
         if (current.box !== box) return;
+        // A hub client's uncleared changes, from the same list as the bell.
+        if (data.client.workspace) {
+          inbox = await api('/inbox').catch(() => null);
+          data.hubNew = inbox ? inbox.items.map((i, n) => [i, n]).filter(([i]) => i.accountId === id) : [];
+        }
         document.title = data.client.name + ' | Command center';
         renderClient(box, data);
       } else if (view === 'documents') {
