@@ -8,9 +8,10 @@ export const TIERS = {
   care: { name: 'Care', credits: 6, price: 500 },
   growth: { name: 'Growth', credits: 12, price: 750 }
 };
-export const BOOST = { credits: 8, months: 12, price: 300 };
-// Courtesy edits (wording, labels, typos, images): the first 5 in a month are free, then every 5 count as 1 credit.
-export const COURTESY = { free: 5, per: 5 };
+export const BOOST = { credits: 6, months: 12, price: 300 };
+// Courtesy edits (wording, labels, typos, images) are free with no cap (decided Nov 10, 2026). Each one is still
+// counted in the ledger, so a steady stream from one client shows up in the command center.
+export const COURTESY_MANY = 10;
 // Monthly credits last the month they are granted plus this many more.
 export const ROLLOVER_MONTHS = 1;
 // The plan's history is backfilled at most this far, so a plan dated long ago cannot write an endless batch.
@@ -40,13 +41,9 @@ export function addYearsMonths(day, months) {
   return d.toISOString().slice(0, 10);
 }
 
-// The credit cost of the nth courtesy edit in a month (n counts from 1): 0 for the free ones, then 1 at the start of
-// each block of 5 (the 6th, 11th, ...), so a block is charged once, when it begins.
-export const courtesyCost = n => n > COURTESY.free && (n - COURTESY.free - 1) % COURTESY.per === 0 ? 1 : 0;
-
 export const costLabel = r => {
   if (r.type === 'fix') return 'Fix · free';
-  if (r.type === 'courtesy') return r.credits ? 'Courtesy edit · 1 credit' : 'Courtesy edit · free';
+  if (r.type === 'courtesy') return 'Courtesy edit · free';
   if (r.type === 'project') return 'New project · quoted separately';
   if (r.type === 'improvement') return `${r.size} · ${r.credits} credit${r.credits === 1 ? '' : 's'}`;
   return '';
@@ -172,7 +169,6 @@ export async function careView(db, client, user, today = todayUtc()) {
     live, requests, shippedThisMonth,
     balance: allowed ? (({ drawn, ...b }) => b)(balanceOf(ledger, today)) : null,
     history: allowed ? ledger.slice(-100).reverse().map(({ id, kind, credits, month, expires_on, item_id, note, at }) => ({ id, kind, credits, month, expires_on, item_id, note, at })) : null,
-    canConfirm: canConfirm(user, plan),
-    courtesy: { ...COURTESY }
+    canConfirm: canConfirm(user, plan)
   };
 }

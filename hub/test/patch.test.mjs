@@ -383,7 +383,7 @@ test('rules are versioned per client, and the plan points at the newest', async 
   const systems = mock.sent.map(s => JSON.stringify(s.body.system));
   assert.ok(systems.some(s => s.includes('Exports too')));
   assert.ok(systems.some(s => !s.includes('Reports count')), 'SAFE does not get UEP\'s rules');
-  assert.deepEqual(sqlite.prepare('SELECT rules_version FROM patch_decisions ORDER BY client_id').all().map(r => r.rules_version), ['client1-v2', 'standard-1']);
+  assert.deepEqual(sqlite.prepare('SELECT rules_version FROM patch_decisions ORDER BY client_id').all().map(r => r.rules_version), ['client1-v2', 'standard-2']);
 });
 
 test('the model is set in the command center, with rollback', async () => {

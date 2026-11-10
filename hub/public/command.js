@@ -525,7 +525,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   }
 
   // ---- Care plans: every client's credits, rollover, boost and checklist (screen 6) ----
-  const TIER_OPTIONS = { essentials: 'Essentials ($300, 2 credits)', care: 'Care ($500, 6 credits)', growth: 'Growth ($750, 12 credits)' };
+  const TIER_OPTIONS = { essentials: 'Essentials ($300, 2 credits; retention fallback, not on proposals)', care: 'Care ($500, 6 credits)', growth: 'Growth ($750, 12 credits)' };
   const PLAN_STATUS = { setup: 'Setting up', active: 'Active', paused: 'Paused', ended: 'Ended' };
   const REQUEST_STATUS = { new: 'to sort', awaiting_confirm: 'waiting for the client', waiting_credits: 'waiting for credits', queued: 'in the queue', shipped: 'shipped', declined: 'declined' };
   const selectOptions = (map, chosen) => Object.entries(map).map(([k, v]) => `<option value="${esc(k)}"${k === chosen ? ' selected' : ''}>${esc(v)}</option>`).join('');
@@ -548,7 +548,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <label>Test database<input type="text" name="testDb" value="${esc(p ? p.test_db : '')}" maxlength="120"></label>
       <label>Who sees balances (besides the director)<select name="balanceContactEmail">${contacts}</select></label>
       <label class="check wide"><input type="checkbox" name="testSigninsOk"${p && p.test_signins_ok ? ' checked' : ''}><span>Test sign-ins work</span></label>
-      <p class="actions wide"><button class="primary">${p ? 'Save plan' : 'Create plan'}</button>${p && p.status === 'active' ? ' <button type="button" data-boost="' + c.client.id + '">Add boost pack (8 credits)</button>' : ''}</p></form>`;
+      <p class="actions wide"><button class="primary">${p ? 'Save plan' : 'Create plan'}</button>${p && p.status === 'active' ? ' <button type="button" data-boost="' + c.client.id + '">Add boost pack (6 credits)</button>' : ''}</p></form>`;
     return `<section class="panel"><div class="row"><h2 class="grow">${esc(c.client.name)}</h2>${p ? `<span class="chip">${esc(p.tierName || p.tier)} · ${esc(PLAN_STATUS[p.status])}</span>` : '<span class="chip">No plan yet</span>'} <a class="client-link" href="#/${esc(c.client.slug)}/home">Open workspace</a></div>
       ${numbers}${waiting ? `<div class="small muted">Requests: ${esc(waiting)}</div>` : ''}${flags ? `<div class="small">${flags}</div>` : ''}
       <details${p && p.status === 'active' ? '' : ' open'}><summary>Setup checklist and plan</summary><ul class="small">${checks}</ul>${form}</details>
@@ -580,7 +580,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     };
     box.onclick = async e => {
       const t = e.target.closest('[data-boost]');
-      if (!t || !confirm('Add a boost pack of 8 credits (valid 12 months)? Record the $300 payment separately.')) return;
+      if (!t || !confirm('Add a boost pack of 6 credits (valid 12 months)? Record the $300 payment separately.')) return;
       try { renderCare(box, await api('/care/' + t.dataset.boost + '/boost', { method: 'POST', body: JSON.stringify({}) })); } catch (error) { fail(t.dataset.boost, error); }
     };
   }
