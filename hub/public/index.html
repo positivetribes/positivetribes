@@ -439,7 +439,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   };
   const KIND_TABS = [['question', 'Open questions'], ['change', 'Suggested changes'], ['problem', 'Test problems'], ['request', 'Support requests']];
   const DONE_WORD = { question: 'answered', change: 'done', problem: 'fixed', request: 'resolved' };
-  const PHASES = [['review', 'To review'], ['prototype', 'Prototype'], ['full', 'Full build'], ['later', 'Later']];
+  const PHASES = [['review', 'Not decided yet'], ['prototype', 'Prototype'], ['full', 'In the build'], ['later', 'After launch']];
   const STEPS = [['kickoff', 'Kickoff'], ['discovery', 'Discovery'], ['prototype', 'Prototype'], ['build', 'Build'], ['uat', 'Testing'], ['launch', 'Launch'], ['hypercare', 'Settling in'], ['support', 'Care plan']];
   const $ = id => document.getElementById(id);
   // Positive Tribes' home page: the command center, drawn by command.js under the same header.
@@ -505,6 +505,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const patch = b => ({ method: 'PATCH', body: JSON.stringify(b) });
   const firstName = () => (viewer().name || '').split(/\s+/)[0].toLowerCase();
   const open = items => items.filter(i => !i.done);
+  // Waiting on the viewer: an estimate they decide (in Preview as, whoever really decides), or a question named for them.
+  const waitsOnMe = i => Boolean(
+    (i.estimate && i.estimate.status === 'offered' && (state.preview ? state.preview.decides : i.estimate.can_decide))
+    || (i.kind === 'question' && i.owner && firstName() && i.owner.toLowerCase().includes(firstName())));
+  const shownBy = (i, key) => key === 'all' || (key === 'yours' ? waitsOnMe(i) : i.phase === key);
   // Nice-to-have and idea suggestions are the Wishlist: listed, never counted in badges, weighed at each phase review.
   const isWish = i => i.kind === 'change' && i.tier !== 'must';
   const tally = items => open(items).filter(i => !isWish(i));
@@ -1122,11 +1127,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     // The form stays closed behind one button until someone wants it, so the list comes first.
     const careMode = kind === 'request' && state.care && state.care.plan;
     const opener = careMode ? 'Request an improvement' : { question: 'Ask a question', change: 'Suggest a change', problem: 'Report a problem', request: 'Ask for help' }[kind];
-    const phaseCount = key => open(mine).filter(i => key === 'all' || i.phase === key).length;
+    // Show: everything, what waits on this viewer (clients only), or when it would be built.
+    // Options with nothing in them are left out, except the one already chosen.
+    const showOptions = [['all', 'Everything'], ...(isPt && !state.preview ? [] : [['yours', 'Waiting on you']]), ...PHASES];
+    const phaseCount = key => open(mine).filter(i => shownBy(i, key)).length;
     const showBy = kind !== 'problem' && kind !== 'request' && open(mine).length > 0 && h('div', { class: 'show-by' },
       h('label', { for: 'show-by' }, 'Show'),
       h('select', { id: 'show-by', onchange: e => { state.filter = e.target.value; render(); } },
-        [['all', 'All phases'], ...PHASES].map(([key, label]) => h('option', { value: key, ...(filter === key ? { selected: true } : {}) }, label + ' (' + phaseCount(key) + ')'))));
+        showOptions.filter(([key]) => key === 'all' || key === filter || phaseCount(key) > 0)
+          .map(([key, label]) => h('option', { value: key, ...(filter === key ? { selected: true } : {}) }, label + ' (' + phaseCount(key) + ')'))));
     const openChanges = open(here.filter(i => i.kind === 'change'));
     const estBy = isPt && kind === 'change' && openChanges.length > 0 && h('div', { class: 'show-by' },
       h('label', { for: 'est-by' }, 'Estimate'),
@@ -1143,7 +1152,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     let shown = 0;
     const wishes = [];
     for (const [key, label] of tiers) {
-      const group = mine.filter(i => i.tier === key && (filter === 'all' || i.phase === filter));
+      const group = mine.filter(i => i.tier === key && shownBy(i, filter));
       const active = open(group);
       if (!active.length) continue;
       // Suggested changes below Must have fold into the Wishlist under the must-haves.
@@ -1156,13 +1165,13 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     }
     const wishCount = wishes.reduce((n, w) => n + w[3].length, 0);
     if (!shown) {
-      const phase = filter === 'all' ? '' : ' in ' + PHASES.find(p => p[0] === filter)[1];
+      const phase = filter === 'all' ? '' : filter === 'yours' ? ' waiting on you' : ' (' + PHASES.find(p => p[0] === filter)[1].toLowerCase() + ')';
       nodes.push(h('p', { class: 'empty' }, wishCount ? 'No open must-haves' + phase + '.' : 'No open ' + { question: 'questions', change: 'suggestions', problem: 'problems', request: 'requests' }[kind] + phase + '.'));
     }
     if (wishCount) {
       const proj = state.projects.find(p => p.id === project);
       const launched = proj && ['launch', 'hypercare', 'support'].includes(proj.phase);
-      nodes.push(h('details', { class: 'wishlist', ...(state.wishOpen ? { open: true } : {}), ontoggle: e => { state.wishOpen = e.target.open; } },
+      nodes.push(h('details', { class: 'wishlist', ...(state.wishOpen || filter !== 'all' ? { open: true } : {}), ontoggle: e => { state.wishOpen = e.target.open; } },
         h('summary', {}, 'Wishlist (' + wishCount + ')'),
         h('p', { class: 'why' }, launched
           ? 'Good ideas, not promised. Now that this tool is live, ask for one with Request an improvement on your care plan.'
@@ -1245,7 +1254,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const tiers = TIER_NAMES[item.kind];
     const position = open(group).indexOf(item);
     const phaseless = item.kind === 'problem' || item.kind === 'request';
-    const moveBody = d => post({ direction: d, ...(state.filter === 'all' ? {} : { phase: state.filter }) });
+    const moveBody = d => post({ direction: d, ...(state.filter === 'all' || state.filter === 'yours' ? {} : { phase: state.filter }) });
+    // Waiting on you is a mix of phases, so moving within it would reorder against items you can't see.
+    const movable = !item.done && state.filter !== 'yours';
     const date = shortDate(item.created_at.slice(0, 10));
     // Long answers show a few lines first; the rest is one click away.
     const long = item.answer && (item.answer.length > 320 || item.answer.split('\n').length > 4);
@@ -1278,8 +1289,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         !item.done && h('div', { class: 'actions' }, h('span', { class: 'meta' }, 'Priority:'), h('span', { class: 'seg small', role: 'group', 'aria-label': 'Priority for ' + item.title },
           tiers.map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(item.tier === k), onclick: () => item.tier !== k && act(base() + '/items/' + item.id, patch({ tier: k })) }, l)))),
         h('div', { class: 'actions' },
-          !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position <= 0, 'aria-label': 'Move up: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('up')) }, 'Move up'),
-          !item.done && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open(group).length - 1, 'aria-label': 'Move down: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('down')) }, 'Move down'),
+          movable && h('button', { class: 'btn ghost small', type: 'button', disabled: position <= 0, 'aria-label': 'Move up: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('up')) }, 'Move up'),
+          movable && h('button', { class: 'btn ghost small', type: 'button', disabled: position === open(group).length - 1, 'aria-label': 'Move down: ' + item.title, onclick: () => act(base() + '/items/' + item.id + '/move', moveBody('down')) }, 'Move down'),
           h('span', { class: 'spacer' }),
           isPt && !state.preview && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.giving = item.id; render(); } }, 'Log donated time'),
           isPt && !state.preview && item.kind === 'change' && (!item.estimate || item.estimate.status === 'withdrawn') && h('button', { class: 'btn ghost small', type: 'button', onclick: () => {

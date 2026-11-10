@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const TIER_NAMES = { must: 'Must have', nice: 'Nice to have', idea: 'Idea for now' };
-export const PHASE_NAMES = { review: 'To review', prototype: 'Prototype', full: 'Full build', later: 'Later' };
+export const PHASE_NAMES = { review: 'Not decided yet', prototype: 'Prototype', full: 'In the build', later: 'After launch' };
 const LIMITS = { title: 200, details: 4000, answer: 2000 };
 const ACTOR = { email: 'eric@positivetribes.org', name: 'Eric Roberts' };
 const clip = (value, max = 300) => value.length > max ? value.slice(0, max - 1) + '…' : value;
