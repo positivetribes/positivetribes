@@ -502,8 +502,8 @@ test('documents: Positive Tribes keeps its own and every client\'s; clients see 
 
   const list = await (await as('eric@positivetribes.org', 'GET', 'admin/documents')).json();
   assert.deepEqual(list.documents.map(d => [d.client, d.title, d.visible]), [
-    ['', 'Sales process', false], ['uep', 'Phase 3 proposal', true], ['uep', 'Draft designs', false], ['safe', 'Chapters proposal', true]
-  ]);
+    ['safe', 'Chapters proposal', true], ['uep', 'Draft designs', false], ['uep', 'Phase 3 proposal', true], ['', 'Sales process', false]
+  ]); // newest first (same-day ties: most recently added first)
   assert.deepEqual(list.clients.find(c => c.slug === 'uep').projects, [{ id: 1, name: 'Scheduler' }]);
 
   // Clients cannot reach the list, and their workspace shows only their own shown documents.

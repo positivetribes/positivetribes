@@ -674,7 +674,7 @@ const DOC_STATUSES = ['', 'draft', 'sent', 'signed'];
 async function loadDocuments(hub) {
   const [docs, clients, projects] = await Promise.all([
     hub.prepare(`SELECT d.id, c.slug AS client, d.project_id, d.kind, d.title, d.url, d.note, d.status, d.visible, d.created_at, d.doc_date
-                 FROM documents d LEFT JOIN clients c ON c.id = d.client_id ORDER BY d.position, d.id`).all(),
+                 FROM documents d LEFT JOIN clients c ON c.id = d.client_id ORDER BY d.doc_date DESC, d.id DESC`).all(),
     hub.prepare('SELECT id, slug, name FROM clients ORDER BY name').all(),
     hub.prepare('SELECT id, client_id, name FROM projects ORDER BY position, id').all()
   ]);

@@ -68,7 +68,7 @@ async function scope(db, user, slug) {
   return client;
 }
 
-// Newest first: position grows with each new document. Positive Tribes also sees documents not yet shown to the client (visible = 0).
+// Newest first by document date (ties: most recently added). Positive Tribes also sees documents not yet shown to the client (visible = 0).
 // The client's Salesforce address is shown as a link only if it is a plain https address on Salesforce's own domains.
 function safeSalesforceUrl(v) {
   try {
@@ -80,7 +80,7 @@ function safeSalesforceUrl(v) {
 async function listDocuments(db, clientId, everything) {
   const { results } = await db.prepare(
     `SELECT id, project_id, kind, title, url, note, status, visible, doc_date FROM documents
-     WHERE client_id = ? AND (visible = 1 OR ?) ORDER BY position DESC, id DESC`
+     WHERE client_id = ? AND (visible = 1 OR ?) ORDER BY doc_date DESC, id DESC`
   ).bind(clientId, everything ? 1 : 0).all();
   return results.map(d => ({ ...d, visible: Boolean(d.visible) }));
 }
