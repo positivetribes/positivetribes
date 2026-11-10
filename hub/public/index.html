@@ -1260,7 +1260,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const tracked = Boolean(STATUS_NAMES[item.kind]);
     const declined = tracked && item.status === 'declined';
     const statusPill = tracked && !(item.done && !declined) && (item.status === 'new'
-      ? isPt && h('span', { class: 'pill status reply' }, 'Needs a reply')
+      ? isPt && !item.answer && h('span', { class: 'pill status reply' }, 'Needs a reply')
       : h('span', { class: 'pill status ' + item.status }, !isPt && item.status === 'built' ? 'Ready to test' : statusName(item)));
     const shipsIn = tracked && item.release_id && !item.done && h('span', { class: 'pill phase' }, 'Ships in ' + phaseName({ name: item.release_name, number: item.release_number }));
     const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), statusPill, estimatePill(item), shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
