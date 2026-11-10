@@ -438,7 +438,7 @@ async function loadNeedsReply(env, now = Date.now()) {
       `SELECT i.id, i.kind, i.title, i.tier, i.created_at, c.slug, c.name,
               EXISTS (SELECT 1 FROM releases r WHERE r.client_id = i.client_id AND r.stage = 'uat') AS testing
        FROM items i JOIN clients c ON c.id = i.client_id
-       WHERE i.kind IN ('change', 'problem') AND i.done = 0 AND i.status = 'new'`
+       WHERE i.kind IN ('change', 'problem') AND i.done = 0 AND i.status = 'new' AND i.answer = ''`
     ).all();
     return results.map(r => {
       const days = businessDaysSince(r.created_at, now);

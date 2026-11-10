@@ -233,6 +233,8 @@ test('Today lists each open change and problem with no reply yet, most urgent fi
       (1, 1, 'change', 'a', 'must', 'new', 0, 1), (1, 1, 'problem', 'b', 'must', 'new', 0, 1), (1, 1, 'change', 'c', 'idea', 'new', 0, 1),
       (1, 1, 'change', 'd', 'must', 'planned', 0, 2), (1, 1, 'change', 'e', 'must', 'new', 1, 3), (1, 1, 'question', 'f', 'must', 'new', 0, 1),
       (2, 2, 'problem', 'g', 'nice', 'new', 0, 1);
+    INSERT INTO items (client_id, project_id, kind, title, tier, status, done, position, answer) VALUES
+      (1, 1, 'change', 'h answered, still new', 'must', 'new', 0, 4, 'We will decide on the call.');
   `);
   const r = await call(admin.db, 'GET', '/api/admin/overview', undefined, { env: { DB: h.db } });
   // Problems first, then changes, each by tier; ranks are by kind, tier, then age.
