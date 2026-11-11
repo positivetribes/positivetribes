@@ -3,7 +3,10 @@
 // events rows, so the client's bell and the item history stay right. For Positive Tribes use from Eric's machine.
 //
 //   node scripts/item.mjs <client-slug> <item-id> [changes] [--apply]
+//   node scripts/item.mjs <client-slug> --add --project <project-slug> --title "text" [--details "text"]
+//        [--kind change|question|problem] [--tier must|nice|idea] [--phase review|prototype|full|later] [--owner "name"] [--apply]
 //
+
 // Changes: --done | --reopen   --answer "text"   --phase review|prototype|full|later   --tier must|nice|idea
 //          --due YYYY-MM-DD|none   --title "text"   --details "text"
 // Without --apply it only looks the item up and prints the SQL it would run.
@@ -16,6 +19,8 @@ import { fileURLToPath } from 'node:url';
 export const TIER_NAMES = { must: 'Must have', nice: 'Nice to have', idea: 'Idea for now' };
 export const PHASE_NAMES = { review: 'Not decided yet', prototype: 'Prototype', full: 'In the build', later: 'After launch' };
 const LIMITS = { title: 200, details: 4000, answer: 2000 };
+const ADD_LIMITS = { title: 160, details: 2000, owner: 60 }; // the same limits the app's add form enforces
+export const KINDS = ['change', 'question', 'problem']; // 'request' items belong to the care plan, so they are not added here
 const ACTOR = { email: 'eric@positivetribes.org', name: 'Eric Roberts' };
 const clip = (value, max = 300) => value.length > max ? value.slice(0, max - 1) + '…' : value;
 
@@ -24,6 +29,58 @@ export function sq(value) {
   const text = String(value);
   if (/[\u0000]/.test(text)) throw new Error('Text contains a NUL character.');
   return "'" + text.replace(/'/g, "''") + "'";
+}
+
+// --add: a new backlog item with the same row and 'added' event the app writes. Defaults match the app's add form.
+export function parseAddArgs(argv) {
+  const [slug, flagAdd, ...rest] = argv;
+  if (!/^[a-z0-9-]{1,60}$/.test(slug || '')) throw new Error('First argument: the client slug (a-z, 0-9, -).');
+  if (flagAdd !== '--add') throw new Error('Second argument: --add.');
+  const add = { details: '', owner: '', kind: 'change', tier: 'idea', phase: null };
+  let project = null;
+  let apply = false;
+  for (let i = 0; i < rest.length; i++) {
+    const flag = rest[i];
+    const value = () => {
+      const v = rest[++i];
+      if (v === undefined) throw new Error(`${flag} needs a value.`);
+      return v;
+    };
+    if (flag === '--apply') apply = true;
+    else if (flag === '--project') project = value();
+    else if (flag === '--title') add.title = value();
+    else if (flag === '--details') add.details = value();
+    else if (flag === '--owner') add.owner = value();
+    else if (flag === '--kind') {
+      add.kind = value();
+      if (!KINDS.includes(add.kind)) throw new Error(`--kind is one of ${KINDS.join(', ')}.`);
+    } else if (flag === '--phase') {
+      add.phase = value();
+      if (!PHASE_NAMES[add.phase]) throw new Error(`--phase is one of ${Object.keys(PHASE_NAMES).join(', ')}.`);
+    } else if (flag === '--tier') {
+      add.tier = value();
+      if (!TIER_NAMES[add.tier]) throw new Error(`--tier is one of ${Object.keys(TIER_NAMES).join(', ')}.`);
+    } else throw new Error(`Unknown option ${flag}.`);
+  }
+  if (project !== null && !/^[a-z0-9-]{1,60}$/.test(project)) throw new Error('--project is the project slug (a-z, 0-9, -).');
+  if (!add.title || !add.title.trim()) throw new Error('--title is required.');
+  for (const [key, max] of Object.entries(ADD_LIMITS)) {
+    if (add[key].length > max) throw new Error(`--${key} is longer than ${max} characters.`);
+  }
+  if (add.phase === null) add.phase = add.kind === 'problem' ? 'full' : 'review';
+  return { slug, project, add, apply };
+}
+
+// The INSERT (placed last in its tier) plus the 'added' event, as the app's POST /items does. The event's item_id
+// is last_insert_rowid(), so the two statements must run together in this order.
+export function buildAddSql(clientId, projectId, add, actor = ACTOR) {
+  return [
+    `INSERT INTO items (client_id, project_id, kind, title, details, owner, tier, phase, position, added_by) VALUES (` +
+    `${clientId}, ${projectId}, ${sq(add.kind)}, ${sq(add.title)}, ${sq(add.details)}, ${sq(add.owner)}, ${sq(add.tier)}, ${sq(add.phase)}, ` +
+    `(SELECT COALESCE(MAX(position), 0) + 1 FROM items WHERE client_id = ${clientId} AND project_id = ${projectId} AND kind = ${sq(add.kind)} AND tier = ${sq(add.tier)}), ${sq(actor.name)});`,
+    `INSERT INTO events (client_id, item_id, action, item_title, item_kind, detail, actor_email, actor_name, at) VALUES (` +
+    `${clientId}, last_insert_rowid(), 'added', ${sq(add.title)}, ${sq(add.kind)}, ${sq(clip(add.details))}, ${sq(actor.email)}, ${sq(actor.name)}, CURRENT_TIMESTAMP);`
+  ].join('\n');
 }
 
 export function parseArgs(argv) {
@@ -105,7 +162,38 @@ const HUB = join(dirname(fileURLToPath(import.meta.url)), '..');
 const wrangler = args => execFileSync('npx', ['wrangler', '-c', 'wrangler.jsonc', 'd1', 'execute', 'hub-db', '--remote', ...args],
   { cwd: HUB, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
+function runSql(sql) {
+  const dir = mkdtempSync(join(tmpdir(), 'hub-item-'));
+  try {
+    writeFileSync(join(dir, 'change.sql'), sql, { mode: 0o600 });
+    wrangler(['--file', join(dir, 'change.sql')]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+async function addItem(argv) {
+  const { slug, project, add, apply } = parseAddArgs(argv);
+  const found = JSON.parse(wrangler(['--json', '--command',
+    `SELECT c.id AS client_id, p.id AS project_id, p.slug AS project_slug, p.name AS project_name
+     FROM clients c JOIN projects p ON p.client_id = c.id WHERE c.slug = ${sq(slug)} ORDER BY p.position, p.id`]))[0].results;
+  if (!found.length) throw new Error(`No client ${slug}, or it has no projects.`);
+  const target = found.find(p => p.project_slug === project);
+  if (!target) throw new Error(`Say which list with --project. ${slug} has: ${found.map(p => `${p.project_slug} (${p.project_name})`).join(', ')}.`);
+  const same = JSON.parse(wrangler(['--json', '--command',
+    `SELECT id FROM items WHERE client_id = ${target.client_id} AND project_id = ${target.project_id} AND title = ${sq(add.title)} AND done = 0`]))[0].results;
+  if (same.length) throw new Error(`An open item with this title already exists (id ${same[0].id}). Nothing added.`);
+  const sql = buildAddSql(target.client_id, target.project_id, add);
+  console.log(`New ${add.kind} for ${slug} / ${target.project_name}, ${TIER_NAMES[add.tier]}, ${PHASE_NAMES[add.phase]}: ${add.title}`);
+  console.log('\n' + sql + '\n');
+  if (!apply) return console.log('Dry run. Add --apply to write it.');
+  runSql(sql);
+  const row = JSON.parse(wrangler(['--json', '--command',
+    `SELECT id FROM items WHERE client_id = ${target.client_id} AND title = ${sq(add.title)} ORDER BY id DESC LIMIT 1`]))[0].results[0];
+  console.log(`Added as item ${row ? row.id : '(look it up)'}. The client sees it in their list and on their bell where the app would tell them.`);
+  if (row) console.log(`https://hub.positivetribes.org/#/${slug}/backlog/${row.id}`);
+}
+
 async function main() {
+  if (process.argv[3] === '--add') return addItem(process.argv.slice(2));
   const { slug, id, changes, apply } = parseArgs(process.argv.slice(2));
   const out = JSON.parse(wrangler(['--json', '--command',
     `SELECT i.id, i.client_id, i.project_id, i.kind, i.title, i.details, i.answer, i.tier, i.phase, i.done, i.due_date
@@ -121,11 +209,7 @@ async function main() {
   if (!sql) return console.log('Already like that. Nothing to change.');
   console.log('\n' + sql + '\n');
   if (!apply) return console.log('Dry run. Add --apply to write it.');
-  const dir = mkdtempSync(join(tmpdir(), 'hub-item-'));
-  try {
-    writeFileSync(join(dir, 'change.sql'), sql, { mode: 0o600 });
-    wrangler(['--file', join(dir, 'change.sql')]);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  runSql(sql);
   console.log('Applied. The client sees it on their bell where the app would tell them.');
 }
 
