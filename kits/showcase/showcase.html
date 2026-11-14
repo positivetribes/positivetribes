@@ -1,0 +1,161 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Positive Tribes Fundraising Work</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow reading column; each client is a band with the result first, then screenshots at full column width. */
+:root{
+  --paper:#f6f4ec; --card:#fffdf7; --ink:#243f36; --muted:#5b6860; --line:#d9ddd1;
+  --rust:#a94c32; --sage:#e7ebdd; --shadow:rgba(36,63,54,.10);
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --body:"Inter",-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#16201c; --card:#1d2a25; --ink:#e8ece4; --muted:#a6b2aa; --line:#33443d;
+  --rust:#e08a6c; --sage:#22302a; --shadow:rgba(0,0,0,.35); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#16201c; --card:#1d2a25; --ink:#e8ece4; --muted:#a6b2aa; --line:#33443d;
+  --rust:#e08a6c; --sage:#22302a; --shadow:rgba(0,0,0,.35); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:16px/1.6 var(--body);margin:0}
+.wrap{max-width:860px;margin:0 auto;padding-block:48px 64px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:56px}
+h1,h2,h3{font-family:var(--display);font-weight:650;line-height:1.12;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.1rem,5.5vw,3.2rem);letter-spacing:-.01em}
+h2{font-size:clamp(1.6rem,3.6vw,2.1rem)}
+h3{font-size:1.15rem;font-family:var(--body);font-weight:600}
+p{margin:0;max-width:66ch}
+.eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--rust)}
+header{display:grid;gap:18px}
+.lede{font-size:1.15rem;color:var(--muted)}
+.wins{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:8px}
+.win{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:4px;align-content:start}
+.win b{font-weight:600}
+.win span{color:var(--muted);font-size:.92rem;line-height:1.45}
+section{display:grid;gap:20px}
+.client-head{display:grid;gap:8px;border-top:2px solid var(--ink);padding-top:20px}
+.status{display:inline-block;justify-self:start;font-size:.8rem;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--sage);color:var(--ink)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.pair>div{min-width:0;display:grid;gap:8px;align-content:start}
+@media (max-width:640px){.pair{grid-template-columns:1fr}}
+ul{margin:0;padding-left:1.1em;display:grid;gap:6px}
+li{padding-left:2px}
+li::marker{color:var(--rust)}
+figure{margin:0;display:grid;gap:8px}
+figure img{width:100%;height:auto;display:block;border-radius:8px;border:1px solid var(--line);box-shadow:0 6px 24px var(--shadow);background:#fff}
+figcaption{font-size:.85rem;color:var(--muted)}
+.quote{font-family:var(--display);font-size:1.25rem;line-height:1.4;font-weight:500;border-left:3px solid var(--rust);padding-left:16px;max-width:60ch}
+a{color:var(--rust);text-underline-offset:3px}
+a:focus-visible{outline:2px solid var(--rust);outline-offset:2px}
+.close{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px;display:grid;gap:14px}
+.steps{counter-reset:s;list-style:none;padding:0;gap:10px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:28px 1fr;gap:10px}
+.steps li::before{content:counter(s);font-weight:600;color:var(--rust);font-variant-numeric:tabular-nums}
+.contact{font-weight:600;user-select:all}
+footer{font-size:.85rem;color:var(--muted)}
+</style>
+<link rel="stylesheet" href="print.css" media="print">
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="eyebrow">Positive Tribes · Fundraising work</div>
+    <h1>Raise more, with the team you already have</h1>
+    <p class="lede">Small nonprofits, different fundraising problems, one approach: make giving easy, show every donor and funder where their money went, and let gifts record themselves so staff stop re-typing them.</p>
+    <div class="wins">
+      <div class="win"><b>Every supporter can fundraise</b><span>One link gives each climber, volunteer or family member their own page, goal and share button.</span></div>
+      <div class="win"><b>Donors see the result</b><span>Gifts are tied to a team, a club or an event, so people see what their money did. That is what brings the second gift.</span></div>
+      <div class="win"><b>Funders stop asking for updates</b><span>A live grant page shows spend, students reached and reports, so staff don't rebuild the same report each quarter.</span></div>
+      <div class="win"><b>No re-keying</b><span>Every gift and donor lands in Salesforce on its own, with a simple form for checks, PayPal and Venmo.</span></div>
+    </div>
+  </header>
+
+  <section data-case="uep" aria-labelledby="uep">
+    <div class="client-head">
+      <div class="eyebrow">Up ENDing Parkinson's (UEP)</div>
+      <h2 id="uep">Peer fundraising for one national climb day</h2>
+      <span class="status">Signed Nov 2026 · pages open March 1, 2027</span>
+    </div>
+    <div class="pair">
+      <div>
+        <h3>The challenge</h3>
+        <p>UEP runs climbing sessions for people with Parkinson's at gyms across the country, mostly with volunteers. For its April 3 climb it wants to raise several times its biggest campaign so far, with no fundraising staff to chase pages or enter gifts.</p>
+      </div>
+      <div>
+        <h3>What we built</h3>
+        <ul>
+          <li>Fundraising inside the climb app people already use, so there's no second sign-up</li>
+          <li>A personal page for every climber, volunteer and family member, with a goal and a progress bar</li>
+          <li>Team and nationwide progress, so gyms cheer each other on</li>
+          <li>A matching-gift prompt and a t-shirt thank-you at a giving level</li>
+          <li>A staff view by team, with top fundraisers</li>
+          <li>Gifts and donor names flow into Salesforce Nonprofit Cloud automatically</li>
+        </ul>
+      </div>
+    </div>
+    <figure>
+      <img src="img/uep-screens.jpg" alt="Four phone screens from the UEP Climb app: sign up from a link, a volunteer's fundraising page, the donor page with preset gift amounts, and a climber's fundraising tab showing $235 raised of $500." width="1600" height="808">
+      <figcaption>From sign-up to first gift in four screens. Sample names and amounts.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/uep-dashboard.jpg" alt="UEP staff fundraising dashboard: total raised, number of fundraisers, a table of teams by gym with progress toward each team goal, and a list of top fundraisers." width="1088" height="975">
+      <figcaption>What UEP staff see: every team's progress and the top fundraisers on one screen. Sample data.</figcaption>
+    </figure>
+  </section>
+
+  <section data-case="safe" aria-labelledby="safe">
+    <div class="client-head">
+      <div class="eyebrow">Sober AF Entertainment (SAFE)</div>
+      <h2 id="safe">A funding platform that shows where every gift lands</h2>
+      <span class="status">Working prototype · under review with SAFE</span>
+    </div>
+    <div class="pair">
+      <div>
+        <h3>The challenge</h3>
+        <p>SAFE, a Colorado recovery community organization, runs sober clubs on college campuses. Foundations want proof of impact before they renew, and small donors want something concrete to back. Tracking it by hand across spreadsheets doesn't scale.</p>
+      </div>
+      <div>
+        <h3>What we built</h3>
+        <ul>
+          <li>Gifts with a clear result: "$1,500 sponsors a sober tailgate for about 80 students"</li>
+          <li>A page for each club, with its own goal and progress</li>
+          <li>A live page for each funder: awarded, spent, students reached, events held, and downloadable reports</li>
+          <li>A staff view with the funder pipeline, recent gifts and club progress</li>
+          <li>Salesforce as the single record of every gift, Stripe first, then PayPal and Venmo</li>
+        </ul>
+      </div>
+    </div>
+    <figure>
+      <img src="img/safe-home.jpg" alt="SAFE Fund home page: 'Back the club on a campus near you', funding to date, and four things to fund with their price and reach, such as a $1,500 sober tailgate." width="1280" height="760">
+      <figcaption>Donors choose a result, not a dollar amount. Sample data.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/safe-funder.jpg" alt="Funder view titled 'Your grant at a glance': $30,000 awarded, $21,400 spent, 77 students reached, 15 events, spend by club, reports to download, and a form to request a check-in." width="1280" height="1070">
+      <figcaption>A foundation's grant page: "everything a board packet needs, kept current by SAFE." Sample data.</figcaption>
+    </figure>
+    <figure>
+      <img src="img/safe-pipeline.jpg" alt="SAFE staff funding view with a funder pipeline from prospect to renewed, and a list of recent gifts tied to clubs." width="1280" height="660">
+      <figcaption>The staff view: funders by stage and every recent gift tied to a club. Sample data.</figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="you">
+    <div class="close">
+      <h2 id="you">What this could look like for you</h2>
+      <p class="quote">Both builds started from the same question: what would make the next gift easier to ask for, and easier to give?</p>
+      <ol class="steps">
+        <li><span>We start from your mission and your supporters, and build a clickable version in days, so your board reacts to something real.</span></li>
+        <li><span>One fixed price for the build. Hosting and ongoing improvements are one yearly fee, with no surprise invoices.</span></li>
+        <li><span>Your gifts and donors stay yours, in your own Salesforce or exported any time.</span></li>
+      </ol>
+      <p>Try the live examples (sample data only): <a href="https://positivetribes.org/uep/v3/">UEP Climb</a> and <a href="https://positivetribes.org/soberafe/funding/">SAFE Fund</a>.</p>
+      <p>Eric Roberts, Founder, Positive Tribes · <span class="contact">eric@positivetribes.org</span> · <a href="https://positivetribes.org">positivetribes.org</a></p>
+    </div>
+  </section>
+
+  <footer>Screens show sample names and figures, never real donors or participants. Shared with permission from UEP and SAFE.</footer>
+</div>
