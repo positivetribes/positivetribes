@@ -89,14 +89,20 @@ async function listItems(db, clientId, user) {
   const { results } = await db.prepare(
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
             i.status, i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id,
-            i.release_id, r.number AS release_number, r.name AS release_name, i.agreement_ref
+            i.release_id, r.number AS release_number, r.name AS release_name, i.agreement_ref,
+            i.proposal_state, i.proposal_document_id, d.title AS proposal_doc_title, d.url AS proposal_doc_url, d.visible AS proposal_doc_visible
      FROM items i JOIN projects p ON p.id = i.project_id
+     LEFT JOIN documents d ON d.id = i.proposal_document_id AND d.client_id = i.client_id
      LEFT JOIN releases r ON r.id = i.release_id AND r.client_id = i.client_id
      WHERE i.client_id = ?
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
   ).bind(clientId).all();
   const [estimates, donated] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user)]);
-  return results.map(item => ({ ...item, done: Boolean(item.done), estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [] }));
+  return results.map(({ proposal_doc_title, proposal_doc_url, proposal_doc_visible, ...item }) => ({
+    ...item, done: Boolean(item.done), estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [],
+    // The proposal's link is the document's own visibility: clients never get the title or URL of a hidden document.
+    proposal_doc: item.proposal_document_id && proposal_doc_title && (user.role === 'pt' || proposal_doc_visible) ? { title: proposal_doc_title, url: proposal_doc_url } : null
+  }));
 }
 
 async function listReleases(db, clientId) {
@@ -632,6 +638,29 @@ export default {
             const live = await db.prepare("SELECT 1 FROM change_estimates WHERE item_id = ? AND client_id = ? AND status != 'withdrawn'").bind(item.id, client.id).first();
             if (live) throw new InputError('This change has an estimate. Withdraw it first, then mark it as covered.', 409);
           }
+          if (agreementRef && item.proposal_state) throw new InputError('This change has a proposal marked. Clear that first, then mark it as covered.', 409);
+        }
+        // Needs a proposal: a change too big for an hours estimate. Positive Tribes marks it planned, then sent (optionally
+        // naming the document row); a live estimate or an agreement mark comes first, so it can't be both.
+        let proposalState = item.proposal_state ?? '';
+        let proposalDoc = item.proposal_document_id ?? null;
+        if (b.proposal_state !== undefined || b.proposal_document_id !== undefined) {
+          if (user.role !== 'pt') throw new InputError('Only Positive Tribes marks a change as needing a proposal.', 403);
+          if (item.kind !== 'change') throw new InputError('Only suggested changes can need a proposal.');
+          if (b.proposal_state !== undefined) {
+            if (!['', 'planned', 'sent'].includes(b.proposal_state)) throw new InputError('Proposal must be planned, sent or empty.');
+            proposalState = b.proposal_state;
+          }
+          if (b.proposal_document_id !== undefined) {
+            proposalDoc = b.proposal_document_id === null ? null : (await db.prepare('SELECT id FROM documents WHERE id = ? AND client_id = ?').bind(Number(b.proposal_document_id), client.id).first())?.id ?? null;
+            if (b.proposal_document_id !== null && proposalDoc === null) throw new InputError('That document is not on this client.');
+          }
+          if (!proposalState) proposalDoc = null;
+          if (proposalState) {
+            if (item.agreement_ref) throw new InputError(`This change is covered by the agreement (${item.agreement_ref}). Clear that first.`, 409);
+            const live = await db.prepare("SELECT 1 FROM change_estimates WHERE item_id = ? AND client_id = ? AND status != 'withdrawn'").bind(item.id, client.id).first();
+            if (live) throw new InputError('This change has an estimate. Withdraw it first, then mark it as needing a proposal.', 409);
+          }
         }
         // Status is Positive Tribes' reply to a suggestion or problem. Not doing it closes the item; picking any other
         // status reopens one that was declined; reopening an item by hand starts it over as new.
@@ -660,13 +689,14 @@ export default {
         const wish = item.kind === 'change' && tier !== 'must' && status === 'planned';
         const statusEvent = b.status !== undefined && status !== item.status ? ['status', wish ? 'On the wishlist' : STATUS_NAMES[item.kind][status]] : null;
         const change = changeOf(item, { title, details, owner, answer, done: statusEvent ? item.done : doneNow, tier, phase, project_id: projectId });
+        const proposal = proposalState !== (item.proposal_state ?? '') ? ['proposal', { '': 'No longer marked as needing a proposal', planned: 'We will send a proposal for this', sent: 'Proposal sent' }[proposalState]] : null;
         const covered = agreementRef !== (item.agreement_ref ?? '') ? ['covered', agreementRef ? 'In the agreement: ' + agreementRef : 'No longer marked as in the agreement'] : null;
         await db.batch([
           db.prepare(
-            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, release_id = ?, agreement_ref = ?, updated_at = CURRENT_TIMESTAMP
+            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, release_id = ?, agreement_ref = ?, proposal_state = ?, proposal_document_id = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND client_id = ?`
-          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, releaseId, agreementRef, item.id, client.id),
-          ...[statusEvent, covered, change].filter(Boolean).map(([action, detail]) => logEvent(db, client.id, item.id, action, { title, kind: item.kind }, detail, user))
+          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, releaseId, agreementRef, proposalState, proposalDoc, item.id, client.id),
+          ...[statusEvent, covered, proposal, change].filter(Boolean).map(([action, detail]) => logEvent(db, client.id, item.id, action, { title, kind: item.kind }, detail, user))
         ]);
         return json({ ok: true, items: await listItems(db, client.id, user) });
       }

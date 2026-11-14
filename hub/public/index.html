@@ -1050,6 +1050,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const e = item.estimate;
     // Covered by the signed agreement: no separate price. Everyone sees which requirement covers it.
     if (item.kind === 'change' && item.agreement_ref && (!e || e.status === 'withdrawn')) return h('span', { class: 'pill est yes', title: 'Covered by the signed agreement, requirement ' + item.agreement_ref }, 'In the agreement · ' + item.agreement_ref);
+    // A change big enough for its own proposal: no hours estimate. Everyone sees where the proposal stands.
+    if (item.kind === 'change' && item.proposal_state && (!e || e.status === 'withdrawn')) return h('span', { class: 'pill est ' + (item.proposal_state === 'sent' ? 'sent' : 'draft') }, item.proposal_state === 'sent' ? 'Proposal sent' : 'Proposal coming');
     if (item.kind !== 'change' || !e) return null;
     if (e.status === 'offered') {
       const days = e.offered_at ? Math.floor((Date.now() - Date.parse(e.offered_at.replace(' ', 'T') + 'Z')) / 864e5) : 0;
@@ -1062,10 +1064,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     return words ? h('span', { class: 'pill est ' + cls }, words) : null;
   }
   // Which estimate state a card is in, for Positive Tribes' "Estimate" filter.
-  const ESTIMATE_FILTERS = [['all', 'Any'], ['none', 'Not estimated'], ['covered', 'In the agreement'], ['draft', 'Draft'], ['sent', 'Sent, waiting'], ['decided', 'Decided']];
+  const ESTIMATE_FILTERS = [['all', 'Any'], ['none', 'Not estimated'], ['covered', 'In the agreement'], ['proposal', 'Needs a proposal'], ['draft', 'Draft'], ['sent', 'Sent, waiting'], ['decided', 'Decided']];
   const estimateStage = item => {
     const s = item.estimate ? item.estimate.status : '';
     if (item.agreement_ref && (!s || s === 'withdrawn')) return 'covered';
+    if (item.proposal_state && (!s || s === 'withdrawn')) return 'proposal';
     return !s || s === 'withdrawn' ? 'none' : s === 'draft' ? 'draft' : s === 'offered' ? 'sent' : 'decided';
   };
 
@@ -1122,6 +1125,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (item.kind !== 'change' || item.done) return null;
     const e = item.estimate, ptNow = viewer().role === 'pt' && !state.preview;
     const nodes = [];
+    // Needs a proposal: say so plainly, and link the proposal once it is sent and visible to this viewer.
+    if (item.proposal_state && !(e && e.status !== 'withdrawn')) {
+      const sent = item.proposal_state === 'sent';
+      return h('div', { class: 'estimate stack' },
+        h('b', {}, sent ? 'Proposal sent' : 'We\u2019ll send a proposal for this'),
+        h('p', { class: 'muted' }, sent ? 'This is a bigger piece of work with its own scope, price and monthly plan, so it comes as a proposal rather than an hours estimate.'
+          : 'This is a bigger piece of work, so it gets its own proposal with the scope, price and monthly plan, rather than an hours estimate. Nothing is added or charged until you agree to it.'),
+        sent && item.proposal_doc && /^https:\/\//.test(item.proposal_doc.url) && h('p', {}, h('a', { href: item.proposal_doc.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open the proposal: ' + item.proposal_doc.title)));
+    }
     const summary = () => h('p', { class: 'big' }, 'About ' + e.hours_label + ' · ' + (e.donated ? e.price_label + ' value, donated by Positive Tribes' : e.price_label));
     const notes = () => [e.schedule_note && h('p', { class: 'muted' }, e.schedule_note), e.scope_note && h('p', { class: 'muted' }, e.scope_note), included()];
     // What the hours buy, folded so the card stays short; everyone on the client's hub can open it.
@@ -1524,6 +1536,16 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             const ref = window.prompt('Covered by the agreement: which requirement? (e.g. F7, or R12, R13). Leave empty to clear.', item.agreement_ref || '');
             if (ref !== null) act(base() + '/items/' + item.id, patch({ agreement_ref: ref }));
           } }, item.agreement_ref ? 'Agreement: ' + item.agreement_ref : 'In the agreement'),
+          isPt && !state.preview && item.kind === 'change' && !item.done && !item.agreement_ref && (!item.estimate || item.estimate.status === 'withdrawn') && [
+            !item.proposal_state && h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ proposal_state: 'planned' })) }, 'Needs a proposal'),
+            item.proposal_state === 'planned' && h('button', { class: 'btn ghost small', type: 'button', onclick: () => {
+              const docs = state.documents.filter(d => d.kind === 'proposal');
+              const pick = docs.length ? window.prompt('Link the proposal sent? Type its number, or leave empty for no link:\n' + docs.map((d, n) => (n + 1) + '. ' + d.title + (d.visible ? '' : ' (hidden from the client)')).join('\n'), '') : '';
+              if (pick === null) return;
+              const doc = docs[Number(pick) - 1];
+              act(base() + '/items/' + item.id, patch(doc ? { proposal_state: 'sent', proposal_document_id: doc.id } : { proposal_state: 'sent' }));
+            } }, 'Proposal sent'),
+            item.proposal_state && h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ proposal_state: '' })) }, 'No proposal needed')],
           isPt && h('button', { class: 'btn ghost small danger', type: 'button', onclick: () => { state.confirming = item.id; render(); } }, 'Delete')))) : null;
     return h('article', { id: 'item-' + item.id, class: 'card item' + (item.done ? ' is-done' : '') },
       h('div', { class: 'actions' }, h('a', { class: 'item-no', href: item.legacy_id ? link('old', item.legacy_id) : link('backlog', item.id), title: 'Link to this card', 'aria-label': 'Item ' + itemNo(item) }, '#' + itemNo(item)), pills),
@@ -1539,7 +1561,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         h('button', { class: 'btn small', type: 'button', onclick: () => { state.editing = item.id; render(); } }, item.kind === 'question' && !item.done ? 'Answer' : isPt && item.kind === 'change' && !item.answer ? 'Reply' : 'Edit'),
         !declined && !locked && h('button', { class: 'btn ghost small', type: 'button', onclick: () => act(base() + '/items/' + item.id, patch({ done: !item.done })) }, item.done ? 'Reopen' : 'Mark ' + DONE_WORD[item.kind]),
         picker,
-        isPt && item.kind === 'change' && !item.done && !item.estimate && !item.agreement_ref && state.estimating !== item.id && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = item.id; render(); } }, 'Estimate')),
+        isPt && item.kind === 'change' && !item.done && !item.estimate && !item.agreement_ref && !item.proposal_state && state.estimating !== item.id && h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.estimating = item.id; render(); } }, 'Estimate')),
       more,
       state.confirming === item.id && h('div', { class: 'confirm', role: 'alert' }, h('span', {}, 'Delete this for everyone? This cannot be undone.'),
         h('button', { class: 'btn small danger ghost', type: 'button', onclick: () => { state.confirming = null; act(base() + '/items/' + item.id, { method: 'DELETE' }); } }, 'Delete'),
@@ -1864,7 +1886,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         shipped: `shipped ${q(i.title)}`, cancelled: `cancelled ${q(i.title)}`,
         care_question: `asked the client about ${q(i.title)}`, care_answered: `answered the question on ${q(i.title)}`,
         estimate_decided: `decided on the estimate for ${q(i.title)}: ${i.detail}`, estimate_offered: `was sent an estimate for ${q(i.title)}`,
-        donated_time: `logged donated time on ${q(i.title)}: ${i.detail}`, covered: `marked ${q(i.title)}: ${i.detail}`
+        donated_time: `logged donated time on ${q(i.title)}: ${i.detail}`, covered: `marked ${q(i.title)}: ${i.detail}`, proposal: `${q(i.title)}: ${i.detail}`
       }[i.action] || `changed ${q(i.title)}`;
       return `${who} ${verb}` + (i.eventIds.length > 1 ? ` (${i.eventIds.length} changes)` : '');
     }

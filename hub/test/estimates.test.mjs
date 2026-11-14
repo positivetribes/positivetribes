@@ -475,3 +475,34 @@ test('a change covered by the agreement: only Positive Tribes marks it, it carri
   assert.equal((await mark(PT, 'F7')).status, 200);
   assert.equal((await call(PT, 'c/uep/items/3', 'PATCH', { agreement_ref: 'R1' })).status, 400);
 });
+
+test('a change that needs a proposal: only Positive Tribes sets it, it blocks an estimate, and clients only see a visible linked document', async () => {
+  const { call, estimate, item, events, sqlite, PT } = setup();
+  const mark = (who, body) => call(who, 'c/uep/items/1', 'PATCH', body);
+  assert.equal((await mark('molly@uep.org', { proposal_state: 'planned' })).status, 403);
+  assert.equal((await mark(PT, { proposal_state: 'soon' })).status, 400);
+  assert.equal((await mark(PT, { proposal_state: 'planned' })).status, 200);
+  assert.equal(item(1).proposal_state, 'planned');
+  assert.match(events('proposal').at(-1).detail, /send a proposal/);
+  // A proposal and an hours estimate never both: the estimate is refused while it is marked.
+  const refused = await estimate(1, 2);
+  assert.equal(refused.status, 409);
+  assert.match(refused.body.error, /needs a proposal/);
+  // A document on another client can't be linked; a hidden one is linked for Positive Tribes but never shown to the client.
+  sqlite.exec(`INSERT INTO documents (id, client_id, project_id, kind, title, url, status, visible) VALUES
+    (900, 1, 1, 'proposal', 'VOMO proposal', 'https://example.org/p', 'sent', 0), (901, 2, 2, 'proposal', 'Other client', 'https://example.org/o', 'sent', 1)`);
+  assert.equal((await mark(PT, { proposal_state: 'sent', proposal_document_id: 901 })).status, 400);
+  assert.equal((await mark(PT, { proposal_state: 'sent', proposal_document_id: 900 })).status, 200);
+  const seen = who => call(who, 'c/uep/items').then(r => r.body.items.find(i => i.id === 1));
+  assert.equal((await seen(PT)).proposal_doc.title, 'VOMO proposal');
+  assert.equal((await seen('molly@uep.org')).proposal_doc, null);
+  assert.equal((await seen('molly@uep.org')).proposal_state, 'sent');
+  sqlite.exec('UPDATE documents SET visible = 1 WHERE id = 900');
+  assert.equal((await seen('molly@uep.org')).proposal_doc.url, 'https://example.org/p');
+  // Covered by the agreement and needing a proposal exclude each other; clearing removes the link.
+  assert.equal((await mark(PT, { agreement_ref: 'F7' })).status, 409);
+  assert.equal((await mark(PT, { proposal_state: '' })).status, 200);
+  assert.equal(item(1).proposal_document_id, null);
+  assert.equal((await mark(PT, { agreement_ref: 'F7' })).status, 200);
+  assert.equal((await mark(PT, { proposal_state: 'planned' })).status, 409);
+});
