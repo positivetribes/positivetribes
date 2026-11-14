@@ -813,10 +813,32 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const start = Math.max(0, at - 60);
     return (start ? '…' : '') + t.slice(start, start + 170) + (start + 170 < t.length ? '…' : '');
   };
+  // Filters narrow a search and stay set while the page is open: clients (keys as grouped below; none = every client),
+  // types (none = all), status (open or done; questions, changes and next steps only) and when (days back).
+  const filters = { clients: new Set(), types: new Set(), status: 'any', since: 'any' };
+  const TYPES = [['items', 'Questions and changes'], ['docs', 'Documents'], ['steps', 'Next steps'], ['notes', 'Notes'], ['activity', 'Emails and meetings']];
+  const STATUSES = { any: 'Open or done', open: 'Open', done: 'Done' };
+  const SINCE = { any: 'Any time', 30: 'Past 30 days', 90: 'Past 90 days', 365: 'Past year' };
+  const narrowed = () => filters.types.size || filters.status !== 'any' || filters.since !== 'any';
+  let lastQuery = '';
   async function search(box, query) {
     const seq = ++searchSeq;
     const q = String(query || '').trim();
-    box.onclick = null;
+    lastQuery = q;
+    box.onclick = e => {
+      const t = e.target.closest('button[data-sf]'); if (!t) return;
+      const [kind, value] = [t.dataset.sf, t.dataset.v];
+      if (kind === 'reset') { filters.clients.clear(); filters.types.clear(); filters.status = 'any'; filters.since = 'any'; }
+      else if (kind === 'client' || kind === 'type') {
+        const set = kind === 'client' ? filters.clients : filters.types;
+        if (!value) set.clear(); else if (set.has(value)) set.delete(value); else set.add(value);
+      }
+      search(box, lastQuery);
+    };
+    box.onchange = e => {
+      const t = e.target.closest('select[data-sf]'); if (!t) return;
+      filters[t.dataset.sf] = t.value; search(box, lastQuery);
+    };
     if (!index || Date.now() - indexAt > 60e3) {
       if (!index) box.innerHTML = '<p class="muted">Loading everything for search…</p>';
       try { index = await api('/search'); indexAt = Date.now(); } catch (error) { box.innerHTML = `<div class="banner">${esc(error.message)}</div>`; return; }
@@ -833,22 +855,44 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const ofHub = id => { const c = hubClient[id]; if (!c) return group('pt', 'Positive Tribes', to.today); return group(c.accountId || 'hub:' + c.id, c.name, c.accountId ? to.client(c.accountId) : '#/' + esc(c.slug) + '/home'); };
     const ofAccount = id => { const c = byAccount[id]; return group(id, c ? c.name : sfName[id] || 'Unknown client', to.client(id)); };
     const project = id => index.projects.find(p => p.id === id)?.name || '';
-    for (const i of index.items) {
+    // Type, status and date filters apply before grouping, so each client's count below is what the filters leave.
+    const want = type => !filters.types.size || filters.types.has(type);
+    const cutoff = filters.since === 'any' ? '' : new Date(Date.now() - Number(filters.since) * 864e5).toISOString().slice(0, 10);
+    const recent = date => !cutoff || String(date || '').slice(0, 10) >= cutoff;
+    const status = done => filters.status === 'any' || (filters.status === 'done') === Boolean(done);
+    if (want('items')) for (const i of index.items) {
       const no = i.legacy_id || i.id;
+      if (!status(i.done) || !recent(i.updated_at)) continue;
       if (num ? String(no) === num[1] : hit(words, i.title, i.details, i.answer, '#' + no)) ofHub(i.client_id).items.push(i);
     }
     if (!num) {
-      for (const d of index.documents) if (hit(words, d.title, d.note, DOC_KIND[d.kind], project(d.project_id))) ofHub(d.client_id).docs.push(d);
-      for (const n of index.notes) if (hit(words, n.body)) ofAccount(n.account_id).notes.push(n);
-      for (const st of index.steps) if (hit(words, st.title)) ofAccount(st.account_id).steps.push(st);
-      for (const a of index.activity) if (hit(words, a.title, a.summary)) ofAccount(a.account_id).activity.push(a);
-      // A client whose name matches is listed even with nothing else, so its page is one click away.
-      for (const c of index.clients) if (hit(words, c.name)) ofHub(c.id).nameHit = true;
-      for (const c of overview?.clients || []) if (hit(words, c.name)) ofAccount(c.id).nameHit = true;
+      if (want('docs')) for (const d of index.documents) if (recent(d.doc_date) && hit(words, d.title, d.note, DOC_KIND[d.kind], project(d.project_id))) ofHub(d.client_id).docs.push(d);
+      if (want('notes')) for (const n of index.notes) if (recent(n.created_at) && hit(words, n.body)) ofAccount(n.account_id).notes.push(n);
+      if (want('steps')) for (const st of index.steps) if (status(st.status === 'done') && hit(words, st.title)) ofAccount(st.account_id).steps.push(st);
+      if (want('activity')) for (const a of index.activity) if (recent(a.occurred_at) && hit(words, a.title, a.summary)) ofAccount(a.account_id).activity.push(a);
+      // A client whose name matches is listed even with nothing else, so its page is one click away (not while narrowed).
+      if (!narrowed()) {
+        for (const c of index.clients) if (hit(words, c.name)) ofHub(c.id).nameHit = true;
+        for (const c of overview?.clients || []) if (hit(words, c.name)) ofAccount(c.id).nameHit = true;
+      }
     }
     const size = g => g.items.length + g.docs.length + g.notes.length + g.steps.length + g.activity.length;
-    const list = [...groups.values()].filter(g => g.nameHit || size(g)).sort((a, b) => b.nameHit - a.nameHit || size(b) - size(a) || a.name.localeCompare(b.name));
+    const keyOf = new Map([...groups].map(([k, g]) => [g, k]));
+    const all = [...groups.values()].filter(g => g.nameHit || size(g)).sort((a, b) => b.nameHit - a.nameHit || size(b) - size(a) || a.name.localeCompare(b.name));
+    const list = filters.clients.size ? all.filter(g => filters.clients.has(keyOf.get(g))) : all;
     const total = list.reduce((n, g) => n + size(g), 0);
+    // Client chips: every client with a match, plus any chosen client that has none right now (so it can be unchosen).
+    const chosenNames = Object.fromEntries([...index.clients.map(c => [c.accountId || 'hub:' + c.id, c.name]), ...(overview?.clients || []).map(c => [c.id, c.name]), ['pt', 'Positive Tribes']]);
+    const chips = [...all.map(g => [keyOf.get(g), g.name, size(g)]), ...[...filters.clients].filter(k => !all.some(g => keyOf.get(g) === k)).map(k => [k, chosenNames[k] || 'Unknown client', 0])]
+      .sort((a, b) => a[1].localeCompare(b[1]));
+    const btn = (kind, value, label, on, n) => `<button type="button" data-sf="${kind}" data-v="${esc(value)}" aria-pressed="${on}"${n === 0 ? ' class="zero"' : ''}>${esc(label)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
+    const select = (name, options, label, title) => `<select data-sf="${name}" aria-label="${label}"${title ? ` title="${title}"` : ''}>${Object.entries(options).map(([v, l]) => `<option value="${v}"${filters[name] === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+    const active = filters.clients.size || narrowed();
+    const bar = `<div class="search-filters">
+      <div class="seg small" role="group" aria-label="Clients">${btn('client', '', 'All clients', !filters.clients.size)}${chips.map(([k, name, n]) => btn('client', k, name, filters.clients.has(k), n)).join('')}</div>
+      <div class="row"><div class="seg small" role="group" aria-label="Type">${btn('type', '', 'Everything', !filters.types.size)}${TYPES.map(([k, l]) => btn('type', k, l, filters.types.has(k))).join('')}</div>
+      ${select('status', STATUSES, 'Status', 'Questions, changes and next steps')}${select('since', SINCE, 'When')}
+      ${active ? '<button type="button" class="link" data-sf="reset">Clear filters</button>' : ''}</div></div>`;
     const section = (label, rows, row) => !rows.length ? '' : `<h3>${label} <span class="count">${rows.length}</span></h3><ul class="items">${rows.slice(0, PER_SECTION).map(row).join('')}</ul>${rows.length > PER_SECTION ? `<p class="small muted">${rows.length - PER_SECTION} more. Add a word to narrow it.</p>` : ''}`;
     const itemRow = i => {
       const c = hubClient[i.client_id], link = appUrl(i.legacy_id ? `#/${c.slug}/old/${i.legacy_id}` : `#/${c.slug}/backlog/${i.id}`);
@@ -861,7 +905,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const actRow = a => { const url = safeUrl(a.url); return `<li><div class="title">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${mark(a.title, words)}</a>` : mark(a.title, words)}</div><div class="meta">${esc([TYPE[a.kind] || a.kind, dayName(String(a.occurred_at).slice(0, 10))].join(' · '))}</div>${a.summary && hit(words, a.summary) && !hit(words, a.title) ? `<div class="meta">${mark(around(a.summary, words), words)}</div>` : ''}</li>`; };
     const panels = list.map(g => `<section class="panel search-group"><h2><a class="client-link" href="${esc(g.home)}">${mark(g.name, words)}</a><span class="count">${size(g) || ''}</span></h2>
       ${section('Questions and changes', g.items, itemRow)}${section('Documents', g.docs, docRowS)}${section('Next steps', g.steps, stepRow)}${section('Notes', g.notes, noteRow)}${section('Emails and meetings', g.activity, actRow)}</section>`).join('');
-    box.innerHTML = `<div class="head"><div><h2 class="greet">Search</h2><p class="muted small">${list.length ? `${total} match${total === 1 ? '' : 'es'} for “${esc(q)}” across ${list.length} client${list.length === 1 ? '' : 's'}. Esc clears.` : `Nothing matches “${esc(q)}”. Try fewer words, or an item number like 133.`}</p></div></div><div class="search-results">${panels}</div>`;
+    const none = active ? `Nothing matches “${esc(q)}” with these filters. Try Clear filters.` : `Nothing matches “${esc(q)}”. Try fewer words, or an item number like 133.`;
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Search</h2><p class="muted small">${list.length ? `${total} match${total === 1 ? '' : 'es'} for “${esc(q)}” across ${list.length} client${list.length === 1 ? '' : 's'}. Esc clears.` : none}</p></div></div>${bar}<div class="search-results">${panels}</div>`;
   }
 
   return { show, search, viewOf, refresh: () => current.box && show(current.box, current.sub, true) };
