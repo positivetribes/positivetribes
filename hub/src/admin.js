@@ -412,7 +412,9 @@ export function buildInbox(backlogs, results, cleared, ownNames) {
         url: e.item_kind === 'idea' ? '#/command/ideas' : e.action === 'deleted' || !e.item_id || e.item_kind === 'release' ? b.url : `#/${b.hub}/backlog/${e.item_id}`,
         eventIds: [...earlier?.eventIds || [], e.id],
         // An item added and then changed before Eric looked still reads as new.
-        added: earlier?.added || e.action === 'added'
+        added: earlier?.added || e.action === 'added',
+        // A question answered (or marked answered) before Eric looked, with the answer's first words.
+        answered: e.item_kind === 'question' && ['answered', 'done'].includes(e.action) ? { by: e.actor, text: e.action === 'answered' ? e.detail : earlier?.answered?.text || '' } : earlier?.answered || null
       });
     }
     items.push(...rows.values());
@@ -792,7 +794,9 @@ export async function handleAdmin(request, env, url, who) {
       const donated = env.DB ? await donatedTotals(env.DB, today.slice(0, 4) + '-01-01').catch(error => { console.error('admin_donated_failed', error.message); return []; }) : [];
       // Last week's website numbers (the Monday GA digest); a broken read never hides Today.
       const web = await latestWebDigest(db).catch(error => { console.error('admin_web_failed', error.message); return null; });
-      return json({ ...view, testing, needsReply, estimates, donated, web, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
+      // Answers to our questions that Eric has not cleared yet: Today lists them under Your move.
+      const answers = inbox.items.filter(i => i.answered).map(i => ({ backlog: i.backlog, client: i.client, title: i.title, url: i.url, at: i.at, by: i.answered.by, text: i.answered.text, eventIds: i.eventIds }));
+      return json({ ...view, testing, needsReply, estimates, donated, web, answers, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });
