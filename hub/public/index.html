@@ -212,8 +212,8 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
 .pill.due{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}.pill.due.late{background:var(--must-bg);color:var(--must)}
 .pill.kind{text-transform:none;letter-spacing:0;font-weight:600;background:transparent;border:1px solid var(--ink);color:var(--ink)}
-section.waiting h2{font-size:22px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}section.waiting h2 .count{font-family:var(--font);font-size:14px;color:var(--muted);font-weight:400}
-section.waiting h3.sub{margin-top:8px}
+details.waiting{border-top:1px solid var(--line);padding-top:12px}details.waiting>summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:10px}details.waiting>summary::-webkit-details-marker{display:none}details.waiting>summary::before{content:'\25B8';color:var(--muted);transition:transform .15s}details.waiting[open]>summary::before{transform:rotate(90deg)}section.waiting h2,details.waiting h2{margin:0;font-size:22px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}section.waiting h2 .count,details.waiting h2 .count{font-family:var(--font);font-size:14px;color:var(--muted);font-weight:400}
+section.waiting h3.sub,details.waiting h3.sub{margin-top:8px}
 .seg .n{display:inline-block;margin-left:6px;min-width:20px;padding:0 6px;border-radius:99px;background:var(--soft);color:var(--ink);font-size:12px;line-height:20px;text-align:center}
 .seg button[aria-pressed=true] .n{background:var(--bg);color:var(--ink)}
 .seg button.zero:not([aria-pressed=true]){color:var(--muted);font-weight:500}
@@ -808,8 +808,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       .map(({ p, mine }) => {
         const asks = mine.filter(i => i.kind !== 'change');
         const decide = mine.filter(i => i.kind === 'change');
-        return h('section', { class: 'waiting stack' },
-          h('h2', {}, p.name, h('span', { class: 'count' }, mine.length + (mine.length === 1 ? ' item' : ' items'))),
+        // Collapsed by default so the page reads as a short list of projects; open state survives re-renders.
+        const open = (state.waitOpen || {})[p.id] || mine.some(i => i.id === state.flash);
+        const first = mine.find(i => i.due_date);
+        return h('details', { class: 'waiting stack', ...(open ? { open: true } : {}), ontoggle: e => { state.waitOpen = { ...(state.waitOpen || {}), [p.id]: e.target.open }; } },
+          h('summary', {}, h('h2', {}, p.name, h('span', { class: 'count' }, mine.length + (mine.length === 1 ? ' item' : ' items') + (first ? ' \u00b7 due ' + shortDate(first.due_date) : '')))),
           asks.length > 0 && decide.length > 0 && h('h3', { class: 'sub' }, 'Questions'),
           asks.map(i => card(i, mine, isPt)),
           decide.length > 0 && h('h3', { class: 'sub' }, 'To decide'),
