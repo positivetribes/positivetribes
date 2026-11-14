@@ -118,26 +118,13 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     for (let d = t + 864e5; d <= end; d += 864e5) if (new Date(d).getUTCDay() % 6 !== 0) left++;
     return left;
   }
-  // Every client phase in testing, from the hub's releases: how long the client has left to test and sign off.
-  function countdowns(data) {
-    return (data.testing || []).map(r => {
-      const business = r.dayType === 'business', left = daysLeft(data.today, r.due, business);
-      const cls = left < 0 ? 'over' : left <= (business ? 3 : 7) ? 'soon' : '';
-      const unit = business ? ' business day' : ' day';
-      // The number large, its words small beneath, like the client's own countdown.
-      const days = left === 0 ? '<span class="num">Due today</span>'
-        : `<span class="num">${Math.abs(left)}</span><span class="unit">${esc(unit.trim())}${Math.abs(left) === 1 ? '' : 's'} ${left < 0 ? 'over' : 'left'}</span>`;
-      return `<a class="panel countdown ${cls}" href="#/${esc(r.workspace)}/home" aria-label="${esc(r.client)}: ${esc(r.phase)} testing countdown"><span class="days">${days}</span>
-        <span><strong>${esc(r.client)} · ${esc(r.project)} ${esc(r.phase)} testing and sign-off</strong><br>
-        <span class="muted small">Due ${esc(longDate(r.due))} (${esc(r.days)}${business ? ' business' : ''} days from ${esc(r.started)})${r.autoAccept ? ' · accepted automatically unless problems are listed' : ''}</span></span></a>`;
-    }).join('');
-  }
   // Suggestions and problems waiting for our reply: one row per item, most urgent first, top 3 with "show all".
   // Each row opens that item on the client's list, where the reply box is.
   const REPLY_SHOWN = 3;
   let replyAll = false;
-  const needsReplyLine = data => {
-    const rows = data.needsReply || [];
+  // `inNow` is the reply already shown as the Now card, so it is not listed twice.
+  const needsReplyLine = (data, inNow = '') => {
+    const rows = (data.needsReply || []).filter(r => r.workspace + '/' + r.id !== inNow);
     if (!rows.length) return '';
     const shown = replyAll ? rows : rows.slice(0, REPLY_SHOWN);
     const row = r => `<li class="${r.late ? 'late' : ''}"><a href="#/${esc(r.workspace)}/backlog/${esc(r.id)}"><span class="who">${esc(r.client)}</span>
@@ -151,7 +138,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   // Estimates waiting on a client's director, and approved changes still to bill and schedule.
   const estimatesLine = data => {
     const e = data.estimates || { waiting: [], toHandle: [], taskFailed: [] };
-    if (!e.waiting.length && !e.toHandle.length) return '';
+    if (!e.waiting.length && !e.toHandle.length) return { toHandle: '', waiting: '', late: false };
     const wait = r => `<li><a href="${esc(r.url)}"><span class="who">${esc(r.client)}</span> <span class="what">${esc(r.title)}</span></a>
       <span class="meta">${esc(r.hours_label)} · ${esc(r.price_label)}${r.donated ? ' donated' : ''} · ${r.days_waiting > 0 ? esc(r.days_waiting) + (r.days_waiting === 1 ? ' day' : ' days') + ' waiting' : 'sent today'}</span></li>`;
     // The client decides these, so each client folds to one line (count, hours, value, oldest); open it for the items.
@@ -167,51 +154,67 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     };
     const handle = r => `<li><a href="${esc(r.url)}"><span class="who">${esc(r.client)}</span> <span class="what">${esc(r.title)}</span></a>
       <span class="meta">${r.status === 'approved_now' ? 'Add now · ' + esc(r.price_label) + (r.donated ? ' donated, schedule only' : '') : 'After launch · ' + esc(r.credits_label)}${r.sf_error ? ' · <strong>Salesforce Task failed</strong>' : ''}</span></li>`;
-    return `<section class="panel needs-reply" aria-label="Estimates">
-      ${e.waiting.length ? `<p class="label"><strong>Estimates waiting for the client</strong> <span class="muted small">${e.waiting.length}</span></p>${waitGroups(e.waiting).map(waitGroup).join('')}` : ''}
-      ${e.toHandle.length ? `<p class="label"><strong>Approved changes to bill and schedule</strong> <span class="muted small">${e.toHandle.length}${e.taskFailed.length ? ' · ' + e.taskFailed.length + ' without a Salesforce Task' : ''}</span></p><ul class="reply-list">${e.toHandle.map(handle).join('')}</ul>` : ''}</section>`;
+    return {
+      // Approved changes are ours to bill and schedule: Your move.
+      toHandle: e.toHandle.length ? `<section class="panel needs-reply" aria-label="Approved changes"><p class="label"><strong>Approved changes to bill and schedule</strong> <span class="muted small">${e.toHandle.length}${e.taskFailed.length ? ' · ' + e.taskFailed.length + ' without a Salesforce Task' : ''}</span></p><ul class="reply-list">${e.toHandle.map(handle).join('')}</ul></section>` : '',
+      // Estimates the client still has to decide: Waiting on clients. Late once one has waited a week.
+      waiting: e.waiting.length ? `<p class="label"><strong>Estimates waiting for the client</strong> <span class="muted small">${e.waiting.length}</span></p>${waitGroups(e.waiting).map(waitGroup).join('')}` : '',
+      late: e.waiting.some(r => (r.days_waiting || 0) >= 7)
+    };
   };
   // Donated by Positive Tribes this year, across clients: one quiet line for funder reports.
-  const donatedLine = data => {
+  const donatedTile = data => {
     const d = data.donated || [];
     if (!d.length) return '';
     const minutes = d.reduce((n, r) => n + r.minutes, 0), cents = d.reduce((n, r) => n + r.value_cents, 0), hrs = minutes / 60;
-    return `<p class="muted small donated-line"><strong>Donated this year:</strong> ${esc(Number.isInteger(hrs) ? hrs : hrs.toFixed(1))} hours · $${esc((cents / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }))} value (${d.map(r => esc(r.client) + ' ' + esc(r.value_label)).join(', ')})</p>`;
+    return tile(esc(Number.isInteger(hrs) ? hrs : hrs.toFixed(1)) + ' h', 'donated this year · $' + esc((cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })),
+      d.map(r => r.client + ' ' + r.value_label).join(', '));
   };
+  const tile = (num, unit, title) => `<div class="tile"${title ? ` title="${esc(title)}"` : ''}><span class="num">${num}</span><span class="unit">${unit}</span></div>`;
   // Last week's website numbers (the Monday digest: leads and gifts from Salesforce, visits from Cloudflare Web Analytics).
   // One line; open it for sources, pages, a leads trend and Run now.
-  const webLine = data => {
+  const webPart = data => {
     const w = data.web;
     const run = '<button type="button" class="link" id="web-run">Run now</button>';
     // Nothing saved yet (before the first Monday run): still offer Run now.
-    if (!w) return `<p class="muted small donated-line"><strong>Website:</strong> no weekly digest yet; the first runs Monday morning. ${run}</p>`;
+    if (!w) return { tiles: '', body: `<p class="muted small"><strong>Website:</strong> no weekly digest yet; the first runs Monday morning. ${run}</p>`, late: false };
     const day = d => new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
     const end = new Date(Date.parse(w.week + 'T12:00:00Z') + 6 * 864e5).toISOString().slice(0, 10);
-    if (!w.digest) return `<p class="muted small donated-line"><strong>Website:</strong> last week's numbers could not be fetched (${esc(w.error)}). ${run}</p>`;
+    if (!w.digest) return { tiles: '', body: `<p class="small"><strong>Website:</strong> last week's numbers could not be fetched (${esc(w.error)}). ${run}</p>`, late: true };
     const d = w.digest, n = (v, one, many) => esc(v) + ' ' + (v === 1 ? one : many);
-    const change = p => p && p.before ? ` <span class="muted">(${p.now >= p.before ? '+' : ''}${esc(Math.round((p.now - p.before) / p.before * 100))}%)</span>` : '';
-    const usd = v => '$' + esc(Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 }));
-    const parts = [
-      d.visits ? n(d.visits.now, 'visit', 'visits') + change(d.visits) : '',
-      d.leads ? n(d.leads.now, 'new lead', 'new leads') : '',
-      d.gifts ? n(d.gifts.now, 'gift', 'gifts') + (d.given?.now ? ' (' + usd(d.given.now) + ')' : '') : '',
-      d.sources?.[0] ? 'most from ' + esc(d.sources[0].source) : ''
-    ].filter(Boolean);
+        const usd = v => '$' + esc(Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 }));
+    const pct = p => p && p.before ? ' · ' + (p.now >= p.before ? '+' : '−') + esc(Math.abs(Math.round((p.now - p.before) / p.before * 100))) + '%' : '';
+    const tiles = [
+      d.visits ? tile(esc(d.visits.now), (d.visits.now === 1 ? 'visit' : 'visits') + pct(d.visits)) : '',
+      d.leads ? tile(esc(d.leads.now), (d.leads.now === 1 ? 'new lead' : 'new leads') + ' from the site') : '',
+      d.gifts ? tile(esc(d.gifts.now), (d.gifts.now === 1 ? 'gift' : 'gifts') + (d.given?.now ? ' · ' + usd(d.given.now) : '')) : ''
+    ].join('');
+    const parts = [d.sources?.[0] ? 'most from ' + esc(d.sources[0].source) : '', (d.notes || []).length ? (d.notes.length === 1 ? '1 source missing' : d.notes.length + ' sources missing') : ''].filter(Boolean);
     const vsRow = (label, p, money) => `<li><span class="what">${esc(label)}</span><span class="meta">${money ? usd(p.now) : esc(p.now)}</span><span class="meta muted">${money ? usd(p.before) : esc(p.before)} the week before</span></li>`;
     const rows = [d.visits && vsRow('Visits', d.visits), d.views && vsRow('Page views', d.views), d.leads && vsRow('New leads from the site (Salesforce)', d.leads),
       d.gifts && vsRow('Gifts', d.gifts), d.given && vsRow('Given', d.given, true)].filter(Boolean).join('');
     const trend = (w.trend || []).length > 1 ? `<p class="muted small">New leads by week: ${w.trend.map(t => esc(day(t.week)) + ' ' + esc(t.leads)).join(' · ')}</p>` : '';
     const late = w.error || (d.notes || []).length;
-    return `<section class="panel needs-reply" aria-label="Website last week"><details class="est-group${late ? ' late' : ''}"><summary><span class="who">Website · ${esc(day(w.week))} to ${esc(day(end))}</span>
-      <span class="meta">${parts.join(' · ') || 'No numbers yet'}</span></summary>
+    return { tiles, late: Boolean(late), week: `${esc(day(w.week))} to ${esc(day(end))}`, body: `<details class="est-group${late ? ' late' : ''}"><summary><span class="who">Website details</span>
+      <span class="meta">${parts.join(' · ') || 'sources, pages and trend'}</span></summary>
       ${w.error ? `<p class="small"><strong>The latest run failed:</strong> ${esc(w.error)}</p>` : ''}
       ${(d.notes || []).map(t => `<p class="small"><strong>Missing:</strong> ${esc(t)}</p>`).join('')}
       <ul class="reply-list">${rows}</ul>
       ${d.sources ? `<p class="label"><strong>Where visits came from</strong></p><ul class="reply-list">${d.sources.map(s => `<li><span class="what">${esc(s.source)}</span><span class="meta">${n(s.visits, 'visit', 'visits')}</span><span></span></li>`).join('') || '<li class="muted small">No visits.</li>'}</ul>` : ''}
       ${d.pages ? `<p class="label"><strong>Pages that show interest</strong></p><ul class="reply-list">${d.pages.map(p => vsRow(p.path, p)).join('')}</ul>` : ''}
-      ${trend}<p class="muted small">Leads and gifts from Salesforce; visits from Cloudflare Web Analytics (sampled, so round numbers are estimates; our own visits are included). Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details></section>`;
+      ${trend}<p class="muted small">Leads and gifts from Salesforce; visits from Cloudflare Web Analytics (sampled, so round numbers are estimates; our own visits are included). Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details>` };
   };
-  const countdownRow = data => (data.testing || []).length ? `<div class="countdowns">${countdowns(data)}</div>` : '';
+  // Client phases in testing, one row each. Late only once the window has passed.
+  const countdownRows = data => {
+    const rows = (data.testing || []).map(r => {
+      const business = r.dayType === 'business', left = daysLeft(data.today, r.due, business), unit = business ? 'business day' : 'day';
+      const when = left === 0 ? 'due today' : Math.abs(left) + ' ' + unit + (Math.abs(left) === 1 ? '' : 's') + (left < 0 ? ' over' : ' left');
+      return `<li class="${left < 0 ? 'late' : ''}"><a href="#/${esc(r.workspace)}/home"><span class="who">${esc(r.client)}</span><span class="what">${esc(r.project)} ${esc(r.phase)} testing and sign-off</span></a>
+        <span class="meta">${esc(when)} · ${esc(dayName(r.due))}</span><span class="meta muted">${r.autoAccept ? 'accepted unless problems are listed' : ''}</span></li>`;
+    });
+    return { html: rows.length ? `<p class="label"><strong>Testing and sign-off</strong> <span class="muted small">${rows.length}</span></p><ul class="reply-list">${rows.join('')}</ul>` : '',
+      late: (data.testing || []).some(r => daysLeft(data.today, r.due, r.dayType === 'business') < 0) };
+  };
 
   // "Not now" only hides an item for the rest of today, in this browser.
   const skipKey = () => 'now-skipped-' + (overview?.today || '');
@@ -221,17 +224,26 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   const doneMap = () => { try { return JSON.parse(localStorage.getItem(doneKey) || '{}') || {}; } catch { return {}; } };
   const doneUntil = today => new Date(Date.parse(today + 'T12:00:00Z') + DONE_DAYS * 864e5).toISOString().slice(0, 10);
   const nowId = i => [i.type, i.id || i.title, i.accountId || ''].join('|');
-  function nowCard(data) {
+  const replyNow = data => (data.needsReply || []).map(r => ({
+    type: 'reply', id: r.workspace + '/' + r.id, title: r.title, client: r.client, url: `#/${r.workspace}/backlog/${r.id}`, score: r.late ? 85 : 80,
+    why: r.late ? `A client has waited ${r.days} business days for your reply` : 'A client is waiting on your reply',
+    detail: r.testing ? 'Test problem' : r.kind === 'problem' ? 'Problem' : 'Suggested change'
+  }));
+  const nowList = data => {
     const skip = skipped(), dones = doneMap(), isDone = i => (dones[nowId(i)] || '') > data.today;
-    const list = (data.now || []).filter(i => !skip.includes(nowId(i)) && !isDone(i));
+    return [...(data.now || []), ...replyNow(data)].sort((a, b) => (b.score || 0) - (a.score || 0)).filter(i => !skip.includes(nowId(i)) && !isDone(i));
+  };
+  function nowCard(data, list = nowList(data)) {
+    const skip = skipped(), dones = doneMap(), isDone = i => (dones[nowId(i)] || '') > data.today;
     // Nothing to do is one quiet line; with nothing needing attention either, it says so here instead of in its own panel.
     if (!list.length) return `<section class="panel nowcard quiet" aria-label="Now"><p class="why"><strong>Nothing needs you right now.</strong> <span class="muted">${skip.length || (data.now || []).some(isDone) ? 'You have skipped or finished everything for now. <button type="button" class="link" id="now-reset">Bring them back</button>' : (data.attention.length ? 'Nothing urgent.' : 'Nothing overdue or waiting.') + ' Pick something from Coming up.'}</span></p></section>`;
-    const [top, ...rest] = list, url = top.type === 'stale' ? to.client(top.accountId) : esc(safeUrl(top.url));
-    const title = url ? `<a href="${url}"${top.type === 'stale' ? '' : ' target="_blank" rel="noopener"'}>${esc(top.title)}</a>` : esc(top.title);
-    const client = top.client && top.type !== 'stale' ? `<a class="client-link" href="${to.client(top.accountId)}">${esc(top.client)}</a> · ` : '';
+    const [top, ...rest] = list, inApp = top.type === 'stale' || top.type === 'reply';
+    const url = top.type === 'stale' ? to.client(top.accountId) : top.type === 'reply' ? esc(top.url) : esc(safeUrl(top.url));
+    const title = url ? `<a href="${url}"${inApp ? '' : ' target="_blank" rel="noopener"'}>${esc(top.title)}</a>` : esc(top.title);
+    const client = top.client && top.type !== 'stale' ? (top.accountId ? `<a class="client-link" href="${to.client(top.accountId)}">${esc(top.client)}</a> · ` : esc(top.client) + ' · ') : '';
     return `<section class="panel nowcard" aria-label="Now"><p class="label">Now</p><h2>${title}</h2>
       <p class="why">${client}<strong>${esc(top.why)}</strong>${top.detail ? ' · <span class="muted">' + esc(top.detail) + '</span>' : ''}</p>
-      ${top.type === 'step' && top.id ? `<button type="button" class="primary" data-today-done="${esc(top.id)}">Mark done</button> ` : `<button type="button" class="primary" id="now-done" data-id="${esc(nowId(top))}" data-account="${top.type === 'lead' ? '' : esc(top.accountId || '')}" data-title="${esc(top.title)}">Done</button> `}<button type="button" id="now-skip" data-id="${esc(nowId(top))}">Not now</button>
+      ${top.type === 'reply' ? `<a class="btn primary" href="${url}">Reply</a> ` : top.type === 'step' && top.id ? `<button type="button" class="primary" data-today-done="${esc(top.id)}">Mark done</button> ` : `<button type="button" class="primary" id="now-done" data-id="${esc(nowId(top))}" data-account="${top.type === 'lead' ? '' : esc(top.accountId || '')}" data-title="${esc(top.title)}">Done</button> `}<button type="button" id="now-skip" data-id="${esc(nowId(top))}">Not now</button>
       ${rest.length ? `<p class="meta later">Then: ${rest.slice(0, 3).map(i => esc(i.title)).join(' · ')}</p>` : ''}</section>`;
   }
   function wireNow(box) {
@@ -260,14 +272,20 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   function renderToday(box, data) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
+    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data);
+    const now = nowList(data), inNow = now[0]?.type === 'reply' ? now[0].id : '';
+    const group = label => `<h3 class="group-label">${esc(label)}</h3>`;
     const hour = new Date().getHours();
     box.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h2 class="greet">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}</h2></div></div>
-    ${nowCard(data)}${needsReplyLine(data)}${estimatesLine(data)}${donatedLine(data)}${webLine(data)}${countdownRow(data)}
-    <div class="cols${attention.length ? '' : ' two'}">
-      ${attention.length ? `<section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2><ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', tick: doneControl })).join('')}</ul></section>` : ''}
+    ${group('Your move')}${nowCard(data, now)}${needsReplyLine(data, inNow)}${est.toHandle}
+    ${attention.length ? `<section class="panel needs-reply attention" aria-label="Needs attention"><p class="label"><strong>Needs attention</strong> <span class="muted small">${attention.length}</span></p><ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', tick: doneControl })).join('')}</ul></section>` : ''}
+    ${cd.html || est.waiting ? `${group('Waiting on clients')}<section class="panel calm${cd.late || est.late ? ' late' : ''}" aria-label="Waiting on clients">${cd.html}${est.waiting}</section>` : ''}
+    <div class="cols two">
       <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { tick: doneControl })}</section>
       <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${shortList(data.recent)}</section>
-    </div>`;
+    </div>
+    ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late ? ' late' : ''}" aria-label="This week">
+      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}</section>`;
     wireNow(box);
     box.onclick = async e => {
       const t = e.target.closest('[data-today-done]');
