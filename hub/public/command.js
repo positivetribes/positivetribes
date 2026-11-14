@@ -178,7 +178,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const minutes = d.reduce((n, r) => n + r.minutes, 0), cents = d.reduce((n, r) => n + r.value_cents, 0), hrs = minutes / 60;
     return `<p class="muted small donated-line"><strong>Donated this year:</strong> ${esc(Number.isInteger(hrs) ? hrs : hrs.toFixed(1))} hours · $${esc((cents / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }))} value (${d.map(r => esc(r.client) + ' ' + esc(r.value_label)).join(', ')})</p>`;
   };
-  // Last week's website numbers (the Monday Google Analytics digest): one line, open it for events, sources and pages.
+  // Last week's website numbers (the Monday digest: leads and gifts from Salesforce, visits from Cloudflare Web Analytics).
+  // One line; open it for sources, pages, a leads trend and Run now.
   const webLine = data => {
     const w = data.web;
     if (!w) return '';
@@ -187,19 +188,27 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const run = '<button type="button" class="link" id="web-run">Run now</button>';
     if (!w.digest) return `<p class="muted small donated-line"><strong>Website:</strong> last week's numbers could not be fetched (${esc(w.error)}). ${run}</p>`;
     const d = w.digest, n = (v, one, many) => esc(v) + ' ' + (v === 1 ? one : many);
-    const change = p => p.before ? ` <span class="muted">(${p.now >= p.before ? '+' : ''}${esc(Math.round((p.now - p.before) / p.before * 100))}%)</span>` : '';
-    const ev = name => (d.events || []).find(e => e.name === name) || { now: 0, before: 0 };
-    const leads = ['generate_lead', 'contact_email_click', 'contact_email_copy'].reduce((t, k) => t + ev(k).now, 0);
-    const gifts = ev('donation_complete').now, top = (d.sources || [])[0];
-    const vsRow = (label, p) => `<li><span class="what">${esc(label)}</span><span class="meta">${esc(p.now)}</span><span class="meta muted">${esc(p.before)} the week before</span></li>`;
-    const trend = (w.trend || []).length > 1 ? `<p class="muted small">Leads by week: ${w.trend.map(t => esc(day(t.week)) + ' ' + esc(t.leads)).join(' · ')}</p>` : '';
-    return `<section class="panel needs-reply" aria-label="Website last week"><details class="est-group${w.error ? ' late' : ''}"><summary><span class="who">Website · ${esc(day(w.week))} to ${esc(day(end))}</span>
-      <span class="meta">${n(d.visitors.now, 'visitor', 'visitors')}${change(d.visitors)} · ${n(leads, 'lead', 'leads')} · ${n(gifts, 'donation', 'donations')}${d.donated?.now ? ' ($' + esc(d.donated.now.toLocaleString('en-US')) + ')' : ''}${top ? ' · most from ' + esc(top.source) : ''}</span></summary>
+    const change = p => p && p.before ? ` <span class="muted">(${p.now >= p.before ? '+' : ''}${esc(Math.round((p.now - p.before) / p.before * 100))}%)</span>` : '';
+    const usd = v => '$' + esc(Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 }));
+    const parts = [
+      d.visits ? n(d.visits.now, 'visit', 'visits') + change(d.visits) : '',
+      d.leads ? n(d.leads.now, 'new lead', 'new leads') : '',
+      d.gifts ? n(d.gifts.now, 'gift', 'gifts') + (d.given?.now ? ' (' + usd(d.given.now) + ')' : '') : '',
+      d.sources?.[0] ? 'most from ' + esc(d.sources[0].source) : ''
+    ].filter(Boolean);
+    const vsRow = (label, p, money) => `<li><span class="what">${esc(label)}</span><span class="meta">${money ? usd(p.now) : esc(p.now)}</span><span class="meta muted">${money ? usd(p.before) : esc(p.before)} the week before</span></li>`;
+    const rows = [d.visits && vsRow('Visits', d.visits), d.views && vsRow('Page views', d.views), d.leads && vsRow('New leads from the site (Salesforce)', d.leads),
+      d.gifts && vsRow('Gifts', d.gifts), d.given && vsRow('Given', d.given, true)].filter(Boolean).join('');
+    const trend = (w.trend || []).length > 1 ? `<p class="muted small">New leads by week: ${w.trend.map(t => esc(day(t.week)) + ' ' + esc(t.leads)).join(' · ')}</p>` : '';
+    const late = w.error || (d.notes || []).length;
+    return `<section class="panel needs-reply" aria-label="Website last week"><details class="est-group${late ? ' late' : ''}"><summary><span class="who">Website · ${esc(day(w.week))} to ${esc(day(end))}</span>
+      <span class="meta">${parts.join(' · ') || 'No numbers yet'}</span></summary>
       ${w.error ? `<p class="small"><strong>The latest run failed:</strong> ${esc(w.error)}</p>` : ''}
-      <p class="label"><strong>What people did</strong></p><ul class="reply-list">${(d.events || []).map(e => vsRow(e.label, e)).join('')}</ul>
-      <p class="label"><strong>Where visits came from</strong></p><ul class="reply-list">${(d.sources || []).map(s => `<li><span class="what">${esc(s.source)}</span><span class="meta">${n(s.sessions, 'visit', 'visits')}</span><span class="meta muted">${s.keyEvents ? n(s.keyEvents, 'key event', 'key events') : ''}</span></li>`).join('') || '<li class="muted small">No visits.</li>'}</ul>
-      <p class="label"><strong>Pages that show interest</strong></p><ul class="reply-list">${(d.pages || []).map(p => vsRow(p.path, p)).join('')}</ul>
-      ${trend}<p class="muted small">From Google Analytics, our own devices left out. Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details></section>`;
+      ${(d.notes || []).map(t => `<p class="small"><strong>Missing:</strong> ${esc(t)}</p>`).join('')}
+      <ul class="reply-list">${rows}</ul>
+      ${d.sources ? `<p class="label"><strong>Where visits came from</strong></p><ul class="reply-list">${d.sources.map(s => `<li><span class="what">${esc(s.source)}</span><span class="meta">${n(s.visits, 'visit', 'visits')}</span><span></span></li>`).join('') || '<li class="muted small">No visits.</li>'}</ul>` : ''}
+      ${d.pages ? `<p class="label"><strong>Pages that show interest</strong></p><ul class="reply-list">${d.pages.map(p => vsRow(p.path, p)).join('')}</ul>` : ''}
+      ${trend}<p class="muted small">Leads and gifts from Salesforce; visits from Cloudflare Web Analytics, our own devices left out. Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details></section>`;
   };
   const countdownRow = data => (data.testing || []).length ? `<div class="countdowns">${countdowns(data)}</div>` : '';
 
