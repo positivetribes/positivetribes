@@ -211,6 +211,11 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .seg.small button{padding:4px 10px;min-height:32px;font-size:14px;font-weight:500}
 .item-no{font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;font-variant-numeric:tabular-nums}.item-no:hover{color:var(--ink);text-decoration:underline}
 .pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 10px;border-radius:99px;white-space:nowrap}
+.pill.new-answer{background:var(--ok);color:var(--card)}
+.new-answers{background:var(--ok-bg);border-radius:12px;padding:12px 16px}
+.new-answers .na-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.new-answers .na-head .btn{flex:none}
+.new-answers ul{margin:6px 0 0;padding-left:18px}.new-answers li{margin:2px 0}.new-answers a{font-weight:600;color:var(--ink)}
+.cc .reply-list.answers .said{font-weight:400;font-size:.88em;opacity:.8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .pill.must{background:var(--must-bg);color:var(--must)}.pill.nice{background:var(--nice-bg);color:var(--nice)}.pill.idea{background:var(--idea-bg);color:var(--idea)}.pill.done{background:var(--ok-bg);color:var(--ok)}
 .pill.est{text-transform:none;letter-spacing:0;font-weight:600}.pill.est.draft{background:var(--nice-bg);color:var(--nice)}.pill.est.sent{background:var(--idea-bg);color:var(--idea)}.pill.est.yes{background:var(--ok-bg);color:var(--ok)}.pill.est.quiet{background:transparent;border:1px solid var(--line);color:var(--muted)}
 .pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
@@ -473,8 +478,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     problem: [['must', 'Stops sign-off', 'The phase cannot be accepted until it is fixed.'], ['nice', 'Fix before launch', 'Works, but is confusing or looks wrong.'], ['idea', 'Minor', 'Small polish. Fine to fix later.']],
     request: [['must', 'Urgent', 'Something is stopping your team from working.'], ['nice', 'Soon', 'Important, but you can work around it.'], ['idea', 'When there is time', 'Nice to have.']]
   };
-  const KIND_TABS = [['question', 'Open questions'], ['change', 'Suggested changes'], ['problem', 'Test problems'], ['request', 'Support requests']];
+  const KIND_TABS = [['question', 'Questions'], ['change', 'Suggested changes'], ['problem', 'Test problems'], ['request', 'Support requests']];
   const DONE_WORD = { question: 'answered', change: 'done', problem: 'fixed', request: 'resolved' };
+  // A question someone else answered in the past 14 days, until this viewer opens it or taps Got it (kept in this browser).
+  const ANSWER_DAYS = 14;
+  const seenKey = () => 'answers-seen-' + state.slug;
+  const seenAnswers = () => { try { return JSON.parse(localStorage.getItem(seenKey()) || '{}') || {}; } catch { return {}; } };
+  const isNewAnswer = i => i.kind === 'question' && i.done && Boolean(i.answered_at) && !i.answered_mine
+    && Date.now() - Date.parse(i.answered_at) < ANSWER_DAYS * 864e5 && seenAnswers()[i.id] !== i.answered_at;
+  const markSeen = items => { const m = seenAnswers(); for (const i of items) m[i.id] = i.answered_at; try { localStorage.setItem(seenKey(), JSON.stringify(m)); } catch {} };
   const PHASES = [['review', 'Not decided yet'], ['prototype', 'Prototype'], ['full', 'In the build'], ['later', 'After launch']];
   const STEPS = [['kickoff', 'Kickoff'], ['discovery', 'Discovery'], ['prototype', 'Prototype'], ['build', 'Build'], ['uat', 'Testing'], ['launch', 'Launch'], ['hypercare', 'Settling in'], ['support', 'Care plan']];
   const $ = id => document.getElementById(id);
@@ -1375,9 +1387,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const opener = careMode ? 'Request an improvement' : { question: 'Ask a question', change: 'Suggest a change', problem: 'Report a problem', request: 'Ask for help' }[kind];
     // Show: everything, what waits on this viewer (clients only), or when it would be built.
     // Options with nothing in them are left out, except the one already chosen.
-    const showOptions = [['all', 'Everything'], ...(isPt && !state.preview ? [] : [['yours', 'Waiting on you']]), ...PHASES];
-    const phaseCount = key => open(mine).filter(i => shownBy(i, key)).length;
-    const showBy = kind !== 'problem' && kind !== 'request' && open(mine).length > 0 && h('div', { class: 'show-by' },
+    // Newest first: most recently answered (or edited) on top.
+    const finished = mine.filter(i => i.done).sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '') || b.id - a.id);
+    const doneLabel = DONE_WORD[kind][0].toUpperCase() + DONE_WORD[kind].slice(1);
+    const showOptions = [['all', 'All open'], ...(isPt && !state.preview ? [] : [['yours', 'Waiting on you']]), ...PHASES, ['done', doneLabel]];
+    const phaseCount = key => key === 'done' ? finished.length : open(mine).filter(i => shownBy(i, key)).length;
+    const showBy = kind !== 'problem' && kind !== 'request' && mine.length > 0 && h('div', { class: 'show-by' },
       h('label', { for: 'show-by' }, 'Show'),
       h('select', { id: 'show-by', onchange: e => { state.filter = e.target.value; render(); } },
         showOptions.filter(([key]) => key === 'all' || key === filter || phaseCount(key) > 0)
@@ -1393,6 +1408,17 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       ? (careMode ? careForm() : addForm())
       : h('div', { class: 'bar' }, h('button', { class: 'btn', type: 'button', onclick: () => { state.adding = true; render(); const f = $('f-title') || $('c-title'); if (f) f.focus(); } }, opener), filters || null));
     if (state.adding && filters) nodes.push(filters);
+    // Answers someone else gave lately, above the open questions, so they are never only in the fold at the bottom.
+    const fresh = kind === 'question' ? finished.filter(isNewAnswer) : [];
+    if (fresh.length && filter !== 'done') nodes.push(h('section', { class: 'new-answers', 'aria-label': 'New answers' },
+      h('div', { class: 'na-head' }, h('strong', {}, fresh.length === 1 ? '1 new answer' : fresh.length + ' new answers'),
+        h('button', { class: 'btn ghost small', type: 'button', onclick: () => { markSeen(fresh); render(); } }, 'Got it')),
+      h('ul', {}, fresh.map(i => h('li', {}, h('a', { href: link('backlog', i.id), onclick: () => markSeen([i]) }, '#' + itemNo(i) + ' ' + i.title),
+        i.owner ? h('span', { class: 'meta' }, ' · answered by ' + i.owner) : null)))));
+    if (filter === 'done') {
+      nodes.push(finished.length ? h('div', { class: 'stack' }, finished.map(i => card(i, finished, isPt))) : h('p', { class: 'empty' }, 'Nothing ' + DONE_WORD[kind] + ' yet.'));
+      return h('div', { class: 'stack' }, nodes);
+    }
     // The phase filter applies to open items only. Finished items all go in one
     // list at the bottom, whatever their tier or phase, and empty tiers are hidden.
     let shown = 0;
@@ -1426,10 +1452,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           h('h3', { class: 'sub' }, h('span', { class: 'pill ' + key }, label), h('span', { class: 'meaning' }, tiers.find(t => t[0] === key)[2])),
           ...active.map(i => card(i, group, isPt))]))));
     }
-    // Newest first: most recently answered (or edited) on top.
-    const finished = mine.filter(i => i.done).sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '') || b.id - a.id);
     if (finished.length) {
-      nodes.push(h('details', { class: 'done-list' }, h('summary', {}, DONE_WORD[kind][0].toUpperCase() + DONE_WORD[kind].slice(1) + ' (' + finished.length + ')'),
+      nodes.push(h('details', { class: 'done-list', ...(fresh.length ? { open: true } : {}) }, h('summary', {}, doneLabel + ' (' + finished.length + ')'),
         h('div', { class: 'stack' }, finished.map(i => card(i, finished, isPt)))));
     }
     return h('div', { class: 'stack' }, nodes);
@@ -1533,7 +1557,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const shipsIn = tracked && item.release_id && !item.done && h('span', { class: 'pill phase' }, 'Ships in ' + phaseName({ name: item.release_name, number: item.release_number }));
     // On Waiting on you there are no priority headings, so each open card carries its priority.
     const tierPill = state.view === 'waiting' && !item.done && h('span', { class: 'pill ' + item.tier }, tiers.find(t => t[0] === item.tier)[1]);
-    const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), tierPill, duePill, statusPill, estimatePill(item), shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
+    const pills = [isNewAnswer(item) && h('span', { class: 'pill new-answer' }, 'New answer'), item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), tierPill, duePill, statusPill, estimatePill(item), shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
     // Positive Tribes picks the status in one tap. Not doing closes it; anything else reopens a declined one.
     const picker = isPt && tracked && (!item.done || declined) && h('select', { class: 'status-pick', 'aria-label': 'Status for ' + item.title, onchange: e => act(base() + '/items/' + item.id, patch({ status: e.target.value })) },
       STATUS_NAMES[item.kind].map(([k]) => h('option', { value: k, ...(item.status === k ? { selected: true } : {}) }, statusName(item, k))));

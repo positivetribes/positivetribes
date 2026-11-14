@@ -416,6 +416,9 @@ test('the inbox shows client changes, one row per item, and leaves out Eric and 
   const [answered, deleted] = inbox.items;
   assert.equal(answered.at, '2026-10-29T16:00:00Z');
   assert.equal(answered.detail, 'Yes, 84 accounts');
+  // Today's New answers come from these rows: who answered and the answer's first words.
+  assert.deepEqual(answered.answered, { by: 'Molly', text: 'Yes, 84 accounts' });
+  assert.equal(deleted.answered, null);
   // Links stay inside the hub.
   assert.equal(answered.url, '#/uep/backlog/10');
   assert.equal(answered.accountId, UEP);

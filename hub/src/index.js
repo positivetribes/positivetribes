@@ -98,12 +98,26 @@ async function listItems(db, clientId, user) {
      WHERE i.client_id = ?
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
   ).bind(clientId).all();
-  const [estimates, donated] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user)]);
+  const [estimates, donated, answers] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user), answersFor(db, clientId, user)]);
   return results.map(({ proposal_doc_title, proposal_doc_url, proposal_doc_visible, ...item }) => ({
     ...item, done: Boolean(item.done), estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [],
+    answered_at: answers.get(item.id)?.at || null, answered_mine: Boolean(answers.get(item.id)?.mine),
     // The proposal's link is the document's own visibility: clients never get the title or URL of a hidden document.
     proposal_doc: item.proposal_document_id && proposal_doc_title && (user.role === 'pt' || proposal_doc_visible) ? { title: proposal_doc_title, url: proposal_doc_url } : null
   }));
+}
+
+// When each question was last answered (or marked answered) in the past 30 days, and whether this viewer did it,
+// so the hub can flag answers someone else gave. Only a yes/no about the viewer leaves the server, never an email.
+export async function answersFor(db, clientId, user) {
+  const { results } = await db.prepare(
+    `SELECT item_id, actor_email, at FROM events
+     WHERE client_id = ? AND item_kind = 'question' AND action IN ('answered', 'done') AND at >= datetime('now', '-30 days')
+     ORDER BY id`
+  ).bind(clientId).all();
+  const me = String(user?.email || '').toLowerCase(), map = new Map();
+  for (const e of results) map.set(e.item_id, { at: String(e.at).replace(' ', 'T') + (String(e.at).endsWith('Z') ? '' : 'Z'), mine: String(e.actor_email || '').toLowerCase() === me });
+  return map;
 }
 
 async function listReleases(db, clientId) {

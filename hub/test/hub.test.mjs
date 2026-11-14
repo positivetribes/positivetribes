@@ -137,6 +137,20 @@ test('clients cannot see or touch another client', async () => {
   assert.equal(pt.items.length, 1);
 });
 
+test('items say when a question was last answered and whether the viewer answered it, never by whom', async () => {
+  const { call } = setup();
+  await call('eric@positivetribes.org', '/api/c/uep/items', 'POST', { title: 'How many volunteers?', kind: 'question', tier: 'must', project_id: 1 });
+  let r = await (await call('eric@positivetribes.org', '/api/c/uep/items')).json();
+  assert.equal(r.items[0].answered_at, null);
+  await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { answer: '482', done: true });
+  const eric = (await (await call('eric@positivetribes.org', '/api/c/uep/items')).json()).items[0];
+  assert.match(eric.answered_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+  assert.equal(eric.answered_mine, false);
+  assert.ok(!JSON.stringify(eric).includes('molly@uep.org'));
+  const molly = (await (await call('molly@uep.org', '/api/c/uep/items')).json()).items[0];
+  assert.equal(molly.answered_mine, true);
+});
+
 test('add, answer, move, done and delete are logged with the real person', async () => {
   const { call, sqlite } = setup();
   for (const title of ['A', 'B']) await call('molly@uep.org', '/api/c/uep/items', 'POST', { title, tier: 'must', project_id: 1 });

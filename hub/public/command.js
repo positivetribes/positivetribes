@@ -122,6 +122,14 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   // Each row opens that item on the client's list, where the reply box is.
   const REPLY_SHOWN = 3;
   let replyAll = false;
+  // Answers to our questions that came in since Eric last cleared them (the same rows as the Inbox). Got it clears them.
+  const answersLine = data => {
+    const rows = data.answers || [];
+    if (!rows.length) return '';
+    const row = (r, n) => `<li><a href="${esc(appUrl(r.url) || '#/command')}"><span class="who">${esc(r.client)}</span><span class="what">${esc(r.title)}</span>${r.text ? `<span class="said">${esc(r.text)}</span>` : ''}</a>
+      <span class="meta">${esc(r.by || 'Someone')} · ${esc(dayName(dayOf(r.at)))}</span><button type="button" class="btn small ghost" data-answer-seen="${n}">Got it</button></li>`;
+    return `<section class="panel needs-reply" aria-label="New answers"><p class="label"><strong>New answers</strong> <span class="muted small">${rows.length} to read</span></p><ul class="reply-list answers">${rows.map(row).join('')}</ul></section>`;
+  };
   // `inNow` is the reply already shown as the Now card, so it is not listed twice.
   const needsReplyLine = (data, inNow = '') => {
     const rows = (data.needsReply || []).filter(r => r.workspace + '/' + r.id !== inNow);
@@ -266,6 +274,17 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       try { const r = await send('/web/run', 'POST', {}); if (r.web) overview.web = r.web; if (!r.ran) alert(r.reason || 'The website digest did not run.'); } catch (error) { alert(error.message); }
       renderToday(box, overview);
     });
+    box.querySelectorAll('[data-answer-seen]').forEach(b => b.addEventListener('click', async e => {
+      const btn = e.currentTarget, r = (overview.answers || [])[Number(btn.dataset.answerSeen)];
+      if (!r) return;
+      btn.disabled = true;
+      try {
+        await send('/inbox/clear', 'POST', { items: [{ backlog: r.backlog, eventIds: r.eventIds }] });
+        overview.answers = overview.answers.filter(a => a !== r);
+        overview.inboxCount = Math.max(0, (overview.inboxCount || 1) - 1); inboxBadge(overview.inboxCount); inboxChanged();
+      } catch (error) { btn.disabled = false; alert(error.message); }
+      renderToday(box, overview);
+    }));
     box.querySelector('#reply-toggle')?.addEventListener('click', () => { replyAll = !replyAll; renderToday(box, overview); });
     box.querySelector('#now-reset')?.addEventListener('click', () => { try { localStorage.removeItem(doneKey); } catch {} save([]); });
   }
@@ -277,7 +296,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const group = label => `<h3 class="group-label">${esc(label)}</h3>`;
     const hour = new Date().getHours();
     box.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h2 class="greet">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}</h2></div></div>
-    ${group('Your move')}${nowCard(data, now)}${needsReplyLine(data, inNow)}${est.toHandle}
+    ${group('Your move')}${nowCard(data, now)}${answersLine(data)}${needsReplyLine(data, inNow)}${est.toHandle}
     ${attention.length ? `<section class="panel needs-reply attention" aria-label="Needs attention"><p class="label"><strong>Needs attention</strong> <span class="muted small">${attention.length}</span></p><ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', tick: doneControl })).join('')}</ul></section>` : ''}
     ${cd.html || est.waiting ? `${group('Waiting on clients')}<section class="panel calm${cd.late || est.late ? ' late' : ''}" aria-label="Waiting on clients">${cd.html}${est.waiting}</section>` : ''}
     <div class="cols two">
