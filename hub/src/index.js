@@ -649,7 +649,7 @@ export default {
         // moving its phase (In the build would add it without approving the price) or moving it to another list.
         if (user.role !== 'pt' && (doneNow !== item.done || phase !== item.phase || projectId !== item.project_id)) {
           const waiting = await db.prepare("SELECT 1 FROM change_estimates WHERE item_id = ? AND client_id = ? AND status = 'offered'").bind(item.id, client.id).first();
-          if (waiting) throw new InputError('This change has an estimate waiting. Your director decides with Add it now or Not now.', 409);
+          if (waiting) throw new InputError('This change has an estimate waiting. Your director decides: add it to the build, or Not now.', 409);
         }
         if (doneNow !== item.done || projectId !== item.project_id) {
           const care = await db.prepare('SELECT 1 FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id).first();
