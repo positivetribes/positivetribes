@@ -302,6 +302,7 @@ export async function estimateAdmin({ request, env, url, route, path, method, wh
     if (!action && method === 'PUT') {
       if (item.done) throw new InputError('This change is already done.', 409);
       if (item.agreement_ref) throw new InputError(`This change is covered by the agreement (${item.agreement_ref}). Clear that first to estimate it.`, 409);
+      if (item.proposal_state) throw new InputError('This change needs a proposal, not an hours estimate. Clear that first to estimate it.', 409);
       const input = await body(request);
       // With a breakdown, the hours are its sum; without one, the single number given.
       const lines = linesFrom(input.lines, text);
