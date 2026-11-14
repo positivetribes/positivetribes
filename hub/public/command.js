@@ -209,7 +209,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <ul class="reply-list">${rows}</ul>
       ${d.sources ? `<p class="label"><strong>Where visits came from</strong></p><ul class="reply-list">${d.sources.map(s => `<li><span class="what">${esc(s.source)}</span><span class="meta">${n(s.visits, 'visit', 'visits')}</span><span></span></li>`).join('') || '<li class="muted small">No visits.</li>'}</ul>` : ''}
       ${d.pages ? `<p class="label"><strong>Pages that show interest</strong></p><ul class="reply-list">${d.pages.map(p => vsRow(p.path, p)).join('')}</ul>` : ''}
-      ${trend}<p class="muted small">Leads and gifts from Salesforce; visits from Cloudflare Web Analytics, our own devices left out. Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details></section>`;
+      ${trend}<p class="muted small">Leads and gifts from Salesforce; visits from Cloudflare Web Analytics (sampled, so round numbers are estimates; our own visits are included). Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details></section>`;
   };
   const countdownRow = data => (data.testing || []).length ? `<div class="countdowns">${countdowns(data)}</div>` : '';
 

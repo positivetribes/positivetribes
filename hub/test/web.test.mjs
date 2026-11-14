@@ -8,8 +8,8 @@ const SF = { SF_DOMAIN: 'https://pt.my.salesforce.com', SF_CLIENT_ID: 'id', SF_C
 const CF = { CF_ACCOUNT_ID: HEX, CF_WEB_SITE_TAG: SITE, CF_ANALYTICS_TOKEN: 'tok' };
 const ACCOUNT = {
   now: [{ count: 40, sum: { visits: 14 } }], before: [{ count: 60, sum: { visits: 19 } }],
-  sources: [{ sum: { visits: 6 }, dimensions: { refererHost: 'www.linkedin.com' } }, { sum: { visits: 5 }, dimensions: { refererHost: 'positivetribes.org' } }, { sum: { visits: 3 }, dimensions: { refererHost: '' } }],
-  pagesNow: [{ count: 5, dimensions: { requestPath: '/care.html' } }], pagesBefore: [{ count: 2, dimensions: { requestPath: '/care.html' } }]
+  sources: [{ sum: { visits: 6 }, dimensions: { refererHost: 'www.linkedin.com' } }, { sum: { visits: 5 }, dimensions: { refererHost: 'positivetribes.org' } }, { sum: { visits: 3 }, dimensions: { refererHost: '' } }, { sum: { visits: 2 }, dimensions: { refererHost: 'positivetribes.cloudflareaccess.com' } }],
+  pagesNow: [{ count: 3, dimensions: { requestPath: '/care' } }, { count: 2, dimensions: { requestPath: '/care.html' } }], pagesBefore: [{ count: 2, dimensions: { requestPath: '/care.html' } }]
 };
 
 // Stubs global fetch (the Salesforce helpers use it) and records every call.
@@ -34,7 +34,7 @@ test('visitsFrom drops our own host as a source and counts interest pages', () =
   assert.deepEqual(v.visits, { now: 14, before: 19 });
   assert.deepEqual(v.views, { now: 40, before: 60 });
   assert.deepEqual(v.sources, [{ source: 'www.linkedin.com', visits: 6 }, { source: 'Direct or app', visits: 3 }]);
-  assert.deepEqual(v.pages.find(p => p.path === '/care.html'), { path: '/care.html', now: 5, before: 2 });
+  assert.deepEqual(v.pages.find(p => p.path === '/care'), { path: '/care', now: 5, before: 2 });
   assert.deepEqual(visitsFrom(undefined).visits, { now: 0, before: 0 });
 });
 
