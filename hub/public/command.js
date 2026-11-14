@@ -182,10 +182,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   // One line; open it for sources, pages, a leads trend and Run now.
   const webLine = data => {
     const w = data.web;
-    if (!w) return '';
+    const run = '<button type="button" class="link" id="web-run">Run now</button>';
+    // Nothing saved yet (before the first Monday run): still offer Run now.
+    if (!w) return `<p class="muted small donated-line"><strong>Website:</strong> no weekly digest yet; the first runs Monday morning. ${run}</p>`;
     const day = d => new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
     const end = new Date(Date.parse(w.week + 'T12:00:00Z') + 6 * 864e5).toISOString().slice(0, 10);
-    const run = '<button type="button" class="link" id="web-run">Run now</button>';
     if (!w.digest) return `<p class="muted small donated-line"><strong>Website:</strong> last week's numbers could not be fetched (${esc(w.error)}). ${run}</p>`;
     const d = w.digest, n = (v, one, many) => esc(v) + ' ' + (v === 1 ? one : many);
     const change = p => p && p.before ? ` <span class="muted">(${p.now >= p.before ? '+' : ''}${esc(Math.round((p.now - p.before) / p.before * 100))}%)</span>` : '';
