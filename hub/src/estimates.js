@@ -180,15 +180,15 @@ export async function decideEstimate({ db, env, url, client, user, item, input }
   if (est.status !== 'offered') throw new InputError('This estimate has already been decided.', 409);
   if (est.version !== input.version) throw new InputError('The estimate changed. Reload the page to see the new one.', 409);
   if (choice === 'later') {
-    if (est.donated) throw new InputError('This change is donated, so there is nothing to put off. Add it now or choose not now.', 409);
+    if (est.donated) throw new InputError('This change is donated, so there is nothing to put off. Add it to the build or choose Not now.', 409);
     if (!plan || plan.status === 'ended') throw new InputError('After launch needs a care plan.', 409);
-    if (est.minutes > LATER_MAX_MINUTES) throw new InputError('This is larger than one care-plan request. Add it now instead.', 409);
+    if (est.minutes > LATER_MAX_MINUTES) throw new InputError('This is larger than one care-plan request. Add it to the build instead.', 409);
   }
   const status = CHOICES[choice];
   const phase = choice === 'now' ? 'full' : choice === 'later' ? 'later' : item.phase;
   const tier = choice === 'not_now' && item.tier === 'must' ? 'idea' : item.tier;
   const token = crypto.randomUUID();
-  const detail = choice === 'now' ? `Add it now · ${hoursLabel(est.minutes)} · ${est.donated ? `donated (${moneyLabel(est.price_cents)} value)` : moneyLabel(est.price_cents)}`
+  const detail = choice === 'now' ? `Added to the build · ${hoursLabel(est.minutes)} · ${est.donated ? `donated (${moneyLabel(est.price_cents)} value)` : moneyLabel(est.price_cents)}`
     : choice === 'later' ? `After launch · ${hoursLabel(est.minutes)} · ${creditsLabel(est.credits)}` : 'Not now';
   const [won] = await db.batch([
     db.prepare(

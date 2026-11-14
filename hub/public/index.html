@@ -1021,10 +1021,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         if (shows) {
           const off = state.preview ? { disabled: true, title: 'Preview only' } : {};
           nodes.push(h('div', { class: 'actions' },
-            h('button', { class: 'btn small', type: 'button', ...off, onclick: () => decideEstimate(item, 'now') }, 'Add it now · ' + (e.donated ? 'free' : e.price_label)),
+            h('button', { class: 'btn small', type: 'button', ...off, onclick: () => decideEstimate(item, 'now') }, 'Yes, add it to the build · ' + (e.donated ? 'free' : e.price_label)),
             e.later_ok && h('button', { class: 'btn ghost small', type: 'button', ...off, onclick: () => decideEstimate(item, 'later') }, 'After launch · ' + e.credits_label),
-            h('button', { class: 'btn ghost small', type: 'button', ...off, onclick: () => decideEstimate(item, 'not_now') }, 'Not now')));
-          nodes.push(h('p', { class: 'meta' }, e.donated ? 'Positive Tribes covers this one: adding it puts it into the build, with nothing on your invoice.' : 'Adding it now puts ' + e.price_label + ' on your next invoice and into the build.' + (e.later_ok ? ' After launch uses ' + e.credits_label + ' from your care plan.' : '')));
+            h('button', { class: 'btn ghost small', type: 'button', ...off, onclick: () => decideEstimate(item, 'not_now') }, 'Not now, keep on wishlist')));
+          nodes.push(h('p', { class: 'meta' }, e.donated ? 'Positive Tribes covers this one: adding it puts it into the build, on the build schedule, with nothing on your invoice.' : 'Adding it puts it into the build, on the build schedule, with ' + e.price_label + ' on your next invoice.' + (e.later_ok ? ' After launch uses ' + e.credits_label + ' from your care plan.' : '')));
           if (e.later_note) nodes.push(h('p', { class: 'meta' }, e.later_note));
         } else nodes.push(h('p', { class: 'meta' }, ptNow ? 'Waiting for the client’s director to decide.' : 'Your director decides whether to add this.'));
       } else {

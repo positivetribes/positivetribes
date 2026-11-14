@@ -123,7 +123,7 @@ test('add it now: the item moves into the build, one Task is not created without
   assert.equal(item(1).phase, 'full');
   assert.equal(item(1).tier, 'must');
   assert.equal(events('estimate_decided').length, 1);
-  assert.equal(events('estimate_decided')[0].detail, 'Add it now · 3 hours · $150');
+  assert.equal(events('estimate_decided')[0].detail, 'Added to the build · 3 hours · $150');
   assert.equal(events('estimate_decided')[0].actor_email, 'molly@uep.org');
   assert.equal(r.body.items.find(i => i.id === 1).estimate.decided_by, 'Molly');
   // Positive Tribes' inbox picks up the client's event.
@@ -345,7 +345,7 @@ test('a donated estimate shows its value as donated, offers no after-launch, and
   assert.equal((await decide('molly@uep.org', 1, 'now')).status, 200);
   assert.equal(row(1).status, 'approved_now');
   assert.equal(item(1).phase, 'full');
-  assert.equal(events('estimate_decided')[0].detail, 'Add it now · 1 hour · donated ($50 value)');
+  assert.equal(events('estimate_decided')[0].detail, 'Added to the build · 1 hour · donated ($50 value)');
   const totals = await donatedTotals(env.DB);
   assert.deepEqual(totals.map(t => [t.slug, t.minutes, t.value_cents]), [['uep', 60, 5000]]);
   assert.equal((await call(PT, 'admin/estimates')).body.toHandle[0].donated, 1);
