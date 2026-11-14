@@ -29,7 +29,7 @@
     // CF_ANALYTICS_TOKEN secret (Account Analytics: Read only; wrangler secret put).
     "WEB_HOST": "hub.positivetribes.org",
     "CF_ACCOUNT_ID": "d7e67bd9fff1850969da60348408f3f0",
-    "CF_WEB_SITE_TAG": ""
+    "CF_WEB_SITE_TAG": "4b2879219eb7447ca537e8b8c0175ae9"
   },
   // Patch's morning check: 12:00 UTC, 8am Eastern (7am in winter). The website digest: Mondays 14:00 UTC.
   "triggers": { "crons": ["0 12 * * *", "0 14 * * 1"] },

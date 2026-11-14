@@ -10,14 +10,14 @@ This folder is for running Positive Tribes' money as a 501(c)(3): choosing and u
 - Personal finances are in Quicken Classic Deluxe for Mac (Quicken ID traveleric@gmail.com). That stays personal.
 - The org banks at Wells Fargo, in an account in its own name. All client and donor money goes there, and Stripe donation payouts deposit into it.
 
-Facts still to confirm and record here when known: fiscal year end, IRS determination letter date and public charity basis (509(a)(1) or 509(a)(2)), accounting software chosen, board members and officers, CPA or bookkeeper, Colorado charitable solicitation registration number.
+Facts still to confirm and record here when known: fiscal year end, IRS determination letter date and public charity basis (509(a)(1) or 509(a)(2)), board members and officers, CPA or bookkeeper, Colorado charitable solicitation registration number.
 
 ## Decisions so far
 
 - **Do not run Positive Tribes in Quicken.** Quicken Classic Deluxe is a personal-finance tool: no invoicing, no accounts receivable, no class or fund tracking, no nonprofit reports, and CPAs can't log in to it. Keeping org money in the personal Quicken file would also blur the line between Eric's money and the charity's, which is exactly what the IRS and Colorado look for. Quicken keeps doing personal finances only.
 - **Recommended books: QuickBooks Online**, bought at the nonprofit discount through TechSoup. It handles client invoices and payments, has a Stripe connection, works with Salesforce, and nearly every nonprofit CPA knows it. Use Classes for functional expenses (Program / Management & General / Fundraising) and Locations or Tags for restricted grants.
   - Alternative: **Aplos**, if restricted grants become a large share of revenue, because it does true fund accounting. Choose Aplos only for that reason.
-  - **Chosen (Oct 29, 2026): QuickBooks Online Plus via TechSoup.** Purchase waits until the org receives its first payment (client fee or donation). **When a first payment comes up, remind Eric to buy QBO before recording it.** Payroll is deferred until the board approves a salary.
+  - **Chosen (Oct 29, 2026): QuickBooks Online Plus via TechSoup.** **Purchased Nov 13, 2026** through TechSoup: QuickBooks Online Plus, 1-Year Subscription, 5 Users, $80 admin fee. It renews yearly through TechSoup (request it again about a month before it ends). Next: activate it from TechSoup's link, connect Stripe and the Wells Fargo account, and book the first payment in it. Payroll is deferred until the board approves a salary.
 
 ## Ground rules Claude should keep reinforcing
 
