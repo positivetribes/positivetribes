@@ -11,6 +11,7 @@ import { InputError } from './triage.js';
 import { patchAdmin, patchInbox, aiCost } from './patch.js';
 import { replyAdmin } from './reply.js';
 import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
+import { webAdmin, latestWebDigest } from './web.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
 const TIME_ZONE = 'America/Denver';
@@ -789,7 +790,9 @@ export async function handleAdmin(request, env, url, who) {
       const estimates = env.DB ? await estimateLists(env.DB).catch(error => { console.error('admin_estimates_failed', error.message); return { waiting: [], toHandle: [], taskFailed: [] }; }) : { waiting: [], toHandle: [], taskFailed: [] };
       // Donated by Positive Tribes this calendar year, per client, for funder reports.
       const donated = env.DB ? await donatedTotals(env.DB, today.slice(0, 4) + '-01-01').catch(error => { console.error('admin_donated_failed', error.message); return []; }) : [];
-      return json({ ...view, testing, needsReply, estimates, donated, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
+      // Last week's website numbers (the Monday GA digest); a broken read never hides Today.
+      const web = await latestWebDigest(db).catch(error => { console.error('admin_web_failed', error.message); return null; });
+      return json({ ...view, testing, needsReply, estimates, donated, web, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });
@@ -907,6 +910,8 @@ export async function handleAdmin(request, env, url, who) {
     if (reply) return reply;
     const estimate = await estimateAdmin({ request, env, url, route, path, method, who, json, body, text });
     if (estimate) return estimate;
+    const web = await webAdmin({ env, url, route, json }, today);
+    if (web) return web;
 
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
