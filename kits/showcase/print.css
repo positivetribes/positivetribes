@@ -1,0 +1,10 @@
+/* Print layout for make-pdf.sh: US Letter, white paper, no orphaned figures. */
+@page{size:Letter;margin:0.5in 0.55in}
+:root{--paper:#fff;--card:#fffdf7}
+body{font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.wrap{padding:0;gap:28px;max-width:none}
+figure,.win,.close,.pair>div,.client-head{break-inside:avoid}
+figure img{box-shadow:none;max-height:4.1in;width:auto;max-width:100%;justify-self:center}
+h1{font-size:2.3rem}
+.wins{grid-template-columns:repeat(4,1fr)}
+section{gap:14px}

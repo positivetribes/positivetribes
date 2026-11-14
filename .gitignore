@@ -5,3 +5,8 @@
 .env*
 
 .claude/settings.local.json
+
+# Mac folder-view files
+.DS_Store
+# Kept in the private positivetribes/financials repo
+/Financials/
