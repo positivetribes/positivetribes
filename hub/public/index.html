@@ -1470,7 +1470,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       onchange: e => { const t = TIER_NAMES[kind].find(x => x[0] === e.target.value); meaning.textContent = t ? t[2] : ''; } },
       h('option', { value: '', disabled: true, selected: true }, 'Choose one'),
       TIER_NAMES[kind].map(([k, l]) => h('option', { value: k }, l)));
-    const owner = h('input', { type: 'text', maxlength: 60, id: 'f-owner', placeholder: kind === 'problem' ? 'Test 3, step 5' : 'Who can answer?' });
+    const owner = h('input', { type: 'text', maxlength: 60, id: 'f-owner', placeholder: kind === 'problem' ? 'Test 3, step 5' : 'Who can answer?', ...(kind === 'question' ? { list: 'f-owner-list', autocomplete: 'off' } : {}) });
     return h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
       try {
@@ -1483,7 +1483,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', {}, h('label', { for: 'f-title' }, verb[1]), title),
       h('div', {}, h('label', { for: 'f-details' }, 'More detail (optional)'), details),
       h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier, meaning),
-        (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner)),
+        (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, kind === 'question' && ownerList('f-owner-list'))),
       kind === 'change' && h('p', { class: 'meta' }, 'We’ll reply and tell you whether this is already in your agreement or needs an estimate. Nothing is added or charged until you approve it.'),
       h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.adding = false; render(); } }, 'Cancel')));
   }
@@ -1612,13 +1612,23 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.confirming = null; render(); } }, 'Keep it')));
   }
 
+  // Names to suggest under "Who can answer?": people already named on this workspace's questions (the viewer
+  // sees those already) plus, for Positive Tribes, the client's people. Still free text: anyone can be named.
+  function ownerList(id) {
+    const seen = new Map();
+    const add = n => { const v = (n || '').trim(); if (v && !seen.has(v.toLowerCase())) seen.set(v.toLowerCase(), v); };
+    if (viewer().role === 'pt') state.people.forEach(u => add(u.name));
+    state.items.filter(i => i.kind === 'question').forEach(i => add(i.owner));
+    return h('datalist', { id }, [...seen.values()].sort((x, y) => x.localeCompare(y)).map(n => h('option', { value: n })));
+  }
+
   function editor(item) {
     const asks = item.kind === 'question' || item.kind === 'problem' || item.kind === 'request';
     // On a suggested change, only Positive Tribes writes the reply.
     const replies = item.kind === 'change' && viewer().role === 'pt';
     const title = h('input', { type: 'text', maxlength: 160, value: item.title, id: 'e-title' });
     const details = h('textarea', { maxlength: 2000, id: 'e-details' }, item.details);
-    const owner = h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'e-owner' });
+    const owner = h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'e-owner', ...(item.kind === 'question' ? { list: 'e-owner-list', autocomplete: 'off' } : {}) });
     const answer = h('textarea', { maxlength: 2000, id: 'e-answer' }, item.answer);
     const done = h('input', { type: 'checkbox', id: 'e-done', ...(item.done ? { checked: true } : {}) });
     const list = h('select', { id: 'e-project' }, state.projects.map(p => h('option', { value: p.id, ...(p.id === item.project_id ? { selected: true } : {}) }, p.name)));
@@ -1667,7 +1677,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     } },
       h('div', {}, h('label', { for: 'e-title' }, 'Title'), title),
       h('div', {}, h('label', { for: 'e-details' }, 'Details'), details),
-      asks && h('div', {}, h('label', { for: 'e-owner' }, item.kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner),
+      asks && h('div', {}, h('label', { for: 'e-owner' }, item.kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, item.kind === 'question' && ownerList('e-owner-list')),
       (asks || replies) && h('div', {}, h('label', { for: 'e-answer' }, replies ? 'Our reply' : item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
       canDraft && h('div', { class: 'stack' }, draftButton, suggestion),
       state.projects.length > 1 && h('div', {}, h('label', { for: 'e-project' }, 'Project'), list),
