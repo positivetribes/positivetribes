@@ -793,5 +793,76 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   }
   const again = () => current.box && show(current.box, current.sub);
 
-  return { show, viewOf, refresh: () => current.box && show(current.box, current.sub, true) };
+  // ---- Search across every client: hub items and documents, notes, next steps, emails and meetings ----
+  // The index comes from /api/admin/search once and is kept for a minute; matching runs here as you type.
+  let index = null, indexAt = 0, searchSeq = 0;
+  const KIND_ONE = { question: 'Question', change: 'Change', problem: 'Test problem', request: 'Support request' };
+  const PER_SECTION = 8;
+  const lower = t => String(t ?? '').toLowerCase();
+  const hit = (words, ...fields) => { const hay = lower(fields.join(' ')); return words.every(w => hay.includes(w)); };
+  // Wraps matched words in <mark> after escaping, so no client text is ever read as HTML.
+  const mark = (text, words) => {
+    if (!words.length) return esc(text);
+    const re = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+    return String(text ?? '').split(re).map((part, k) => k % 2 ? '<mark>' + esc(part) + '</mark>' : esc(part)).join('');
+  };
+  const around = (text, words) => {
+    const t = String(text || '').replace(/\s+/g, ' ');
+    const at = Math.min(...words.map(w => lower(t).indexOf(w)).filter(n => n >= 0));
+    if (!isFinite(at)) return '';
+    const start = Math.max(0, at - 60);
+    return (start ? '…' : '') + t.slice(start, start + 170) + (start + 170 < t.length ? '…' : '');
+  };
+  async function search(box, query) {
+    const seq = ++searchSeq;
+    const q = String(query || '').trim();
+    box.onclick = null;
+    if (!index || Date.now() - indexAt > 60e3) {
+      if (!index) box.innerHTML = '<p class="muted">Loading everything for search…</p>';
+      try { index = await api('/search'); indexAt = Date.now(); } catch (error) { box.innerHTML = `<div class="banner">${esc(error.message)}</div>`; return; }
+      if (seq !== searchSeq) return;
+    }
+    const num = q.match(/^#?(\d+)$/);
+    const words = num ? [] : lower(q).split(/\s+/).filter(Boolean);
+    // Group everything under its client: hub clients by id, command center records by Salesforce account.
+    const sfName = Object.fromEntries((overview?.clients || []).map(c => [c.id, c.name]));
+    const groups = new Map();
+    const group = (key, name, home) => { if (!groups.has(key)) groups.set(key, { name, home, nameHit: false, items: [], docs: [], notes: [], steps: [], activity: [] }); return groups.get(key); };
+    const hubClient = Object.fromEntries(index.clients.map(c => [c.id, c]));
+    const byAccount = Object.fromEntries(index.clients.filter(c => c.accountId).map(c => [c.accountId, c]));
+    const ofHub = id => { const c = hubClient[id]; if (!c) return group('pt', 'Positive Tribes', to.today); return group(c.accountId || 'hub:' + c.id, c.name, c.accountId ? to.client(c.accountId) : '#/' + esc(c.slug) + '/home'); };
+    const ofAccount = id => { const c = byAccount[id]; return group(id, c ? c.name : sfName[id] || 'Unknown client', to.client(id)); };
+    const project = id => index.projects.find(p => p.id === id)?.name || '';
+    for (const i of index.items) {
+      const no = i.legacy_id || i.id;
+      if (num ? String(no) === num[1] : hit(words, i.title, i.details, i.answer, '#' + no)) ofHub(i.client_id).items.push(i);
+    }
+    if (!num) {
+      for (const d of index.documents) if (hit(words, d.title, d.note, DOC_KIND[d.kind], project(d.project_id))) ofHub(d.client_id).docs.push(d);
+      for (const n of index.notes) if (hit(words, n.body)) ofAccount(n.account_id).notes.push(n);
+      for (const st of index.steps) if (hit(words, st.title)) ofAccount(st.account_id).steps.push(st);
+      for (const a of index.activity) if (hit(words, a.title, a.summary)) ofAccount(a.account_id).activity.push(a);
+      // A client whose name matches is listed even with nothing else, so its page is one click away.
+      for (const c of index.clients) if (hit(words, c.name)) ofHub(c.id).nameHit = true;
+      for (const c of overview?.clients || []) if (hit(words, c.name)) ofAccount(c.id).nameHit = true;
+    }
+    const size = g => g.items.length + g.docs.length + g.notes.length + g.steps.length + g.activity.length;
+    const list = [...groups.values()].filter(g => g.nameHit || size(g)).sort((a, b) => b.nameHit - a.nameHit || size(b) - size(a) || a.name.localeCompare(b.name));
+    const total = list.reduce((n, g) => n + size(g), 0);
+    const section = (label, rows, row) => !rows.length ? '' : `<h3>${label} <span class="count">${rows.length}</span></h3><ul class="items">${rows.slice(0, PER_SECTION).map(row).join('')}</ul>${rows.length > PER_SECTION ? `<p class="small muted">${rows.length - PER_SECTION} more. Add a word to narrow it.</p>` : ''}`;
+    const itemRow = i => {
+      const c = hubClient[i.client_id], link = appUrl(i.legacy_id ? `#/${c.slug}/old/${i.legacy_id}` : `#/${c.slug}/backlog/${i.id}`);
+      const snip = words.length && !hit(words, i.title) ? around(i.details + ' ' + i.answer, words) : '';
+      return `<li><div class="title"><span class="meta">#${i.legacy_id || i.id}</span> <a href="${esc(link)}">${mark(i.title, words)}</a></div><div class="meta">${[project(i.project_id), KIND_ONE[i.kind], i.done ? 'Done' : 'Open'].filter(Boolean).map(esc).join(' · ')}</div>${snip ? `<div class="meta">${mark(snip, words)}</div>` : ''}</li>`;
+    };
+    const docRowS = d => { const url = safeUrl(d.url); return `<li><div class="title">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${mark(d.title, words)}</a>` : mark(d.title, words)}</div><div class="meta">${[project(d.project_id), DOC_KIND[d.kind], d.status && DOC_STATUS[d.status], docDate(d.doc_date), d.client_id && !d.visible ? 'Hidden from client' : ''].filter(Boolean).map(esc).join(' · ')}</div>${d.note && hit(words, d.note) ? `<div class="meta">${mark(d.note, words)}</div>` : ''}</li>`; };
+    const noteRow = n => `<li><div class="meta">${esc(dayName(String(n.created_at).slice(0, 10)))}</div><div>${mark(around(n.body, words) || String(n.body).slice(0, 170), words)}</div></li>`;
+    const stepRow = st => `<li><div class="title">${mark(st.title, words)}</div><div class="meta">${[st.status === 'done' ? 'Done' : 'Open', st.due_date && 'Due ' + dayName(st.due_date)].filter(Boolean).map(esc).join(' · ')}</div></li>`;
+    const actRow = a => { const url = safeUrl(a.url); return `<li><div class="title">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${mark(a.title, words)}</a>` : mark(a.title, words)}</div><div class="meta">${esc([TYPE[a.kind] || a.kind, dayName(String(a.occurred_at).slice(0, 10))].join(' · '))}</div>${a.summary && hit(words, a.summary) && !hit(words, a.title) ? `<div class="meta">${mark(around(a.summary, words), words)}</div>` : ''}</li>`; };
+    const panels = list.map(g => `<section class="panel search-group"><h2><a class="client-link" href="${esc(g.home)}">${mark(g.name, words)}</a><span class="count">${size(g) || ''}</span></h2>
+      ${section('Questions and changes', g.items, itemRow)}${section('Documents', g.docs, docRowS)}${section('Next steps', g.steps, stepRow)}${section('Notes', g.notes, noteRow)}${section('Emails and meetings', g.activity, actRow)}</section>`).join('');
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Search</h2><p class="muted small">${list.length ? `${total} match${total === 1 ? '' : 'es'} for “${esc(q)}” across ${list.length} client${list.length === 1 ? '' : 's'}. Esc clears.` : `Nothing matches “${esc(q)}”. Try fewer words, or an item number like 133.`}</p></div></div><div class="search-results">${panels}</div>`;
+  }
+
+  return { show, search, viewOf, refresh: () => current.box && show(current.box, current.sub, true) };
 };
