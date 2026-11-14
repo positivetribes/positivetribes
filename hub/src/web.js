@@ -11,8 +11,11 @@ import { salesforceToken, soql } from './salesforce.js';
 
 export const WEB_HOST = 'hub.positivetribes.org';
 const TIME_ZONE = 'America/Denver';
-// Pages that show interest in working with us or giving.
-export const PAGES = ['/care.html', '/projects.html', '/contact.html', '/donate.html', '/about.html'];
+// Pages that show interest in working with us or giving. The site redirects /care.html to /care, so the beacon
+// records the short path; both spellings are asked for and counted together.
+export const PAGES = ['/care', '/projects', '/contact', '/donate', '/support', '/volunteer', '/about'];
+const PAGE_PATHS = PAGES.flatMap(p => [p, p + '.html']);
+const pagePath = path => String(path || '').replace(/\.html$/, '').replace(/\/$/, '') || '/';
 
 const salesforceOn = env => Boolean(env.SF_DOMAIN && env.SF_CLIENT_ID && env.SF_CLIENT_SECRET);
 const hex32 = v => /^[a-f0-9]{32}$/.test(String(v || ''));
@@ -70,8 +73,8 @@ const RUM_QUERY = `query($acct: string!, $site: string!, $before: Time!, $start:
     now: rumPageloadEventsAdaptiveGroups(limit: 1, filter: { siteTag: $site, datetime_geq: $start, datetime_lt: $end }) { count sum { visits } }
     before: rumPageloadEventsAdaptiveGroups(limit: 1, filter: { siteTag: $site, datetime_geq: $before, datetime_lt: $start }) { count sum { visits } }
     sources: rumPageloadEventsAdaptiveGroups(limit: 8, orderBy: [sum_visits_DESC], filter: { siteTag: $site, datetime_geq: $start, datetime_lt: $end }) { sum { visits } dimensions { refererHost } }
-    pagesNow: rumPageloadEventsAdaptiveGroups(limit: 20, filter: { siteTag: $site, datetime_geq: $start, datetime_lt: $end, requestPath_in: $pages }) { count dimensions { requestPath } }
-    pagesBefore: rumPageloadEventsAdaptiveGroups(limit: 20, filter: { siteTag: $site, datetime_geq: $before, datetime_lt: $start, requestPath_in: $pages }) { count dimensions { requestPath } }
+    pagesNow: rumPageloadEventsAdaptiveGroups(limit: 40, filter: { siteTag: $site, datetime_geq: $start, datetime_lt: $end, requestPath_in: $pages }) { count dimensions { requestPath } }
+    pagesBefore: rumPageloadEventsAdaptiveGroups(limit: 40, filter: { siteTag: $site, datetime_geq: $before, datetime_lt: $start, requestPath_in: $pages }) { count dimensions { requestPath } }
   } }
 }`;
 
@@ -79,14 +82,15 @@ const RUM_QUERY = `query($acct: string!, $site: string!, $before: Time!, $start:
 export function visitsFrom(account) {
   const one = rows => ({ visits: rows?.[0]?.sum?.visits || 0, views: rows?.[0]?.count || 0 });
   const now = one(account?.now), before = one(account?.before);
-  const pageCount = (rows, path) => (rows || []).filter(r => r.dimensions?.requestPath === path).reduce((n, r) => n + (r.count || 0), 0);
+  const pageCount = (rows, path) => (rows || []).filter(r => pagePath(r.dimensions?.requestPath) === path).reduce((n, r) => n + (r.count || 0), 0);
   return {
     visits: { now: now.visits, before: before.visits },
     views: { now: now.views, before: before.views },
-    // A blank referrer is someone typing the address, a bookmark or an app; our own host is people moving between pages.
+    // A blank referrer is someone typing the address, a bookmark or an app; our own host is people moving between pages,
+    // and cloudflareaccess.com is us coming back from a sign-in.
     sources: (account?.sources || [])
       .map(r => ({ source: r.dimensions?.refererHost || 'Direct or app', visits: r.sum?.visits || 0 }))
-      .filter(s => !/(^|\.)positivetribes\.org$/.test(s.source) && s.visits > 0).slice(0, 6),
+      .filter(s => !/(^|\.)positivetribes\.org$|\.cloudflareaccess\.com$/.test(s.source) && s.visits > 0).slice(0, 6),
     pages: PAGES.map(path => ({ path, now: pageCount(account?.pagesNow, path), before: pageCount(account?.pagesBefore, path) }))
   };
 }
@@ -95,7 +99,7 @@ export async function cloudflareVisits(env, w, fetchFn = fetch) {
   const res = await fetchFn(GRAPHQL, {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + env.CF_ANALYTICS_TOKEN, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: RUM_QUERY, variables: { acct: env.CF_ACCOUNT_ID, site: env.CF_WEB_SITE_TAG, ...bounds(w), pages: PAGES } })
+    body: JSON.stringify({ query: RUM_QUERY, variables: { acct: env.CF_ACCOUNT_ID, site: env.CF_WEB_SITE_TAG, ...bounds(w), pages: PAGE_PATHS } })
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body.errors?.length) throw new Error('Cloudflare analytics refused the query (' + res.status + (body.errors?.[0]?.message ? ': ' + String(body.errors[0].message).slice(0, 120) : '') + ').');
