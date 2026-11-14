@@ -88,6 +88,10 @@ h1{font-size:clamp(30px,6vw,44px);margin-top:4px}
 .ws-name{display:flex;align-items:center;gap:14px;margin-top:4px}.ws-name h1{margin-top:0}
 .ws-logo{width:48px;height:48px;flex:none;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:12px;padding:5px}
 nav.tabs{display:flex;gap:4px;margin:6px 0 22px;overflow-x:auto}
+.tabrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 22px}.tabrow nav.tabs{margin:0;flex:1 1 auto;min-width:0}
+input.search{flex:0 1 240px;min-width:160px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;font-size:15px}
+@media (max-width:640px){input.search{flex:1 1 100%}}
+ul.found{list-style:none;margin:0;padding:0;display:grid;gap:10px}ul.found a{display:block;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none}ul.found a:hover,ul.found a:focus{border-color:var(--client)}.found-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}ul.found .meta{margin:6px 0 0}ul.found mark{background:color-mix(in srgb,var(--rust) 25%,transparent);color:inherit;border-radius:3px;padding:0 1px}
 nav.tabs a{padding:12px 16px;text-decoration:none;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
 nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .badge{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12px;line-height:20px;text-align:center}
@@ -555,6 +559,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   }
 
   async function route() {
+    state.query = '';
     showError('');
     const ptUser = state.me.user.role === 'pt';
     // Positive Tribes lands on the command center; #/command/inbox, #/command/clients, #/command/client/<id> are its views.
@@ -686,17 +691,87 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const waiting = open(state.items).filter(i => i.kind === 'question').length;
     const forYou = waitingList().length;
     const ptOwn = isPt && !state.preview;
+    const searching = document.activeElement && document.activeElement.id === 'hub-search';
     $('main').replaceChildren(
       h('div', { class: 'hero ws' }, h('div', { class: 'eyebrow' }, 'Your workspace',
         state.client.salesforce_url && [' \u00b7 ', h('a', { class: 'eb-sf', href: state.client.salesforce_url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Open Salesforce (opens in a new tab)' }, 'Salesforce \u2197')]),
         h('div', { class: 'ws-name' }, state.client.logo && h('img', { class: 'ws-logo', src: state.client.logo, alt: '', width: 48, height: 48 }), h('h1', {}, state.client.name))),
-      h('nav', { class: 'tabs', 'aria-label': 'Sections' },
+      h('div', { class: 'tabrow' }, h('nav', { class: 'tabs', 'aria-label': 'Sections' },
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
         h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : '')),
         (forYou > 0 || state.view === 'waiting') && h('a', { href: link('waiting'), ...(state.view === 'waiting' ? { 'aria-current': 'page' } : {}) }, ptOwn ? 'Waiting on them' : 'Waiting on you', h('span', { class: 'badge' }, forYou ? String(forYou) : '')),
-        h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents')),
-      state.view === 'home' ? home() : state.view === 'waiting' ? waitingView(isPt) : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt));
+        h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents')), searchBox()),
+      h('div', { id: 'view-slot' }, state.query ? searchView() : viewNode(isPt)));
     $('main').querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
+    // A background refresh re-renders the page; keep the cursor in the search box if it was there.
+    if (searching) { const box = $('hub-search'); box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+  }
+  function viewNode(isPt) {
+    return state.view === 'home' ? home() : state.view === 'waiting' ? waitingView(isPt) : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt);
+  }
+
+  // ---- Search: every item this person can already see (state.items), in the browser; nothing new is fetched ----
+  // "133" or "#133" opens that item; words match title, details and the answer or reply, all words required.
+  function searchBox() {
+    const input = h('input', { type: 'search', id: 'hub-search', class: 'search', placeholder: 'Search items or #133', 'aria-label': 'Search questions and changes', value: state.query || '', autocomplete: 'off',
+      oninput: e => { state.query = e.target.value; $('view-slot').replaceChildren(state.query.trim() ? searchView() : viewNode(viewer().role === 'pt')); },
+      onkeydown: e => {
+        if (e.key === 'Escape') { e.target.value = ''; e.target.dispatchEvent(new Event('input')); }
+        if (e.key === 'Enter') { const first = searchResults()[0]; if (first) openFound(first); }
+      } });
+    return input;
+  }
+  const SEARCH_KINDS = Object.fromEntries(KIND_TABS);
+  const KIND_ONE = { question: 'Question', change: 'Suggested change', problem: 'Test problem', request: 'Support request' };
+  const norm = t => (t || '').toLowerCase();
+  function searchResults() {
+    const q = (state.query || '').trim();
+    if (!q) return [];
+    const items = state.items.filter(i => SEARCH_KINDS[i.kind]);
+    const num = q.match(/^#?(\d+)$/);
+    if (num) return items.filter(i => String(itemNo(i)) === num[1]);
+    const words = norm(q).split(/\s+/).filter(Boolean);
+    const hay = i => norm(i.title + ' ' + (i.details || '') + ' ' + (i.answer || '') + ' #' + itemNo(i));
+    return items.filter(i => words.every(w => hay(i).includes(w)))
+      .map(i => ({ i, score: (words.every(w => norm(i.title).includes(w)) ? 2 : 0) + (i.done ? 0 : 1) }))
+      .sort((a, b) => b.score - a.score || itemNo(b.i) - itemNo(a.i)).map(x => x.i);
+  }
+  function openFound(item) {
+    state.query = '';
+    const target = item.legacy_id ? link('old', item.legacy_id) : link('backlog', item.id);
+    if (location.hash === target) route(); else location.hash = target;
+  }
+  // Wraps each matched word in <mark>; text stays text nodes, never HTML.
+  function marked(text, words) {
+    if (!words.length) return [text];
+    const re = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+    return text.split(re).map((part, k) => k % 2 ? h('mark', {}, part) : part);
+  }
+  function snippet(item, words) {
+    for (const text of [item.details, item.answer]) {
+      if (!text) continue;
+      const at = Math.min(...words.map(w => norm(text).indexOf(w)).filter(n => n >= 0));
+      if (!isFinite(at)) continue;
+      const start = Math.max(0, at - 60);
+      return (start ? '\u2026' : '') + text.slice(start, start + 180).replace(/\s+/g, ' ') + (start + 180 < text.length ? '\u2026' : '');
+    }
+    return '';
+  }
+  function searchView() {
+    const q = state.query.trim();
+    const found = searchResults();
+    const words = /^#?\d+$/.test(q) ? [] : norm(q).split(/\s+/).filter(Boolean);
+    const shown = found.slice(0, 50);
+    return h('div', { class: 'stack' },
+      h('p', { class: 'muted' }, found.length ? found.length + (found.length === 1 ? ' item matches' : ' items match') + ' \u201c' + q + '\u201d' + (found.length > 50 ? ' (first 50 shown)' : '') + '. Esc clears.' : 'Nothing matches \u201c' + q + '\u201d. Try fewer words, or a number like 133.'),
+      shown.length > 0 && h('ul', { class: 'found' }, shown.map(i => {
+        const proj = state.projects.find(p => p.id === i.project_id);
+        const snip = !words.every(w => norm(i.title).includes(w)) || words.some(w => norm(i.details + ' ' + i.answer).includes(w)) ? snippet(i, words) : '';
+        return h('li', {}, h('a', { href: i.legacy_id ? link('old', i.legacy_id) : link('backlog', i.id), onclick: e => { e.preventDefault(); openFound(i); } },
+          h('div', { class: 'found-top' }, h('span', { class: 'item-no' }, '#' + itemNo(i)), proj && h('span', { class: 'pill kind' }, proj.name), h('span', { class: 'pill kind' }, KIND_ONE[i.kind]), h('span', { class: 'pill ' + (i.done ? 'doc' : 'due') }, i.done ? 'Done' : 'Open')),
+          h('b', {}, marked(i.title, words)),
+          snip && h('p', { class: 'meta' }, marked(snip, words))));
+      })));
   }
 
   // ---- Home: what happens next ----
@@ -1866,6 +1941,13 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   }
   $('preview').addEventListener('change', e => setPreview(e.target.value));
   window.addEventListener('hashchange', () => { if (state.me) { route(); bell.refresh(); } });
+  // "/" jumps to the search box from anywhere that isn't a text field.
+  document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target, tag = t && t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    const box = $('hub-search'); if (box) { e.preventDefault(); box.focus(); }
+  });
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden || !state.client || state.editing || state.mode === COMMAND) return;
     try { state.items = (await api(base() + '/items')).items; render(); } catch {}
