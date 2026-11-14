@@ -525,9 +525,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const firstName = () => (viewer().name || '').split(/\s+/)[0].toLowerCase();
   const open = items => items.filter(i => !i.done);
   // Waiting on the viewer: an estimate they decide (in Preview as, whoever really decides), a question named for them,
-  // or a suggested change named for them that is still to be decided (status still New, no estimate sent or decided).
+  // or a suggested change named for them that is still to be decided (status still New, no estimate sent or decided, no proposal marked: that is on us).
   const ownedBy = (i, name) => Boolean(i.owner && name && i.owner.toLowerCase().includes(name));
-  const undecided = i => i.kind === 'change' && i.status === 'new' && !(i.estimate && i.estimate.status !== 'withdrawn' && i.estimate.status !== 'draft');
+  const undecided = i => i.kind === 'change' && i.status === 'new' && !i.proposal_state && !(i.estimate && i.estimate.status !== 'withdrawn' && i.estimate.status !== 'draft');
   const named = (i, name) => (i.kind === 'question' || undecided(i)) && ownedBy(i, name);
   const waitsOnMe = i => Boolean(
     (i.estimate && i.estimate.status === 'offered' && (state.preview ? state.preview.decides : i.estimate.can_decide))
@@ -1499,7 +1499,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const long = item.answer && (item.answer.length > 320 || item.answer.split('\n').length > 4);
     const answerText = item.answer && h('p', { class: long ? 'clamp' : '' }, item.answer);
     // Whose move it is, in plain words: who it waits on (or where a problem happened), who asked, and when.
-    const who = item.owner
+    // A change with a proposal coming or sent is on Positive Tribes, not on whoever the card names, so it never says "Waiting on" them.
+    const proposing = item.kind === 'change' && item.proposal_state && !item.done;
+    const who = proposing ? [item.proposal_state === 'sent' ? 'Proposal sent by Positive Tribes \u00b7 ' : 'Positive Tribes is writing the proposal \u00b7 ']
+      : item.owner
       ? (item.kind === 'problem' ? [h('b', {}, item.owner), ' · '] : [item.done ? 'Answered by ' : 'Waiting on ', h('b', {}, item.owner), ' · '])
       : [];
     // Open items sit under their priority heading already, so only finished ones carry a status pill.
