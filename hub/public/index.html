@@ -91,7 +91,7 @@ nav.tabs{display:flex;gap:4px;margin:6px 0 22px;overflow-x:auto}
 .tabrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 22px}.tabrow nav.tabs{margin:0;flex:1 1 auto;min-width:0}
 input.search{flex:0 1 240px;min-width:160px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;font-size:15px}
 @media (max-width:640px){input.search{flex:1 1 100%}}
-ul.found{list-style:none;margin:0;padding:0;display:grid;gap:10px}ul.found a{display:block;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none}ul.found a:hover,ul.found a:focus{border-color:var(--client)}.found-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}ul.found .meta{margin:6px 0 0}ul.found mark{background:color-mix(in srgb,var(--rust) 25%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+ul.found{list-style:none;margin:0;padding:0;display:grid;gap:10px}ul.found a,ul.found .found-doc{display:block;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none}ul.found a:hover,ul.found a:focus{border-color:var(--client)}.found-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}ul.found .meta{margin:6px 0 0}ul.found mark{background:color-mix(in srgb,var(--rust) 25%,transparent);color:inherit;border-radius:3px;padding:0 1px}
 nav.tabs a{padding:12px 16px;text-decoration:none;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
 nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .badge{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:10px;background:var(--ink);color:var(--bg);font-size:12px;line-height:20px;text-align:center}
@@ -713,7 +713,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   // ---- Search: every item this person can already see (state.items), in the browser; nothing new is fetched ----
   // "133" or "#133" opens that item; words match title, details and the answer or reply, all words required.
   function searchBox() {
-    const input = h('input', { type: 'search', id: 'hub-search', class: 'search', placeholder: 'Search items or #133', 'aria-label': 'Search questions and changes', value: state.query || '', autocomplete: 'off',
+    const input = h('input', { type: 'search', id: 'hub-search', class: 'search', placeholder: 'Search items, documents or #133', 'aria-label': 'Search questions, changes and documents', value: state.query || '', autocomplete: 'off',
       oninput: e => { state.query = e.target.value; $('view-slot').replaceChildren(state.query.trim() ? searchView() : viewNode(viewer().role === 'pt')); },
       onkeydown: e => {
         if (e.key === 'Escape') { e.target.value = ''; e.target.dispatchEvent(new Event('input')); }
@@ -735,6 +735,18 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     return items.filter(i => words.every(w => hay(i).includes(w)))
       .map(i => ({ i, score: (words.every(w => norm(i.title).includes(w)) ? 2 : 0) + (i.done ? 0 : 1) }))
       .sort((a, b) => b.score - a.score || itemNo(b.i) - itemNo(a.i)).map(x => x.i);
+  }
+  // Documents match on title, note, kind and folder (project) name; same visibility rule as the Documents tab.
+  function searchDocs() {
+    const q = (state.query || '').trim();
+    if (!q || /^#?\d+$/.test(q)) return [];
+    const isPt = viewer().role === 'pt';
+    const words = norm(q).split(/\s+/).filter(Boolean);
+    const folder = d => { const p = state.projects.find(x => x.id === d.project_id); return p ? p.name : 'General'; };
+    return state.documents.filter(d => d.visible || isPt)
+      .map(d => ({ d, folder: folder(d) }))
+      .filter(({ d, folder }) => { const hay = norm([d.title, d.note, DOC_KINDS[d.kind], folder].join(' ')); return words.every(w => hay.includes(w)); })
+      .sort((a, b) => (b.d.doc_date || '').localeCompare(a.d.doc_date || ''));
   }
   function openFound(item) {
     state.query = '';
@@ -760,10 +772,20 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   function searchView() {
     const q = state.query.trim();
     const found = searchResults();
+    const docs = searchDocs();
+    const total = found.length + docs.length;
     const words = /^#?\d+$/.test(q) ? [] : norm(q).split(/\s+/).filter(Boolean);
     const shown = found.slice(0, 50);
     return h('div', { class: 'stack' },
-      h('p', { class: 'muted' }, found.length ? found.length + (found.length === 1 ? ' item matches' : ' items match') + ' \u201c' + q + '\u201d' + (found.length > 50 ? ' (first 50 shown)' : '') + '. Esc clears.' : 'Nothing matches \u201c' + q + '\u201d. Try fewer words, or a number like 133.'),
+      h('p', { class: 'muted' }, total ? [found.length && found.length + (found.length === 1 ? ' item' : ' items'), docs.length && docs.length + (docs.length === 1 ? ' document' : ' documents')].filter(Boolean).join(' and ') + (total === 1 ? ' matches' : ' match') + ' \u201c' + q + '\u201d' + (found.length > 50 ? ' (first 50 shown)' : '') + '. Esc clears.' : 'Nothing matches \u201c' + q + '\u201d. Try fewer words, or a number like 133.'),
+      docs.length > 0 && h('h3', { class: 'sub' }, 'Documents'),
+      docs.length > 0 && h('ul', { class: 'found' }, docs.map(({ d, folder }) => {
+        const body = [h('div', { class: 'found-top' }, h('span', { class: 'pill kind' }, folder), DOC_KINDS[d.kind] && h('span', { class: 'pill kind' }, DOC_KINDS[d.kind]), d.status && h('span', { class: 'pill doc ' + d.status }, DOC_STATUS[d.status]), !d.visible && h('span', { class: 'meta' }, 'only Positive Tribes sees this')),
+          h('b', {}, marked(d.title, words)),
+          (d.note || d.doc_date) && h('p', { class: 'meta' }, marked([d.doc_date && shortDocDate(d.doc_date), d.note].filter(Boolean).join(' \u00b7 '), words))];
+        return h('li', {}, d.url ? h('a', { href: d.url, target: '_blank', rel: 'noopener' }, ...body) : h('div', { class: 'found-doc' }, ...body));
+      })),
+      docs.length > 0 && shown.length > 0 && h('h3', { class: 'sub' }, 'Questions and changes'),
       shown.length > 0 && h('ul', { class: 'found' }, shown.map(i => {
         const proj = state.projects.find(p => p.id === i.project_id);
         const snip = !words.every(w => norm(i.title).includes(w)) || words.some(w => norm(i.details + ' ' + i.answer).includes(w)) ? snippet(i, words) : '';
