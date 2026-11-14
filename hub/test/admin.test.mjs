@@ -649,3 +649,25 @@ test('the client page brings in open Tasks and follows what changed in Salesforc
   assert.equal([...org.tasks.values()].filter(t => t.Subject === 'Suggested idea').length, 1);
   fakeSalesforce = null;
 });
+
+test('command center search: one index of every client for Positive Tribes, nobody else', async () => {
+  const { as, hub: h, admin } = hubDb();
+  h.sqlite.exec(`
+    UPDATE clients SET salesforce_account_id = '${UEP}' WHERE slug = 'uep';
+    INSERT INTO items (client_id, project_id, kind, title, details, added_by, tier, position) VALUES (1, 1, 'question', 'Which ZIP for mail?', 'Waiver mailing', 'Eric', 'must', 1), (2, 2, 'change', 'Chapter map', '', 'Eric', 'idea', 1);
+    INSERT INTO documents (client_id, project_id, kind, title, url, visible) VALUES (1, 1, 'agreement', 'Scheduler agreement', 'https://example.org/a.pdf', 1), (2, NULL, 'plan', 'Hidden plan', '', 0);
+  `);
+  await as('eric@positivetribes.org', 'POST', 'admin/notes', { accountId: UEP, body: 'Molly prefers Tuesday calls' });
+  admin.sqlite.exec(`INSERT INTO activity (account_id, kind, occurred_at, title, summary, external_id) VALUES ('${UEP}', 'email', '2026-11-14T10:00:00Z', 'Your questions for our Nov 18 call', 'hub link', 'gmail:x')`);
+  const r = await as('eric@positivetribes.org', 'GET', 'admin/search');
+  assert.equal(r.status, 200);
+  const data = await r.json();
+  assert.deepEqual(data.items.map(i => i.title).sort(), ['Chapter map', 'Which ZIP for mail?']);
+  assert.equal(data.items.find(i => i.title === 'Chapter map').client_id, 2);
+  assert.equal(data.documents.length, 2);
+  assert.equal(data.clients.find(c => c.slug === 'uep').accountId, UEP);
+  assert.equal(data.notes[0].body, 'Molly prefers Tuesday calls');
+  assert.equal(data.activity[0].title, 'Your questions for our Nov 18 call');
+  for (const who of ['molly@uep.org', 'dana@safe.org', 'stranger@example.org']) assert.equal((await as(who, 'GET', 'admin/search')).status, 404, who);
+  assert.equal((await as(SYNC, 'GET', 'admin/search', undefined, { service: true })).status, 403);
+});

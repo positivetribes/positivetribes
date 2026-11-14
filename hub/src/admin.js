@@ -671,6 +671,33 @@ function metaInput(input) {
 const DOC_KINDS = ['proposal', 'agreement', 'test_script', 'design', 'plan', 'process', 'link', 'other'];
 const DOC_STATUSES = ['', 'draft', 'sent', 'signed'];
 
+// ---- Search: one index of everything Positive Tribes may look up, searched in the browser (command center only) ----
+// Hub items and documents for every client, plus the command center's own notes, next steps and the last 1,000 synced
+// emails and meetings. Read-only; the route sits behind the same Positive Tribes-only door as the rest of /api/admin.
+const SEARCH_KINDS = ['question', 'change', 'problem', 'request'];
+const ACTIVITY_LIMIT = 1000;
+export async function loadSearchIndex(hub, db) {
+  const [clients, projects, items, docs] = hub ? await Promise.all([
+    hub.prepare('SELECT id, slug, name, salesforce_account_id FROM clients ORDER BY name').all(),
+    hub.prepare('SELECT id, client_id, name FROM projects ORDER BY position, id').all(),
+    hub.prepare(`SELECT id, legacy_id, client_id, project_id, kind, title, details, answer, done, updated_at FROM items
+                 WHERE kind IN (${SEARCH_KINDS.map(() => '?').join(', ')}) ORDER BY id DESC`).bind(...SEARCH_KINDS).all(),
+    hub.prepare('SELECT id, client_id, project_id, kind, title, url, note, status, visible, doc_date FROM documents ORDER BY doc_date DESC, id DESC').all()
+  ]) : [{ results: [] }, { results: [] }, { results: [] }, { results: [] }];
+  const [notes, steps, activity] = await Promise.all([
+    db.prepare('SELECT id, account_id, body, created_at FROM notes ORDER BY created_at DESC').all(),
+    db.prepare("SELECT id, account_id, title, due_date, status FROM next_steps WHERE status != 'dismissed' ORDER BY COALESCE(due_date, '9999') , id").all(),
+    db.prepare('SELECT id, account_id, kind, occurred_at, title, summary, url FROM activity ORDER BY occurred_at DESC LIMIT ?').bind(ACTIVITY_LIMIT).all()
+  ]);
+  return {
+    clients: clients.results.map(c => ({ id: c.id, slug: c.slug, name: c.name, accountId: c.salesforce_account_id || '' })),
+    projects: projects.results,
+    items: items.results.map(i => ({ ...i, done: Boolean(i.done) })),
+    documents: docs.results.map(d => ({ ...d, visible: Boolean(d.visible) })),
+    notes: notes.results, steps: steps.results, activity: activity.results
+  };
+}
+
 async function loadDocuments(hub) {
   const [docs, clients, projects] = await Promise.all([
     hub.prepare(`SELECT d.id, c.slug AS client, d.project_id, d.kind, d.title, d.url, d.note, d.status, d.visible, d.created_at, d.doc_date
@@ -848,6 +875,8 @@ export async function handleAdmin(request, env, url, who) {
       const after = await db.prepare('SELECT * FROM next_steps WHERE id = ?').bind(id).first();
       return json({ ok: true, salesforce: await stepToSalesforce(env, url, db, step, after) });
     }
+
+    if (route === 'GET /api/admin/search') return json(await loadSearchIndex(env.DB, db));
 
     const docId = path.match(/^\/api\/admin\/documents(?:\/(\d+))?$/);
     if (docId) {

@@ -289,6 +289,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .badge:empty{display:none}
 .cc-bar{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:6px 0 22px}
 .cc-bar nav.tabs{margin:0;flex:1 1 auto}
+.cc mark{background:color-mix(in srgb,var(--rust) 25%,transparent);color:inherit;border-radius:3px;padding:0 1px}.cc .search-results{display:grid;gap:16px}.cc .search-group h2{display:flex;align-items:baseline;gap:6px;margin:0 0 4px;font-family:var(--display);font-size:22px}.cc .search-group h2 a{text-decoration:none}
 .cc-sync.late{color:var(--nice)}
 .seg.subnav{margin-bottom:18px}
 .seg a{padding:4px 12px;border-radius:9px;font-weight:600;font-size:14px;text-decoration:none;min-height:32px;display:inline-flex;align-items:center;color:var(--muted)}
@@ -656,6 +657,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       // Moving between command center views keeps the hero and tab row; only the view below changes.
       $('cc-tabs').replaceChildren(...tabs($('cc-inbox-count'), $('cc-care-count')));
       $('cc').replaceWith(box);
+      // Any navigation ends a search.
+      $('cc-search').value = ''; $('cc-found').hidden = true;
     } else {
       $('main').replaceChildren(
         h('div', { class: 'hero' }, h('div', { class: 'eyebrow' }, 'Command center',
@@ -664,14 +667,29 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
           h('nav', { class: 'tabs', id: 'cc-tabs', 'aria-label': 'Command center' }, ...tabs(h('span', { class: 'badge', id: 'cc-inbox-count' }), h('span', { class: 'badge', id: 'cc-care-count' }))),
           // No Refresh button: each page load reads Salesforce live (60-second cache, cleared by any change made here),
           // and the label is the daily email and meeting sync, which only its own routine can run.
-          h('span', { class: 'meta cc-sync', id: 'cc-sync', title: 'When the daily routine last pulled your emails and meetings in. Salesforce itself is read live.' })),
-        box);
+          h('span', { class: 'meta cc-sync', id: 'cc-sync', title: 'When the daily routine last pulled your emails and meetings in. Salesforce itself is read live.' }),
+          ccSearchBox()),
+        box, h('div', { class: 'cc', id: 'cc-found', hidden: true }));
     }
     state.ccView = view;
     ideaButton();
     // Improve this hub is the same view as in a client workspace, showing every client's ideas and Positive Tribes' own.
     if (view === 'ideas') { document.title = 'Improve this hub | Command center'; loadCommandIdeas(); }
     else { command.show(box, sub); loadCommandIdeas(true); }
+  }
+  // Search every client from the command center. Results draw in their own box (#cc-found) so the view under it
+  // keeps loading undisturbed; clearing the box shows that view again.
+  function ccSearchBox() {
+    let timer = null;
+    const run = value => {
+      const found = $('cc-found'), view = $('cc');
+      const q = value.trim();
+      found.hidden = !q; view.hidden = Boolean(q);
+      if (q) command.search(found, q);
+    };
+    return h('input', { type: 'search', id: 'cc-search', class: 'search', placeholder: 'Search all clients', 'aria-label': 'Search every client: items, documents, notes, next steps, emails and meetings', autocomplete: 'off',
+      oninput: e => { clearTimeout(timer); const v = e.target.value; timer = setTimeout(() => run(v), 120); },
+      onkeydown: e => { if (e.key === 'Escape') { e.target.value = ''; run(''); } } });
   }
   // quiet: only refresh the tab's count of ideas waiting for review.
   async function loadCommandIdeas(quiet) {
@@ -1968,7 +1986,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.target, tag = t && t.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
-    const box = $('hub-search'); if (box) { e.preventDefault(); box.focus(); }
+    const box = $('hub-search') || $('cc-search'); if (box) { e.preventDefault(); box.focus(); }
   });
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden || !state.client || state.editing || state.mode === COMMAND) return;
