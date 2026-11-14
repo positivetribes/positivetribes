@@ -8,7 +8,9 @@ if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) throw new Error
 const measurementId = process.env.GA_MEASUREMENT_ID;
 if (measurementId && !/^G-[A-Z0-9]+$/.test(measurementId)) throw new Error('GA_MEASUREMENT_ID must look like G-XXXXXXXXXX.');
 const analytics = measurementId ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${measurementId}"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${measurementId}');
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());
+let internal=false;try{const f=new URLSearchParams(location.search).get('internal');if(f==='1')localStorage.setItem('pt_internal','1');if(f==='0')localStorage.removeItem('pt_internal');internal=localStorage.getItem('pt_internal')==='1'}catch{}
+gtag('config','${measurementId}',internal?{traffic_type:'internal'}:{});
 document.addEventListener('click',(event)=>{const link=event.target.closest('a[href^="mailto:"]');if(link)gtag('event','contact_email_click',{link_url:link.href})});</script>
 ` : '';
 
