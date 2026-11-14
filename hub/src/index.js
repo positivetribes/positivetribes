@@ -1,7 +1,8 @@
 // Tribe Hub API: one Worker for every client. Sign-in is Cloudflare Access (emailed one-time PIN); the email is
 // mapped to a users row, which decides which client the person may see. Tenant checks happen in one place (scope).
 import { accessIdentity } from './access.js';
-import { handleAdmin } from './admin.js';
+import { handleAdmin, localDay } from './admin.js';
+import { runWebDigest } from './web.js';
 import { windowEnd } from './dates.js';
 import { listForClient, markRead } from './notifications.js';
 import {
@@ -311,9 +312,18 @@ async function careRoute({ request, db, user, client, rawId, action, method }) {
   return json({ error: 'Not found.' }, 404);
 }
 
+// Mondays 14:00 UTC (7am Denver in winter, 8am in summer); must match wrangler.jsonc.
+const WEB_CRON = '0 14 * * 1';
+
 export default {
   // Patch's morning check (cron in wrangler.jsonc). runPatch refuses to run off the production host or without the key.
+  // The website digest (Mondays) pulls last week's Google Analytics numbers for Today.
   async scheduled(event, env, ctx) {
+    if (event.cron === WEB_CRON) {
+      ctx.waitUntil(runWebDigest(env, localDay(Date.now())).then(r => console.log('web_digest', r.ran ? 'saved ' + r.week : r.reason))
+        .catch(error => console.error('web_digest_failed', error.message)));
+      return;
+    }
     ctx.waitUntil(runPatch(env, 'cron').then(r => console.log('patch_run', r.ran ? `checked ${r.checked}, failed ${r.failed}` : r.reason))
       .catch(error => console.error('patch_run_failed', error.message)));
   },

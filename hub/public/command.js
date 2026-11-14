@@ -178,6 +178,29 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const minutes = d.reduce((n, r) => n + r.minutes, 0), cents = d.reduce((n, r) => n + r.value_cents, 0), hrs = minutes / 60;
     return `<p class="muted small donated-line"><strong>Donated this year:</strong> ${esc(Number.isInteger(hrs) ? hrs : hrs.toFixed(1))} hours · $${esc((cents / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }))} value (${d.map(r => esc(r.client) + ' ' + esc(r.value_label)).join(', ')})</p>`;
   };
+  // Last week's website numbers (the Monday Google Analytics digest): one line, open it for events, sources and pages.
+  const webLine = data => {
+    const w = data.web;
+    if (!w) return '';
+    const day = d => new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const end = new Date(Date.parse(w.week + 'T12:00:00Z') + 6 * 864e5).toISOString().slice(0, 10);
+    const run = '<button type="button" class="link" id="web-run">Run now</button>';
+    if (!w.digest) return `<p class="muted small donated-line"><strong>Website:</strong> last week's numbers could not be fetched (${esc(w.error)}). ${run}</p>`;
+    const d = w.digest, n = (v, one, many) => esc(v) + ' ' + (v === 1 ? one : many);
+    const change = p => p.before ? ` <span class="muted">(${p.now >= p.before ? '+' : ''}${esc(Math.round((p.now - p.before) / p.before * 100))}%)</span>` : '';
+    const ev = name => (d.events || []).find(e => e.name === name) || { now: 0, before: 0 };
+    const leads = ['generate_lead', 'contact_email_click', 'contact_email_copy'].reduce((t, k) => t + ev(k).now, 0);
+    const gifts = ev('donation_complete').now, top = (d.sources || [])[0];
+    const vsRow = (label, p) => `<li><span class="what">${esc(label)}</span><span class="meta">${esc(p.now)}</span><span class="meta muted">${esc(p.before)} the week before</span></li>`;
+    const trend = (w.trend || []).length > 1 ? `<p class="muted small">Leads by week: ${w.trend.map(t => esc(day(t.week)) + ' ' + esc(t.leads)).join(' · ')}</p>` : '';
+    return `<section class="panel needs-reply" aria-label="Website last week"><details class="est-group${w.error ? ' late' : ''}"><summary><span class="who">Website · ${esc(day(w.week))} to ${esc(day(end))}</span>
+      <span class="meta">${n(d.visitors.now, 'visitor', 'visitors')}${change(d.visitors)} · ${n(leads, 'lead', 'leads')} · ${n(gifts, 'donation', 'donations')}${d.donated?.now ? ' ($' + esc(d.donated.now.toLocaleString('en-US')) + ')' : ''}${top ? ' · most from ' + esc(top.source) : ''}</span></summary>
+      ${w.error ? `<p class="small"><strong>The latest run failed:</strong> ${esc(w.error)}</p>` : ''}
+      <p class="label"><strong>What people did</strong></p><ul class="reply-list">${(d.events || []).map(e => vsRow(e.label, e)).join('')}</ul>
+      <p class="label"><strong>Where visits came from</strong></p><ul class="reply-list">${(d.sources || []).map(s => `<li><span class="what">${esc(s.source)}</span><span class="meta">${n(s.sessions, 'visit', 'visits')}</span><span class="meta muted">${s.keyEvents ? n(s.keyEvents, 'key event', 'key events') : ''}</span></li>`).join('') || '<li class="muted small">No visits.</li>'}</ul>
+      <p class="label"><strong>Pages that show interest</strong></p><ul class="reply-list">${(d.pages || []).map(p => vsRow(p.path, p)).join('')}</ul>
+      ${trend}<p class="muted small">From Google Analytics, our own devices left out. Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details></section>`;
+  };
   const countdownRow = data => (data.testing || []).length ? `<div class="countdowns">${countdowns(data)}</div>` : '';
 
   // "Not now" only hides an item for the rest of today, in this browser.
@@ -216,6 +239,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       } catch (error) { alert(error.message); }
       renderToday(box, overview);
     });
+    box.querySelector('#web-run')?.addEventListener('click', async e => {
+      const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'Running…';
+      try { const r = await send('/web/run', 'POST', {}); if (r.web) overview.web = r.web; if (!r.ran) alert(r.reason || 'The website digest did not run.'); } catch (error) { alert(error.message); }
+      renderToday(box, overview);
+    });
     box.querySelector('#reply-toggle')?.addEventListener('click', () => { replyAll = !replyAll; renderToday(box, overview); });
     box.querySelector('#now-reset')?.addEventListener('click', () => { try { localStorage.removeItem(doneKey); } catch {} save([]); });
   }
@@ -224,7 +252,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
     const hour = new Date().getHours();
     box.innerHTML = `${banners(data)}<div class="head"><div><p class="muted small">${esc(new Date(data.today + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }))}</p><h2 class="greet">Good ${hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'}</h2></div></div>
-    ${nowCard(data)}${needsReplyLine(data)}${estimatesLine(data)}${donatedLine(data)}${countdownRow(data)}
+    ${nowCard(data)}${needsReplyLine(data)}${estimatesLine(data)}${donatedLine(data)}${webLine(data)}${countdownRow(data)}
     <div class="cols${attention.length ? '' : ' two'}">
       ${attention.length ? `<section class="panel"><h2>Needs attention<span class="count">${attention.length}</span></h2><ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', tick: doneControl })).join('')}</ul></section>` : ''}
       <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { tick: doneControl })}</section>
