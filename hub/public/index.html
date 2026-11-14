@@ -421,6 +421,22 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .needs-reply .link{margin-top:6px}
 @media (max-width:560px){.cc .reply-list li{grid-template-columns:1fr auto}.cc .reply-list .meta{grid-column:1/-1;white-space:normal}}
 .cc .nowcard{border-left:6px solid var(--rust);margin-bottom:22px}
+/* Today is grouped by who acts: Your move (red edge), Waiting on clients and This week (quiet edge, red only when late). */
+.cc .group-label{font-family:var(--font);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:30px 0 12px}
+.cc .head+.group-label{margin-top:8px}
+.cc .panel.calm{margin:0 0 22px;padding-top:12px;padding-bottom:12px;border-left:6px solid var(--line)}
+.cc .panel.calm.late{border-left-color:var(--rust)}
+.cc .panel.calm .label,.cc .panel.calm .label strong{color:var(--muted)}
+.cc .nowcard a.btn{color:var(--bg);font-weight:600;text-decoration:none}
+.cc .panel.calm .label+.reply-list,.cc .panel.calm .label+.est-group{margin-bottom:6px}
+.cc .panel.calm .reply-list+.label{margin-top:14px}
+.cc .attention .items{margin:0}
+.cc .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:6px 0 10px}
+.cc .tile{display:flex;flex-direction:column;padding:12px 14px;background:var(--bg);border-radius:10px}
+.cc .tile .num{font-family:var(--display);font-size:30px;line-height:1.1}
+.cc .tile .unit{font-size:13px;color:var(--muted);margin-top:2px}
+.cc .week .est-group summary{padding-top:4px}
+.cc .cols+.group-label{margin-top:34px}
 .cc .nowcard .label{margin:0 0 6px}
 .cc .nowcard h2{font-size:26px;margin-bottom:6px;overflow-wrap:anywhere}
 .cc .nowcard h2 a{text-decoration:none}.cc .nowcard h2 a:hover{text-decoration:underline}
