@@ -253,6 +253,11 @@ section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wra
 .item.is-done h3{color:var(--muted)}
 .answer{background:var(--ok-bg);border-radius:10px;padding:10px 14px}
 .estimate{border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+/* A donated change wears a small tilted sticker on the box's top-right edge. */
+.estimate.gifted{position:relative;margin-top:14px;padding-top:16px}
+.gift{position:absolute;top:-13px;right:14px;display:inline-flex;align-items:center;gap:6px;padding:3px 11px 3px 7px;border-radius:99px;background:var(--rust);color:var(--card);font-size:12px;font-weight:700;letter-spacing:.02em;white-space:nowrap;transform:rotate(-3deg);box-shadow:0 2px 6px rgba(0,0,0,.18)}
+.gift svg{width:15px;height:15px;fill:currentColor}.gift svg .core{opacity:.6}
+@media (max-width:420px){.gift{right:8px;font-size:11px}}
 .estimate .big{font-weight:600;font-size:17px;margin:0}
 .estimate .stack>*{margin:0}
 .estimate input[type=number]{width:6em}
@@ -947,6 +952,19 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   };
 
   // Time Positive Tribes gave on this card without an estimate. Everyone on the client's hub sees it.
+  // The sticker on a donated change: the Positive Tribes mark and a plain line the client can read.
+  function giftBadge(title) {
+    const ns = 'http://www.w3.org/2000/svg', svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 152 152'); svg.setAttribute('aria-hidden', 'true');
+    [[76, 22], [130, 76], [76, 130], [22, 76], [76, 76]].forEach(([cx, cy], n) => {
+      const c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 22);
+      if (n === 4) c.setAttribute('class', 'core');
+      svg.appendChild(c);
+    });
+    return h('span', { class: 'gift', title }, svg, 'Gift from Positive Tribes');
+  }
+
   function donatedBlock(item) {
     const list = item.donated_time || [], ptNow = viewer().role === 'pt' && !state.preview;
     const nodes = list.map(d => h('p', { class: 'meta' }, h('b', {}, 'Donated by Positive Tribes: '), d.hours_label + ' (' + d.value_label + ' value)', d.note ? ' · ' + d.note : '',
@@ -958,7 +976,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         h('button', { class: 'btn small', type: 'button', onclick: () => hours.value ? donatedAct('/admin/items/' + item.id + '/donated-time', 'POST', { hours: Number(hours.value), note: note.value }) : showError('Enter the hours first.') }, 'Log donated time'),
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => { state.giving = null; render(); } }, 'Cancel'))));
     }
-    return nodes.length ? h('div', { class: 'estimate stack' }, nodes) : null;
+    if (list.length) nodes.unshift(giftBadge('Positive Tribes donated this time: nothing on your invoice.'));
+    return nodes.length ? h('div', { class: 'estimate stack' + (list.length ? ' gifted' : '') }, nodes) : null;
   }
   async function donatedAct(path, method, payload) {
     showError('');
@@ -1065,7 +1084,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         }
       }
     }
-    return nodes.length ? h('div', { class: 'estimate stack' }, nodes) : null;
+    // Clients see the sticker once a donated estimate is sent; Positive Tribes sees it on the draft too.
+    const gifted = e && e.donated && ['offered', 'approved_now'].concat(ptNow ? ['draft'] : []).includes(e.status);
+    if (gifted && nodes.length) nodes.unshift(giftBadge(e.status === 'approved_now' ? 'Positive Tribes donated this change.' : 'Positive Tribes offers this change at no charge.'));
+    return nodes.length ? h('div', { class: 'estimate stack' + (gifted ? ' gifted' : '') }, nodes) : null;
   }
 
   // ---- System status: live up/down for the client's apps, from the status Worker ----
