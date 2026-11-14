@@ -210,6 +210,10 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .pill.must{background:var(--must-bg);color:var(--must)}.pill.nice{background:var(--nice-bg);color:var(--nice)}.pill.idea{background:var(--idea-bg);color:var(--idea)}.pill.done{background:var(--ok-bg);color:var(--ok)}
 .pill.est{text-transform:none;letter-spacing:0;font-weight:600}.pill.est.draft{background:var(--nice-bg);color:var(--nice)}.pill.est.sent{background:var(--idea-bg);color:var(--idea)}.pill.est.yes{background:var(--ok-bg);color:var(--ok)}.pill.est.quiet{background:transparent;border:1px solid var(--line);color:var(--muted)}
 .pill.phase{background:transparent;border:1px solid var(--line);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500}
+.pill.due{text-transform:none;letter-spacing:0;font-weight:600;background:var(--soft);color:var(--ink)}.pill.due.late{background:var(--must-bg);color:var(--must)}
+.pill.kind{text-transform:none;letter-spacing:0;font-weight:600;background:transparent;border:1px solid var(--ink);color:var(--ink)}
+section.waiting h2{font-size:22px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}section.waiting h2 .count{font-family:var(--font);font-size:14px;color:var(--muted);font-weight:400}
+section.waiting h3.sub{margin-top:8px}
 .seg .n{display:inline-block;margin-left:6px;min-width:20px;padding:0 6px;border-radius:99px;background:var(--soft);color:var(--ink);font-size:12px;line-height:20px;text-align:center}
 .seg button[aria-pressed=true] .n{background:var(--bg);color:var(--ink)}
 .seg button.zero:not([aria-pressed=true]){color:var(--muted);font-weight:500}
@@ -510,10 +514,18 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const patch = b => ({ method: 'PATCH', body: JSON.stringify(b) });
   const firstName = () => (viewer().name || '').split(/\s+/)[0].toLowerCase();
   const open = items => items.filter(i => !i.done);
-  // Waiting on the viewer: an estimate they decide (in Preview as, whoever really decides), or a question named for them.
+  // Waiting on the viewer: an estimate they decide (in Preview as, whoever really decides), a question named for them,
+  // or a suggested change named for them that is still to be decided (status still New, no estimate sent or decided).
+  const ownedBy = (i, name) => Boolean(i.owner && name && i.owner.toLowerCase().includes(name));
+  const undecided = i => i.kind === 'change' && i.status === 'new' && !(i.estimate && i.estimate.status !== 'withdrawn' && i.estimate.status !== 'draft');
+  const named = (i, name) => (i.kind === 'question' || undecided(i)) && ownedBy(i, name);
   const waitsOnMe = i => Boolean(
     (i.estimate && i.estimate.status === 'offered' && (state.preview ? state.preview.decides : i.estimate.can_decide))
-    || (i.kind === 'question' && i.owner && firstName() && i.owner.toLowerCase().includes(firstName())));
+    || named(i, firstName()));
+  // Positive Tribes (not previewing) sees everything waiting on the client's people: offered estimates and anything named
+  // for someone other than the viewer.
+  const waitsOnClient = i => Boolean((i.estimate && i.estimate.status === 'offered') || (i.owner && !ownedBy(i, firstName()) && named(i, i.owner.toLowerCase())));
+  const waitingList = () => open(state.items).filter(viewer().role === 'pt' && !state.preview ? waitsOnClient : waitsOnMe);
   const shownBy = (i, key) => key === 'all' || (key === 'yours' ? waitsOnMe(i) : i.phase === key);
   // Nice-to-have and idea suggestions are the Wishlist: listed, never counted in badges, weighed at each phase review.
   const isWish = i => i.kind === 'change' && i.tier !== 'must';
@@ -551,7 +563,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     // Coming back from the command center to the same client restores its accent and title.
     document.documentElement.style.setProperty('--client', state.client.accent);
     document.title = state.client.name + ' | Positive Tribes';
-    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : view === 'ideas' ? 'ideas' : view === 'documents' ? 'documents' : 'home';
+    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : view === 'ideas' ? 'ideas' : view === 'documents' ? 'documents' : view === 'waiting' ? 'waiting' : 'home';
     // #/uep/problems opens the test problems of the project being tested (the link in UAT scripts).
     if (view === 'problems') {
       const testing = state.releases.find(r => r.stage === 'uat');
@@ -667,6 +679,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const isPt = viewer().role === 'pt';
     renderBar();
     const waiting = open(state.items).filter(i => i.kind === 'question').length;
+    const forYou = waitingList().length;
+    const ptOwn = isPt && !state.preview;
     $('main').replaceChildren(
       h('div', { class: 'hero ws' }, h('div', { class: 'eyebrow' }, 'Your workspace',
         state.client.salesforce_url && [' \u00b7 ', h('a', { class: 'eb-sf', href: state.client.salesforce_url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Open Salesforce (opens in a new tab)' }, 'Salesforce \u2197')]),
@@ -674,14 +688,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('nav', { class: 'tabs', 'aria-label': 'Sections' },
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
         h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : '')),
+        (forYou > 0 || state.view === 'waiting') && h('a', { href: link('waiting'), ...(state.view === 'waiting' ? { 'aria-current': 'page' } : {}) }, ptOwn ? 'Waiting on them' : 'Waiting on you', h('span', { class: 'badge' }, forYou ? String(forYou) : '')),
         h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents')),
-      state.view === 'home' ? home() : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt));
+      state.view === 'home' ? home() : state.view === 'waiting' ? waitingView(isPt) : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt));
     $('main').querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
   }
 
   // ---- Home: what happens next ----
   function home() {
-    const mine = open(state.items).filter(i => i.kind === 'question' && i.owner && i.owner.toLowerCase().includes(firstName()) && firstName());
+    const mine = sortWaiting(open(state.items).filter(i => i.kind === 'question' && i.owner && i.owner.toLowerCase().includes(firstName()) && firstName()));
     const focus = mine.find(i => i.tier === 'must') || mine[0]
       || open(state.items).find(i => i.kind === 'problem' && i.tier === 'must');
     const testingNow = state.releases.some(r => r.stage === 'uat');
@@ -739,8 +754,63 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production'))));
       })); }),
       systemStatus(),
-      mine.length > 1 && h('div', { class: 'card' }, h('h2', {}, 'Waiting on you'),
-        h('ul', { class: 'list' }, mine.map(i => h('li', {}, h('a', { href: link('backlog', i.id) }, h('span', { class: 'pill ' + i.tier }, TIER_NAMES.question.find(t => t[0] === i.tier)[1]), h('span', {}, i.title)))))));
+      waitingCard(focus));
+  }
+
+  // The home card: the first few things waiting on the viewer, soonest due first, and a link to the full list.
+  function waitingCard(focus) {
+    const all = sortWaiting(waitingList());
+    const rest = all.filter(i => !focus || i.id !== focus.id);
+    if (!rest.length) return null;
+    const ptOwn = viewer().role === 'pt' && !state.preview;
+    return h('div', { class: 'card' }, h('h2', {}, ptOwn ? 'Waiting on them' : 'Waiting on you'),
+      h('ul', { class: 'list' }, rest.slice(0, 5).map(i => h('li', {}, h('a', { href: link('backlog', i.id) },
+        h('span', { class: 'pill ' + i.tier }, TIER_NAMES[i.kind].find(t => t[0] === i.tier)[1]), h('span', {}, i.title), i.due_date && h('span', { class: 'meta' }, ' · due ' + shortDate(i.due_date)))))),
+      h('p', {}, h('a', { class: 'btn ghost small', href: link('waiting') }, all.length > 1 ? 'See all ' + all.length + ', by project' : 'See it with its project')));
+  }
+
+  // Soonest due first (no date last), then questions before decisions, then priority, then the list's own order.
+  const TIER_ORDER = { must: 0, nice: 1, idea: 2 };
+  const sortWaiting = items => items.slice().sort((a, b) =>
+    (a.due_date || '9999').localeCompare(b.due_date || '9999') || (a.kind === 'question' ? 0 : 1) - (b.kind === 'question' ? 0 : 1)
+    || TIER_ORDER[a.tier] - TIER_ORDER[b.tier] || a.position - b.position || a.id - b.id);
+
+  // ---- Waiting on you: everything waiting on the viewer, in every project, in one list ----
+  // Grouped by project (the project with the soonest due item first). Questions are answered in place; suggested changes
+  // to decide are listed to talk through, and an estimate sent for approval carries its own buttons.
+  function waitingView(isPt) {
+    const ptOwn = isPt && !state.preview;
+    const items = sortWaiting(waitingList());
+    if (!items.length) return h('div', { class: 'card' }, h('h2', {}, ptOwn ? 'Nothing is waiting on them' : 'Nothing is waiting on you'),
+      h('p', { class: 'muted' }, ptOwn ? 'No open questions or decisions are named for anyone at ' + state.client.name + '.' : 'You\u2019re all caught up. We\u2019ll tell you here, and by email, when we need something.'));
+    const due = items.filter(i => i.due_date).map(i => i.due_date).sort();
+    const soonest = due[0];
+    const onSoonest = items.filter(i => i.due_date === soonest).length;
+    const left = soonest ? daysUntil(soonest) : null;
+    const when = left === null ? '' : left < 0 ? 'was due ' + shortDate(soonest) : left === 0 ? 'due today' : left === 1 ? 'due tomorrow' : 'due ' + longDate(soonest) + ' (in ' + left + ' days)';
+    const projects = state.projects.filter(p => items.some(i => i.project_id === p.id));
+    const owners = ptOwn ? [...new Set(items.map(i => i.owner).filter(Boolean))] : [];
+    const summary = h('div', { class: 'card' },
+      h('div', { class: 'label' }, ptOwn ? 'Waiting on them' : 'Waiting on you'),
+      h('h2', {}, items.length + (items.length === 1 ? ' thing' : ' things') + (projects.length > 1 ? ' across ' + projects.length + ' projects' : '')),
+      soonest && h('p', {}, h('b', {}, onSoonest === items.length ? (items.length === 1 ? 'It is ' : 'All are ') + when + '.' : onSoonest + ' ' + when + '.')),
+      ptOwn && owners.length > 0 && h('p', { class: 'muted' }, owners.map(o => o + ' ' + items.filter(i => i.owner === o).length).join(' \u00b7 ')),
+      h('p', { class: 'muted' }, ptOwn ? 'Questions and decisions named for the client\u2019s people, and estimates waiting for approval.'
+        : 'Answer each question here when you can. Changes to decide are listed so we can talk them through; an estimate can be approved right on its card.'));
+    const sections = projects
+      .map(p => ({ p, mine: items.filter(i => i.project_id === p.id) }))
+      .sort((a, b) => (a.mine[0].due_date || '9999').localeCompare(b.mine[0].due_date || '9999'))
+      .map(({ p, mine }) => {
+        const asks = mine.filter(i => i.kind !== 'change');
+        const decide = mine.filter(i => i.kind === 'change');
+        return h('section', { class: 'waiting stack' },
+          h('h2', {}, p.name, h('span', { class: 'count' }, mine.length + (mine.length === 1 ? ' item' : ' items'))),
+          asks.length > 0 && decide.length > 0 && h('h3', { class: 'sub' }, 'Questions'),
+          asks.map(i => card(i, mine, isPt)),
+          decide.length > 0 && h('h3', { class: 'sub' }, 'To decide'),
+          decide.map(i => card(i, mine, isPt)));
+      });
+    return h('div', { class: 'stack' }, summary, ...sections);
   }
 
   // ---- Care plan: the strip on the home page, and the care request controls on each request ----
@@ -1269,7 +1339,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const phaseless = item.kind === 'problem' || item.kind === 'request';
     const moveBody = d => post({ direction: d, ...(state.filter === 'all' || state.filter === 'yours' ? {} : { phase: state.filter }) });
     // Waiting on you is a mix of phases, so moving within it would reorder against items you can't see.
-    const movable = !item.done && state.filter !== 'yours';
+    const movable = !item.done && state.filter !== 'yours' && state.view !== 'waiting';
+    const left = !item.done && item.due_date ? daysUntil(item.due_date) : null;
+    const duePill = left !== null && h('span', { class: 'pill due' + (left < 0 ? ' late' : '') }, left < 0 ? 'Overdue · ' + shortDate(item.due_date) : left === 0 ? 'Due today' : 'Due ' + shortDate(item.due_date));
     const date = shortDate(item.created_at.slice(0, 10));
     // Long answers show a few lines first; the rest is one click away.
     const long = item.answer && (item.answer.length > 320 || item.answer.split('\n').length > 4);
@@ -1287,7 +1359,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       ? isPt && !item.answer && h('span', { class: 'pill status reply' }, 'Needs a reply')
       : h('span', { class: 'pill status ' + item.status }, !isPt && item.status === 'built' ? 'Ready to test' : statusName(item)));
     const shipsIn = tracked && item.release_id && !item.done && h('span', { class: 'pill phase' }, 'Ships in ' + phaseName({ name: item.release_name, number: item.release_number }));
-    const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), statusPill, estimatePill(item), shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
+    // On Waiting on you there are no priority headings, so each open card carries its priority.
+    const tierPill = state.view === 'waiting' && !item.done && h('span', { class: 'pill ' + item.tier }, tiers.find(t => t[0] === item.tier)[1]);
+    const pills = [item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), tierPill, duePill, statusPill, estimatePill(item), shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
     // Positive Tribes picks the status in one tap. Not doing closes it; anything else reopens a declined one.
     const picker = isPt && tracked && (!item.done || declined) && h('select', { class: 'status-pick', 'aria-label': 'Status for ' + item.title, onchange: e => act(base() + '/items/' + item.id, patch({ status: e.target.value })) },
       STATUS_NAMES[item.kind].map(([k]) => h('option', { value: k, ...(item.status === k ? { selected: true } : {}) }, statusName(item, k))));
