@@ -24,10 +24,12 @@
     // ANTHROPIC_API_KEY secret is set (wrangler secret put). Previews share this value; what keeps them off the API is
     // that crons run only on the deployed Worker and a manual run must come in on hub.positivetribes.org itself.
     "PATCH_HOST": "hub.positivetribes.org",
-    // Weekly website digest (src/web.js): runs only on this host, with the GA4 property's numeric id (public) and the
-    // GA_SA_KEY secret (a read-only service account's JSON key, Viewer on that property only; wrangler secret put).
+    // Weekly website digest (src/web.js): runs only on this host. Leads and gifts come from Salesforce (secrets above);
+    // visits from Cloudflare Web Analytics: the account id and the site's tag are public identifiers, the token is the
+    // CF_ANALYTICS_TOKEN secret (Account Analytics: Read only; wrangler secret put).
     "WEB_HOST": "hub.positivetribes.org",
-    "GA_PROPERTY_ID": ""
+    "CF_ACCOUNT_ID": "d7e67bd9fff1850969da60348408f3f0",
+    "CF_WEB_SITE_TAG": ""
   },
   // Patch's morning check: 12:00 UTC, 8am Eastern (7am in winter). The website digest: Mondays 14:00 UTC.
   "triggers": { "crons": ["0 12 * * *", "0 14 * * 1"] },

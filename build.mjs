@@ -12,6 +12,13 @@ const analytics = measurementId ? `<script async src="https://www.googletagmanag
 document.addEventListener('click',(event)=>{const link=event.target.closest('a[href^="mailto:"]');if(link)gtag('event','contact_email_click',{link_url:link.href})});</script>
 ` : '';
 
+// Optional Cloudflare Web Analytics beacon (cookieless; the hub's Monday website digest reads it). Main pages only, so
+// client prototypes don't count as our visits, and never on a device tagged with ?internal=1 (same flag as GA above).
+const beaconToken = process.env.CF_BEACON_TOKEN;
+if (beaconToken && !/^[a-f0-9]{32}$/.test(beaconToken)) throw new Error('CF_BEACON_TOKEN must be the 32-character Web Analytics site token.');
+const beacon = beaconToken ? `<script>(()=>{let i=false;try{const f=new URLSearchParams(location.search).get('internal');i=f==='1'||(f!=='0'&&localStorage.getItem('pt_internal')==='1')}catch{}if(i)return;const s=document.createElement('script');s.defer=true;s.src='https://static.cloudflareinsights.com/beacon.min.js';s.setAttribute('data-cf-beacon','{"token":"${beaconToken}"}');document.head.append(s)})()</script>
+` : '';
+
 // Donations: "off" (default) leaves the donate page out entirely, "preview" publishes it unlinked and
 // hidden from search for testing, "on" also adds Donate to the menu and the donation note to the privacy page.
 const donations = process.env.DONATIONS || 'off';
@@ -27,7 +34,7 @@ for (const page of pages) {
   html = donations === 'on' ? html.replace(/<!--donations-->|<!--\/donations-->/g, '') : html.replace(/<!--donations-->[\s\S]*?<!--\/donations-->/g, '');
   if (donations === 'on' && page !== 'donate.html') html = html.replace(/(<a href="\/volunteer\.html"[^>]*>Volunteer<\/a>)/, '$1<a href="/donate.html">Donate</a>');
   if (donations === 'preview' && page === 'donate.html') html = html.replace('</head>', '<meta name="robots" content="noindex"></head>');
-  await writeFile(`public/${page}`, html.replace('</head>', analytics + '</head>'));
+  await writeFile(`public/${page}`, html.replace('</head>', analytics + beacon + '</head>'));
 }
 for (const screen of ['workouts', 'training-frequency', 'blood-pressure', 'medicine-tracker']) {
   await copyFile(`pulselift-${screen}.png`, `public/pulselift-${screen}.png`);
