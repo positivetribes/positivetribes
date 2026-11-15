@@ -4,6 +4,7 @@ import { accessIdentity } from './access.js';
 import { handleAdmin, localDay } from './admin.js';
 import { runWebDigest } from './web.js';
 import { windowEnd } from './dates.js';
+import { pushPhaseTask, checkTestingWindows } from './phasetask.js';
 import { listForClient, markRead } from './notifications.js';
 import {
   TYPE_NAMES, costLabel, planFor, ensureGrants, ledgerOf, balanceOf, canConfirm, isLive,
@@ -344,6 +345,9 @@ export default {
         .catch(error => console.error('web_digest_failed', error.message)));
       return;
     }
+    // Phases whose testing window ended with no problems get a Salesforce Task to confirm and invoice (src/phasetask.js).
+    ctx.waitUntil(checkTestingWindows(env, env.DB, localDay(Date.now())).then(r => console.log('testing_windows', JSON.stringify(r)))
+      .catch(error => console.error('testing_windows_failed', error.message)));
     ctx.waitUntil(runPatch(env, 'cron').then(r => console.log('patch_run', r.ran ? `checked ${r.checked}, failed ${r.failed}` : r.reason))
       .catch(error => console.error('patch_run_failed', error.message)));
   },
@@ -569,6 +573,8 @@ export default {
           ...next ? [db.prepare(`UPDATE releases SET stage = 'uat', uat_started = date('now') WHERE id = ? AND client_id = ?`).bind(next.id, client.id)] : [],
           logEvent(db, client.id, 0, 'signed_off', { title: label, kind: 'release' }, next ? `${next.name || 'Phase ' + next.number} starts testing` : '', user)
         ]);
+        // A reminder in Salesforce to send the acceptance invoice (src/phasetask.js). Never blocks the sign-off.
+        await pushPhaseTask(env, db, url.hostname, release.id, 'signed_off', localDay(Date.now()));
         return json({ ok: true, releases: await listReleases(db, client.id) });
       }
       if (resource !== 'items') return json({ error: 'Not found.' }, 404);
