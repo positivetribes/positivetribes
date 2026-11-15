@@ -141,6 +141,19 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .email{border:1px dashed var(--rule);border-radius:14px;padding:16px;background:#FFFDF8;font-size:15px}
 .email .meta{font-size:13px;color:var(--muted);margin-bottom:8px}
 
+/* Salesforce highlights: every place the sketch touches Salesforce reads in lake blue */
+mark.sf{background:var(--lakesoft);color:var(--lake);font-weight:700;padding:1px 7px;border-radius:6px;white-space:nowrap}
+mark.sf:before{content:"";display:inline-block;width:.5em;height:.5em;border-radius:50%;background:var(--lake);margin-right:.35em;vertical-align:.1em}
+.callout mark.sf{background:#D6E8F5;color:#124E78}
+.pill.lake.key{font-size:14px;padding:6px 14px;border:1.5px solid var(--lake)}
+.step.sf{border:2px solid var(--lake);background:var(--lakesoft)}
+.step.sf p{color:#2E4A5E}
+.sfrec{border:2px solid var(--lake);box-shadow:0 0 0 4px var(--lakesoft)}
+.email.sf{border:2px dashed var(--lake)}
+.email.sf .meta{color:var(--lake);font-weight:600}
+.callout .nums div.sf{background:rgba(214,232,245,.12);border:1.5px solid #8FC1E3;border-radius:12px;padding:10px 12px}
+.callout .nums div.sf b{color:#BFE0F7}
+
 footer{border-top:1px solid var(--rule);padding:28px 0 40px;font-size:14px;color:var(--muted)}
 footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
 footer img{height:40px}
@@ -289,18 +302,18 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
   <section class="view" id="supporters" role="tabpanel" aria-labelledby="t-supporters" hidden>
     <div class="intro">
       <div><h2>Every Lab Card family becomes a supporter you know</h2>
-      <p>Today these families give through their groceries, but the Foundation doesn't know most of them by name. Connected to Salesforce, each one becomes a supporter record that can be thanked, invited and counted.</p></div>
-      <span class="pill lake">Salesforce</span>
+      <p>Today these families give through their groceries, but the Foundation doesn't know most of them by name. Connected to <mark class="sf">Salesforce</mark>, each one becomes a supporter record that can be thanked, invited and counted.</p></div>
+      <span class="pill lake key">Blue = Salesforce</span>
     </div>
     <div class="flow" style="margin-bottom:16px">
       <div class="step"><b>Family enrolls in Lab Card</b><p>Links their King Soopers or Safeway card, same as today.</p></div>
-      <div class="step sf"><b>A household record appears</b><p>In Salesforce, with each child, school and Lab Card total. No retyping.</p></div>
+      <div class="step sf"><b>A household record appears</b><p>In <mark class="sf">Salesforce</mark>, with each child, school and Lab Card total. No retyping.</p></div>
       <div class="step"><b>Thank-you at Redemption Week</b><p>"Your groceries sent Maya to Windy Peak." Sent automatically, signed by Bryan.</p></div>
       <div class="step give"><b>An invitation to do more</b><p>Become a monthly giver, sponsor a classmate's tuition, or come to After Dark.</p></div>
     </div>
     <div class="grid g2">
       <div class="sfrec">
-        <div class="top"><div class="ic">H</div><div><b>Rivera Household</b><div class="small muted">Salesforce · Household account</div></div></div>
+        <div class="top"><div class="ic">H</div><div><b>Rivera Household</b><div class="small muted"><mark class="sf">Salesforce</mark> · Household account</div></div></div>
         <div class="fields">
           <div><span>Lab Card total, all years</span><b>$552</b></div>
           <div><span>Kids at Outdoor Lab</span><b>Ana (2024), Maya (this year)</b></div>
@@ -319,8 +332,8 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
           </ul>
         </div>
       </div>
-      <div class="email">
-        <div class="meta">Thank-you email, queued in Salesforce for after Redemption Week</div>
+      <div class="email sf">
+        <div class="meta">Thank-you email, queued in <mark class="sf">Salesforce</mark> for after Redemption Week</div>
         <p><b>Subject: Your groceries sent Maya to Windy Peak</b></p>
         <p style="margin-top:8px">Hi Rivera family,</p>
         <p style="margin-top:8px">Your Lab Card earned $300, the full cost of Maya's week at Windy Peak. Four of you shopped for it, including Grandma.</p>
@@ -330,11 +343,11 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
     </div>
     <div class="callout" style="margin-top:16px">
       <h3>Why it matters</h3>
-      <p>About 5,000 sixth graders go to Outdoor Lab every year. Many of their families already give through Lab Card. Connecting Lab Card to Salesforce turns them into the individual-giving program the Foundation wants to grow.</p>
+      <p>About 5,000 sixth graders go to Outdoor Lab every year. Many of their families already give through Lab Card. Connecting Lab Card to <mark class="sf">Salesforce</mark> turns them into the individual-giving program the Foundation wants to grow.</p>
       <div class="nums">
         <div><b>1,284</b><span>families who become named supporters (sample)</span></div>
         <div><b>3 per year</b><span>touches per family: thank-you, story, invitation</span></div>
-        <div><b>One place</b><span>for donors, grants and Lab Card, instead of Bloomerang plus spreadsheets</span></div>
+        <div class="sf"><b>One place</b><span>for donors, grants and Lab Card, in <mark class="sf">Salesforce</mark>, instead of Bloomerang plus spreadsheets</span></div>
       </div>
     </div>
   </section>
