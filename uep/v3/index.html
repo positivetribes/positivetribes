@@ -322,8 +322,8 @@ const S=(id,siteId,name,rule,from,to,cap,booked,tbc=false,wait=0)=>({id,site:sit
 
 /* ---------- Fundraising sample data (v3) ---------- */
 // One campaign row per event, so next year's climb is new data, not new code.
-// Name, goals and t-shirt sizes from Molly (Nov 2: #80, #75, #121). The overall goal and the t-shirt level are samples until UEP sets them.
-const CAMPAIGN={name:"Climb against Parkinson's Day",date:'2027-04-03',defGoal:500,goals:[100,250,500,1000],gifts:[25,50,100,250],goal:20000,shirt:250,sizes:['S','M','L','XL','2XL']};
+// Name, goals and t-shirt sizes from Molly (Nov 2: #80, #75, #121). Overall goal $200,000 (#153) and t-shirt level $200 (#152) from Molly, Nov 15.
+const CAMPAIGN={name:"Climb against Parkinson's Day",date:'2027-04-03',defGoal:500,goals:[100,250,500,1000],gifts:[25,50,100,250],goal:200000,shirt:200,sizes:['S','M','L','XL','2XL']};
 const AFFS=['Climber','Volunteer','Family member of a climber','Other'];
 const usd=n=>'$'+Math.round(n).toLocaleString('en-US');
 const slugOf=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
@@ -719,7 +719,7 @@ const stateOf=id=>site(id).city.split(', ')[1];
 // T-shirt gift at UEP's level (#121): ask for size and mailing address once the page reaches it.
 function shirtCard(pg){
   const r=raisedOf(pg),lvl=CAMPAIGN.shirt;
-  if(r<lvl)return `<div class="card"><h3>Earn a UEP t-shirt</h3><p class="small">Raise ${usd(lvl)} and UEP sends you a t-shirt. You're <b>${usd(lvl-r)}</b> away.</p><div class="meter"><i style="width:${Math.round(r/lvl*100)}%"></i></div><p class="muted small">Sample level. UEP sets the levels.</p></div>`;
+  if(r<lvl)return `<div class="card"><h3>Earn a UEP t-shirt</h3><p class="small">Raise ${usd(lvl)} and UEP sends you a t-shirt. You're <b>${usd(lvl-r)}</b> away.</p><div class="meter"><i style="width:${Math.round(r/lvl*100)}%"></i></div></div>`;
   if(pg.shirt&&pg.shirt.saved)return `<div class="card"><div class="row"><h3>Your UEP t-shirt</h3><span class="pill ok">Size ${esc(pg.shirt.size)}</span></div><p class="small">You earned it. UEP mails it to ${esc(pg.shirt.addr)}.</p><button class="linkbtn" data-act="shedit" style="align-self:flex-start">Change size or address</button></div>`;
   const S=pg.shirt||(pg.shirt={size:'',addr:'',saved:false});
   return `<div class="card"><div class="row"><h3>You earned a UEP t-shirt!</h3><span class="pill sun">${usd(lvl)} reached</span></div><p class="small">Tell us your size and where to mail it.</p>
@@ -870,7 +870,7 @@ const NOTES={
     b:['What someone sees comes from what they are. A page makes someone a fundraiser; a signed waiver makes someone a climber. There is still no role picker.','In the full build the server checks this too: a fundraising-only account cannot open booking or waiver pages, and never gets climbing reminders or waiver texts.','Donors don\'t need an account. They give from the public page.','Every gift goes to Virtuous with the donor\'s name.'],
     t:'Open Share, then "See my page as a donor," and give $50.',r:'Volunteers'},
   fund:{h:'One account, two parts',p:'A climber or lead who fundraises keeps the scheduler and gets a Fundraising tab beside it.',
-    b:['The page starts with their name and home gym\'s team filled in.','Goal presets and a default goal are set by UEP for each campaign.','Donations and thank-yous are in one list.','At UEP\'s t-shirt level (a sample $250 here), the page asks for a size and mailing address.','Every page shows the overall total against UEP\'s goal.','A fundraiser can say who is matching their gifts and up to how much; it shows as a banner on the page.','Molly sees every page, team and gift, and can turn the climber prompt off after the event.'],
+    b:['The page starts with their name and home gym\'s team filled in.','Goal presets and a default goal are set by UEP for each campaign.','Donations and thank-yous are in one list.','At UEP\'s t-shirt level ($200), the page asks for a size and mailing address.','Every page shows the overall total against UEP\'s goal.','A fundraiser can say who is matching their gifts and up to how much; it shows as a banner on the page.','Molly sees every page, team and gift, and can turn the climber prompt off after the event.'],
     t:'Say thanks to a donor, then see the page as a donor.',r:'Fundraising'},
   out:{h:'One sign-in, no role picker',p:'Climbers, care partners, lead volunteers and staff all sign in the same way. The system looks up the account and opens the right view.',
     b:['A code by email or text replaces passwords, which are hard to type with tremor and easy to forget.','Care partners get their own accounts, so they are counted separately from climbers.','A lead who also climbs gets one account with a simple switch, and a site can have two or more leads.','New climbers arrive from one "Climb with us" button on the UEP website.'],
