@@ -154,7 +154,7 @@ export async function pushEstimateTask(env, db, url, itemId) {
     const task = {
       Subject: clip(`Change approved: ${row.title} (${hoursLabel(row.minutes)}, ${terms})`, 250),
       ActivityDate: addDaysIso(7), WhatId: what, Status: 'Not Started',
-      Description: `${row.decided_by || 'The client'} approved this change in the Tribe Hub.\n${donated ? 'Donated by Positive Tribes: schedule it in the build, no invoice.' : now ? 'Bill it and schedule it in the build.' : 'Add it to the care queue once the tool is live.'}`
+      Description: `${row.decided_by || 'The client'} approved this change in the Tribe Hub.\n${donated ? 'Donated by Positive Tribes: schedule it in the build, no invoice.' : now ? 'Schedule it in the build. Invoice it when the phase it ships in is accepted.' : 'Add it to the care queue once the tool is live.'}`
     };
     if (env.SF_TASK_OWNER_ID) task.OwnerId = env.SF_TASK_OWNER_ID;
     const { id } = await sf(await salesforceToken(env), 'POST', '/sobjects/Task', task);
