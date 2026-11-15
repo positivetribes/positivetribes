@@ -16,7 +16,7 @@ During a build, out-of-scope asks (Julie Calligaro's #133–#136 for UEP are the
 3. Saves it as a draft (only Positive Tribes sees it), then taps "Send to client".
 
 **The client.** Everyone on the client's hub sees the estimate on the card: "About 3 hours · $150 · adds about a week to Phase 2". Only the **director** (role `ed`) or the care plan's named contact gets the buttons:
-- **Add it now**: "Adds $150 to your next invoice." The item becomes Planned, Full build.
+- **Add it now**: "Adds $150 to the invoice for the phase it ships in, once you accept that phase." The item becomes Planned, Full build.
 - **After launch, 6 credits**: shown only if the client has a care plan and the estimate is 2 hours or less (4 credits, the largest care-plan size). The item becomes Planned, Later. Above 2 hours the card says "Larger than one care-plan request, so better added now" instead.
 - **Not now**: the item stays open on the Wishlist (status Planned, which reads "On the wishlist"; a Must have moves to Idea).
 
@@ -69,7 +69,7 @@ Client (the existing Origin check applies to all client writes):
 
 ## After a decision
 
-1. **Salesforce.** After the D1 batch, the Worker creates a Task on the project's Opportunity (`projects.salesforce_opportunity_id`): "Change approved by Molly Cupka: <title> (3 h, $150, add now)". It's due in 7 days, as a reminder to bill and schedule it. This uses the Task-write access the hub already has; no new Salesforce permissions. On failure, it stores `sf_error`, and the command center's Today shows "Salesforce Task failed: retry". Nothing fails silently.
+1. **Salesforce.** After the D1 batch, the Worker creates a Task on the project's Opportunity (`projects.salesforce_opportunity_id`): "Change approved by Molly Cupka: <title> (3 h, $150, add now)". It's due in 7 days, as a reminder to schedule it and tag the phase it ships in. Billing rule (Eric, 2026-11-15): approved changes are invoiced when that phase is accepted, not on approval, matching how phases are billed; retitle the Task "Invoice with Phase N acceptance" and date it for that phase. This uses the Task-write access the hub already has; no new Salesforce permissions. On failure, it stores `sf_error`, and the command center's Today shows "Salesforce Task failed: retry". Nothing fails silently.
 2. **Command center Today** gets two short lists: "Estimates waiting for the client" (with days waiting) and "Approved changes to bill or schedule".
 3. **Requirements.** For UEP, the checklist in `UEP/CLAUDE.md` turns an approved estimate into an R row (P-rows lose their P number). The hub doesn't touch other repos.
 4. **Approved for after launch.** These wait as Planned, Later. When the tool goes live with an active plan, Eric turns each into a care request at its credit size. That step stays manual in version 1, and Today lists them so none get missed.
