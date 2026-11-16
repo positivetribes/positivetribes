@@ -366,6 +366,41 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .docform[open]>summary{padding-bottom:4px}
 .cc .docform>form{padding:0 24px 22px}
 .cc .docform .fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;margin-top:6px}
+/* Timeline (#/command/timeline): month axis, one row per project, bars placed by percent of the chart's width. */
+.cc .tl-panel{margin-bottom:18px}
+.cc .tl-scroll{overflow-x:auto;margin-top:10px;padding-bottom:4px}
+.cc .tl{--tl-name:170px}
+.cc .tl-head,.cc .tl-lane{display:grid;grid-template-columns:var(--tl-name) minmax(0,1fr)}
+.cc .tl-months{position:relative;height:24px;border-bottom:1px solid var(--line)}
+.cc .tl-month{position:absolute;top:2px;padding-left:4px;font-size:12px;color:var(--muted);white-space:nowrap}
+.cc .tl-body{position:relative;padding-bottom:22px}
+.cc .tl-lines{position:absolute;top:0;bottom:0;left:var(--tl-name);right:0;pointer-events:none}
+.cc .tl-grid{position:absolute;top:0;bottom:22px;border-left:1px solid var(--line)}
+.cc .tl-line{position:absolute;top:0;bottom:22px;border-left:2px solid var(--muted);pointer-events:auto}
+.cc .tl-line.m-deadline{border-left:2px dashed var(--must)}
+.cc .tl-line.today{border-left-color:var(--rust);pointer-events:none}
+.cc .tl-line.today b{position:absolute;bottom:-20px;left:-14px;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--rust)}
+.cc .tl-lane{border-bottom:1px solid var(--line);padding:6px 0}
+.cc .tl-name{align-self:center;padding-right:12px;font-weight:600;font-size:14px}
+.cc .tl-track{position:relative}
+.cc .tl-row{position:relative;height:44px;margin:3px 0}
+.cc .tl .tl-bar{position:absolute;top:0;height:44px;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:3px 8px;border:0;border-radius:8px;background:none;text-align:left;font-size:12.5px;line-height:1.25;color:var(--ink);overflow:hidden;z-index:1}
+.cc .tl-fill{position:absolute;top:0;bottom:0;left:0;border:1px solid transparent;border-radius:8px;z-index:-1}
+.cc .tl-bar span,.cc .tl-bar small{position:relative}
+.cc .tl-bar span,.cc .tl-bar small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc .tl-bar span{font-weight:600}
+.cc .tl-bar small{font-size:11px;color:var(--muted)}
+.cc .tl-bar.t0 .tl-fill{background:var(--idea-bg)}.cc .tl-bar.t1 .tl-fill{background:var(--nice-bg)}.cc .tl-bar.t2 .tl-fill{background:var(--ok-bg)}.cc .tl-bar.t3 .tl-fill{background:var(--soft)}
+.cc .tl-bar.k-ongoing .tl-fill{opacity:.7}
+.cc .tl-bar.k-proposed .tl-fill{background:var(--card);border:1.5px dashed var(--muted)}
+.cc .tl .tl-bar.done span{color:var(--ok)}
+.cc .tl-bar:hover .tl-fill{border-color:var(--ink)}
+.cc .tl-bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.cc .tl .tl-bar.editing{outline:2px solid var(--rust);outline-offset:1px}
+.cc .tl-keys{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px}
+.cc .tl-keys button{border:0;background:none;padding:0;min-height:0;font-size:13px;text-align:left}
+.cc .tl-keys i{display:inline-block;width:3px;height:12px;margin-right:7px;vertical-align:-1px;background:var(--muted)}
+.cc .tl-keys .m-deadline i{background:var(--must)}
 .cc .docform label{display:flex;flex-direction:column;gap:5px;margin:0;font-size:13px;font-weight:600;color:var(--muted)}
 .cc .docform label.wide{grid-column:span 2}
 .cc .docform label.check{flex-direction:row;align-items:center;color:var(--ink);font-weight:400;font-size:14px}
@@ -680,7 +715,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     // Four daily tabs, then the Playbook (commands and kits). What clients changed lives in the bell (its "See all" opens #/command/inbox) and on each client's card,
     // so Inbox has no tab of its own. Improve this hub sits apart at the right end.
     const tabs = (inboxBadge, careBadge) => [tab('today', '#/command', 'Today'), tab('clients', '#/command/clients', 'Clients', null, 'client'),
-      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents'), tab('playbook', '#/command/playbook', 'Playbook')];
+      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents'), tab('timeline', '#/command/timeline', 'Timeline'), tab('playbook', '#/command/playbook', 'Playbook')];
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {

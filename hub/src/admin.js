@@ -12,6 +12,7 @@ import { patchAdmin, patchInbox, aiCost } from './patch.js';
 import { replyAdmin } from './reply.js';
 import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
 import { webAdmin, latestWebDigest } from './web.js';
+import { timelineAdmin } from './timeline.js';
 import { PLAYBOOK } from './playbook-data.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
@@ -919,6 +920,8 @@ export async function handleAdmin(request, env, url, who) {
     if (estimate) return estimate;
     const web = await webAdmin({ env, url, route, json }, today);
     if (web) return web;
+    const timeline = await timelineAdmin({ request, env, route, path, method, json, body, text });
+    if (timeline) return timeline;
 
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);

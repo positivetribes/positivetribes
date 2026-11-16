@@ -833,19 +833,191 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     } catch (error) { out.innerHTML = `<p class="err">${esc(error.message)}</p>`; }
   }
 
-  // sub is what follows #/command: '', 'inbox', 'clients', 'care', 'care/triage', 'documents', 'playbook', 'ideas' or
+  // ---- Timeline: every client's schedule on one month axis (#/command/timeline). Only Positive Tribes sees it. ----
+  // Bars sit in their project's row, or in a named row for work with no hub project yet (a proposed build). A bar linked
+  // to a client phase follows that phase live: a tick once signed off, the testing window's end while in UAT.
+  // Key dates and deadlines are lines across the whole chart, listed under it. The page reloads its data every minute.
+  const TL_KIND = { work: 'Work', ongoing: 'Ongoing (a plan or support)', proposed: 'Proposed, not signed', milestone: 'Key date (an event)', deadline: 'Deadline' };
+  const TL_MARK = ['milestone', 'deadline'];
+  const TL_DONE = ['signed_off', 'live'];
+  const TL_NAME = 170; // px for the row names; matches --tl-name in index.html
+  const TL_STAGE = { building: 'Building', waiting: 'Built, waiting', uat: 'Testing', planned: '' };
+  let tl = null, tlEditing = null, tlNew = false, tlTimer = null, tlSeen = '';
+  const tlDay = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const tlLong = iso => new Date(iso + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  const tlRange = e => e.end_date ? `${tlDay(e.start_date)} – ${tlDay(e.end_date)}` : tlDay(e.start_date);
+  const tlToday = () => overview?.today || new Date().toLocaleDateString('en-CA');
+
+  // Placed in pixels across the space the panel has (at least 640), so a short bar's label can run past its coloured
+  // span without hiding the next bar: bars stack on a new line inside their row when their labels would touch.
+  function tlChart(c, today, room) {
+    const bars = c.entries.filter(e => !TL_MARK.includes(e.kind)), marks = c.entries.filter(e => TL_MARK.includes(e.kind));
+    const days = c.entries.flatMap(e => [e.start_date, e.end_date || e.start_date]).concat(today).sort();
+    const first = new Date(days[0].slice(0, 8) + '01T00:00:00Z'), last = new Date(days[days.length - 1] + 'T00:00:00Z');
+    const t0 = first.getTime(), t1 = Date.UTC(last.getUTCFullYear(), last.getUTCMonth() + 1, 1);
+    const width = Math.max(640, room), perDay = width / ((t1 - t0) / 86400e3);
+    // Pixels from the left: the start of a day, or its end for the last day of a bar.
+    const at = (iso, end = false) => ((Date.parse(iso + 'T00:00:00Z') - t0) / 86400e3 + (end ? 1 : 0)) * perDay;
+    const px = n => n.toFixed(1) + 'px';
+    const months = [];
+    for (let d = first; d.getTime() < t1; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) months.push(d);
+    const monthIso = d => d.toISOString().slice(0, 10);
+    const head = months.map((d, i) => `<span class="tl-month" style="left:${px(at(monthIso(d)))}">${esc(d.toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' }) + (i === 0 || d.getUTCMonth() === 0 ? " '" + String(d.getUTCFullYear()).slice(2) : ''))}</span>`).join('');
+    const grid = months.slice(1).map(d => `<i class="tl-grid" style="left:${px(at(monthIso(d)))}"></i>`).join('');
+    const mid = iso => (at(iso) + at(iso, true)) / 2;
+    const lines = marks.map(m => `<i class="tl-line m-${m.kind}" style="left:${px(mid(m.start_date))}" title="${esc(tlLong(m.start_date) + ' · ' + m.label)}"></i>`).join('')
+      + `<i class="tl-line today" style="left:${px(mid(today))}"><b>Today</b></i>`;
+
+    // Rows: the client's projects in their hub order, then named rows in the order they first start.
+    const lanes = [];
+    c.projects.forEach((p, i) => { const items = bars.filter(e => e.project_id === p.id); if (items.length) lanes.push({ name: p.name, tone: i % 3, items }); });
+    for (const e of bars.filter(b => !b.project_id)) {
+      const lane = lanes.find(l => l.lane === e.lane.toLowerCase());
+      if (lane) lane.items.push(e); else lanes.push({ lane: e.lane.toLowerCase(), name: e.lane, tone: 3, items: [e] });
+    }
+    const shape = e => {
+      const r = e.release_id ? c.releases.find(x => x.id === e.release_id) : null;
+      const done = Boolean(r && TL_DONE.includes(r.stage));
+      const status = !r ? '' : done ? 'Signed off' : r.stage === 'uat' && r.window_end ? 'Testing to ' + tlDay(r.window_end) : TL_STAGE[r.stage] || '';
+      const title = (done ? '✓ ' : '') + e.label, sub = [tlRange(e), done ? '' : status].filter(Boolean).join(' · ');
+      const left = at(e.start_date), span = Math.max(6, at(e.end_date || e.start_date, true) - left);
+      // A rough width for the words (12.5px semibold, 11px dates), capped so one long label cannot push a row wide.
+      const words = Math.min(300, Math.max(title.length * 7, sub.length * 6) + 18);
+      return { e, done, status, title, sub, left, span, extent: Math.max(span, words) };
+    };
+    const pack = items => {
+      const rows = [];
+      for (const b of items.map(shape).sort((x, y) => x.left - y.left || x.e.id - y.e.id)) {
+        const row = rows.find(r => r.end + 4 <= b.left);
+        if (row) { row.items.push(b); row.end = b.left + b.extent; } else rows.push({ end: b.left + b.extent, items: [b] });
+      }
+      return rows;
+    };
+    const bar = (b, tone) => {
+      const tip = [b.e.label, tlRange(b.e), b.status, b.e.kind === 'proposed' ? 'Proposed, not signed' : ''].filter(Boolean).join(' · ');
+      return `<button type="button" class="tl-bar t${tone} k-${b.e.kind}${b.done ? ' done' : ''}${tlEditing === b.e.id ? ' editing' : ''}${b.span < b.extent ? ' short' : ''}" style="left:${px(b.left)};width:${px(b.extent)}" data-tl-edit="${b.e.id}" title="${esc(tip)}" aria-label="${esc(tip)}. Edit">
+        <i class="tl-fill" style="width:${px(b.span)}"></i><span>${esc(b.title)}</span><small>${esc(b.sub)}</small></button>`;
+    };
+    const rows = lanes.map(l => `<div class="tl-lane"><div class="tl-name">${esc(l.name)}</div><div class="tl-track">${pack(l.items).map(s => `<div class="tl-row">${s.items.map(b => bar(b, l.tone)).join('')}</div>`).join('')}</div></div>`).join('');
+    const keys = [...marks].sort((a, b) => a.start_date.localeCompare(b.start_date)).map(m => `<li class="m-${m.kind}"><button type="button" data-tl-edit="${m.id}"><i></i><strong>${esc(tlLong(m.start_date))}</strong> · ${esc(m.label)}${m.start_date < today ? ' <span class="muted">(past)</span>' : ''}</button></li>`).join('');
+    return `<div class="tl-scroll"><div class="tl" style="width:${px(width + TL_NAME)}"><div class="tl-head"><div></div><div class="tl-months">${head}</div></div>
+      <div class="tl-body"><div class="tl-lines">${grid}${lines}</div>${rows || '<p class="empty small">Only dates so far.</p>'}</div></div></div>
+      ${keys ? `<ul class="tl-keys">${keys}</ul>` : ''}`;
+  }
+
+  function tlForm(e) {
+    const clients = tl.map(c => `<option value="${c.id}"${c.id === e.client_id ? ' selected' : ''}>${esc(c.name)}</option>`).join('');
+    return `<details class="panel docform" id="tl-panel"${tlEditing || tlNew ? ' open' : ''}><summary>${tlEditing ? 'Edit timeline entry' : '+ Add to the timeline'}</summary><form id="tl-form">
+      <div class="fields">
+        <label>Client<select name="client_id"${tlEditing ? ' disabled' : ''}>${clients}</select></label>
+        <label>Kind<select name="kind">${options(TL_KIND, e.kind)}</select></label>
+        <label>Project<select name="project_id"></select></label>
+        <label>Follows phase<select name="release_id"></select></label>
+        <label class="wide">Label<input type="text" name="label" value="${esc(e.label)}" maxlength="120" required placeholder="Build Apr 6 – May 31"></label>
+        <label class="wide">Row name, if no project<input type="text" name="lane" value="${esc(e.lane)}" maxlength="60" placeholder="Volunteer scheduling"></label>
+        <label>Start<input type="date" name="start_date" value="${esc(e.start_date)}" required></label>
+        <label>End<input type="date" name="end_date" value="${esc(e.end_date)}"></label>
+      </div>
+      <p class="actions"><button class="primary">${tlEditing ? 'Save' : 'Add'}</button> <button type="button" id="tl-cancel">Cancel</button>${tlEditing ? ' <button type="button" class="link" id="tl-delete">Delete</button>' : ''}</p><p class="err" id="tl-err"></p></form></details>`;
+  }
+
+  function renderTimeline(box, data) {
+    tl = data.clients;
+    const today = tlToday();
+    const all = tl.flatMap(c => c.entries);
+    if (tlEditing && !all.some(e => e.id === tlEditing)) tlEditing = null;
+    const blank = { client_id: tl.find(c => c.entries.length)?.id || tl[0]?.id, kind: 'work', project_id: null, release_id: null, lane: '', label: '', start_date: today, end_date: '' };
+    const room = Math.floor((box.clientWidth || 1000) - 52 - TL_NAME);
+    const panels = tl.filter(c => c.entries.length).map(c => `<section class="panel tl-panel"><div class="row"><h2 class="grow">${esc(c.name)}</h2><a class="client-link small" href="#/${esc(c.slug)}/home">Open workspace</a></div>${tlChart(c, today, room)}</section>`).join('');
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Timeline</h2><p class="muted small">Every client's schedule. Bars that follow a client phase update themselves: a tick once signed off, the testing window while in UAT. Dashed bars are proposed, not signed. Click any bar or date to change it. Only you see this page.</p></div></div>
+      ${tl.length ? tlForm(all.find(e => e.id === tlEditing) || blank) : ''}${panels || '<p class="empty">Nothing scheduled yet. Add the first entry above.</p>'}`;
+    tlSeen = JSON.stringify(data);
+    if (tl.length) wireTimeline(box);
+  }
+
+  function wireTimeline(box) {
+    const form = box.querySelector('#tl-form'), err = box.querySelector('#tl-err');
+    const editing = tl.flatMap(c => c.entries).find(e => e.id === tlEditing);
+    const fill = (keep = {}) => {
+      const c = tl.find(x => String(x.id) === form.client_id.value);
+      const mark = TL_MARK.includes(form.kind.value), work = form.kind.value === 'work';
+      form.project_id.innerHTML = '<option value="">None (its own row)</option>' + (c ? c.projects.map(p => `<option value="${p.id}"${p.id === keep.project_id ? ' selected' : ''}>${esc(p.name)}</option>`).join('') : '');
+      const project = c?.projects.find(p => String(p.id) === form.project_id.value);
+      form.release_id.innerHTML = '<option value="">None</option>' + (c ? c.releases.filter(r => !project || r.project_id === project.id).map(r => `<option value="${r.id}"${r.id === keep.release_id ? ' selected' : ''}>${esc((c.projects.find(p => p.id === r.project_id)?.name || '') + ' · Phase ' + r.number)}</option>`).join('') : '');
+      form.project_id.disabled = mark;
+      form.release_id.disabled = !work;
+      form.lane.disabled = mark || Boolean(form.project_id.value);
+      form.end_date.disabled = mark;
+    };
+    fill(editing || {});
+    form.client_id.onchange = () => fill();
+    form.kind.onchange = () => fill({ project_id: Number(form.project_id.value) || null, release_id: Number(form.release_id.value) || null });
+    form.project_id.onchange = () => fill({ project_id: Number(form.project_id.value) || null });
+    form.release_id.onchange = () => {
+      const c = tl.find(x => String(x.id) === form.client_id.value), r = c?.releases.find(x => String(x.id) === form.release_id.value);
+      if (r) fill({ project_id: r.project_id, release_id: r.id });
+    };
+    box.querySelector('#tl-panel').addEventListener('toggle', e => { if (!e.target.open) { tlNew = false; if (tlEditing) { tlEditing = null; renderTimeline(box, { clients: tl }); } } else tlNew = true; });
+    box.querySelector('#tl-cancel').onclick = () => { tlEditing = null; tlNew = false; renderTimeline(box, { clients: tl }); };
+    box.querySelector('#tl-delete')?.addEventListener('click', async () => {
+      if (!editing || !confirm(`Delete "${editing.label}" from the timeline?`)) return;
+      try { await api('/timeline/' + editing.id, { method: 'DELETE' }); tlEditing = null; again(); } catch (error) { err.textContent = error.message; }
+    });
+    form.onsubmit = async e => {
+      e.preventDefault();
+      const id = v => v ? Number(v) : null;
+      const payload = { client_id: Number(form.client_id.value), kind: form.kind.value, label: form.label.value, start_date: form.start_date.value,
+        end_date: form.end_date.disabled ? '' : form.end_date.value, project_id: form.project_id.disabled ? null : id(form.project_id.value),
+        release_id: form.release_id.disabled ? null : id(form.release_id.value), lane: form.lane.disabled ? '' : form.lane.value };
+      const button = form.querySelector('button.primary');
+      button.disabled = true;
+      try {
+        if (tlEditing) await api('/timeline/' + tlEditing, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api('/timeline', { method: 'POST', body: JSON.stringify(payload) });
+        tlEditing = null; tlNew = false; again();
+      } catch (error) { button.disabled = false; err.textContent = error.message; }
+    };
+    box.onclick = e => {
+      const t = e.target.closest('[data-tl-edit]');
+      if (!t) return;
+      tlEditing = Number(t.dataset.tlEdit);
+      renderTimeline(box, { clients: tl });
+      box.querySelector('#tl-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+  }
+
+  let tlResize = null;
+  addEventListener('resize', () => {
+    clearTimeout(tlResize);
+    tlResize = setTimeout(() => { if (tl && current.box?.isConnected && viewOf(current.sub).view === 'timeline') renderTimeline(current.box, { clients: tl }); }, 200);
+  });
+  // Reload the timeline every minute while it is on screen, unless the form is open, so sign-offs and other changes show.
+  function tlWatch(box) {
+    clearInterval(tlTimer);
+    tlTimer = setInterval(async () => {
+      if (current.box !== box || viewOf(current.sub).view !== 'timeline' || !box.isConnected) { clearInterval(tlTimer); return; }
+      if (document.hidden || tlEditing || tlNew) return;
+      try {
+        const data = await api('/timeline');
+        if (current.box === box && viewOf(current.sub).view === 'timeline' && !tlEditing && !tlNew && JSON.stringify(data) !== tlSeen) renderTimeline(box, data);
+      } catch { /* the next minute tries again */ }
+    }, 60000);
+  }
+
+  // sub is what follows #/command: '', 'inbox', 'clients', 'care', 'care/triage', 'documents', 'playbook', 'timeline', 'ideas' or
   // 'client/<Salesforce account id>'. The old 'triage' address still opens Triage.
   const viewOf = sub => {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
     if (client) return { view: 'client', id: client[1] };
     if (sub === 'care/triage' || sub === 'triage') return { view: 'triage' };
-    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas', 'playbook'].includes(sub) ? sub : 'today' };
+    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas', 'playbook', 'timeline'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
     current = { box, sub };
     const { view, id } = viewOf(sub);
     box.onclick = null;
+    clearInterval(tlTimer);
     try {
       if (!overview || refresh) await loadOverview(refresh);
       else { syncStatus(overview.lastSync); inboxBadge(overview.inboxCount); }
@@ -865,6 +1037,12 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         if (current.box !== box) return;
         document.title = 'Documents | Command center';
         renderDocuments(box, data);
+      } else if (view === 'timeline') {
+        const data = await api('/timeline');
+        if (current.box !== box) return;
+        document.title = 'Timeline | Command center';
+        renderTimeline(box, data);
+        tlWatch(box);
       } else if (view === 'playbook') {
         const data = await api('/playbook');
         if (current.box !== box) return;
