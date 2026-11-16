@@ -141,6 +141,9 @@ test('after one answer, phase/value/pulse questions stay quiet for 30 days; care
   // An expired ask is never shown.
   sqlite.exec(`UPDATE feedback SET expires_at = datetime('now', '-1 minute') WHERE kind = 'care'`);
   assert.equal(await pendingFor(db, molly, 1), null);
+  // An answer marked starts_quiet = 0 (a late question about an earlier phase) doesn't hold back the next one.
+  sqlite.exec(`UPDATE feedback SET starts_quiet = 0 WHERE kind = 'phase'`);
+  assert.equal((await pendingFor(db, molly, 1)).kind, 'value');
 });
 
 test('the daily run asks about a launch 30 to 45 days old and a quarterly pulse on an active care plan', async () => {
