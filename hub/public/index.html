@@ -385,14 +385,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .tl-track{position:relative}
 .cc .tl-row{position:relative;height:44px;margin:3px 0}
 .cc .tl .tl-bar{position:absolute;top:0;height:44px;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:3px 8px;border:0;border-radius:8px;background:none;text-align:left;font-size:12.5px;line-height:1.25;color:var(--ink);overflow:hidden;z-index:1}
-.cc .tl-fill{position:absolute;top:0;bottom:0;left:0;border:1px solid transparent;border-radius:8px;z-index:-1}
+.cc .tl-fill{position:absolute;top:0;bottom:0;left:0;border:1px solid color-mix(in srgb,var(--tc) 55%,transparent);border-left:4px solid var(--tc);border-radius:8px;background:color-mix(in srgb,var(--tc) 24%,var(--card));z-index:-1}
 .cc .tl-bar span,.cc .tl-bar small{position:relative}
 .cc .tl-bar span,.cc .tl-bar small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cc .tl-bar span{font-weight:600}
 .cc .tl-bar small{font-size:11px;color:var(--muted)}
-.cc .tl-bar.t0 .tl-fill{background:var(--idea-bg)}.cc .tl-bar.t1 .tl-fill{background:var(--nice-bg)}.cc .tl-bar.t2 .tl-fill{background:var(--ok-bg)}.cc .tl-bar.t3 .tl-fill{background:var(--soft)}
-.cc .tl-bar.k-ongoing .tl-fill{opacity:.7}
-.cc .tl-bar.k-proposed .tl-fill{background:var(--card);border:1.5px dashed var(--muted)}
+/* Each row's tone: a solid left edge and a tinted fill mixed from it, so bars stand out in light and dark. */
+.cc .tl-bar.t0{--tc:var(--idea)}.cc .tl-bar.t1{--tc:var(--nice)}.cc .tl-bar.t2{--tc:var(--ok)}.cc .tl-bar.t3{--tc:var(--muted)}
+.cc .tl-bar.k-ongoing .tl-fill{background:color-mix(in srgb,var(--tc) 12%,var(--card))}
+.cc .tl-bar.k-proposed .tl-fill{background:var(--card);border:1.5px dashed var(--tc)}
 .cc .tl .tl-bar.done span{color:var(--ok)}
 .cc .tl-bar:hover .tl-fill{border-color:var(--ink)}
 .cc .tl-bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
