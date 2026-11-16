@@ -174,7 +174,7 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
 <body>
 
 <div class="sketch"><div class="wrap">
-  <p><b>A sketch, not a product.</b> Positive Tribes built this from Outdoor Lab's public website. Every name and number is sample data.</p>
+  <p><b>A sketch, not a product.</b> Updated Nov 16 after our conversation. Every name and number is sample data.</p>
   <p>What does it get wrong? <a href="mailto:eric@positivetribes.org?subject=Lab%20Card%20sketch">Tell Eric</a></p>
 </div></div>
 
@@ -196,6 +196,7 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
     <button role="tab" id="t-family" aria-controls="family" aria-selected="true"><span>1</span>For families</button>
     <button role="tab" id="t-staff" aria-controls="staff" aria-selected="false"><span>2</span>For staff</button>
     <button role="tab" id="t-supporters" aria-controls="supporters" aria-selected="false"><span>3</span><b class="lg" style="font-weight:inherit">The payoff: </b>Supporters</button>
+    <button role="tab" id="t-email" aria-controls="email" aria-selected="false"><span>4</span>Email &amp; giving</button>
   </div>
 </nav>
 
@@ -205,7 +206,7 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
   <section class="view" id="family" role="tabpanel" aria-labelledby="t-family">
     <div class="intro">
       <div><h2>The Rivera family's Lab Card</h2>
-      <p>What a parent sees on their phone: how close their sixth grader is, when Redemption Week is, and a one-tap way to move extra earnings to a younger sibling.</p></div>
+      <p>What a parent sees on their phone, any time of day: how close each child is, when Redemption Week is, and who is shopping for them. No need to email the office to ask.</p></div>
       <span class="pill green">Sample family</span>
     </div>
     <div class="grid g2">
@@ -231,7 +232,8 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
         <div class="linked">
           <div class="row"><div><b>King Soopers Community Rewards</b><span class="small muted">Linked to Outdoor Lab Foundation · 4 shoppers</span></div><span class="pill green">Active</span></div>
           <div class="row"><div><b>Safeway reloadable card</b><span class="small muted">Last reload Jan 18 · $100</span></div><span class="pill green">Active</span></div>
-          <div class="row"><div><b>Invite grandparents</b><span class="small muted">Their groceries can count for Maya too</span></div><button class="btn ghost" data-toast="Invite link copied. Grandma's King Soopers card can now count toward Maya.">Share link</button></div>
+          <div class="row"><div><b>Shopping for Maya and Leo</b><span class="small muted">Mom, Dad, Grandma Rivera, the Lees next door</span></div><span class="pill green">4 supporters</span></div>
+          <div class="row"><div><b>Invite others</b><span class="small muted">Grandparents, aunts, neighbors: their groceries count too</span></div><button class="btn ghost" style="white-space:nowrap" data-toast="Invite link copied. Anyone's King Soopers or Safeway card can now count toward Maya or Leo.">Share link</button></div>
         </div>
       </div>
       <div class="card">
@@ -318,8 +320,11 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
           <div><span>Lab Card total, all years</span><b>$552</b></div>
           <div><span>Kids at Outdoor Lab</span><b>Ana (2024), Maya (this year)</b></div>
           <div><span>Schools</span><b>Aspen Ridge Elementary</b></div>
-          <div><span>Grocery shoppers linked</span><b>4</b></div>
-          <div><span>Direct gifts</span><b>None yet</b></div>
+          <div><span>Supporters linked</span><b>4 (parents, grandma, neighbor)</b></div>
+          <div><span>Direct gifts</span><b>$50, Colorado Gives Day</b></div>
+          <div><span>Volunteering</span><b>Trail day, Jun 2026</b></div>
+          <div><span>Parent nights</span><b>2 attended</b></div>
+          <div><span>Email</span><b>Opens 8 of the last 10</b></div>
           <div><span>Next best ask</span><b>Monthly gift, $15</b></div>
         </div>
         <div class="tl">
@@ -327,6 +332,8 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
           <ul>
             <li>Mar 2024 · Thank-you sent after Ana's week at Mt. Blue Sky</li>
             <li>Apr 2024 · Invited to After Dark</li>
+            <li>Dec 2025 · $50 gift on Colorado Gives Day</li>
+            <li>Jun 2026 · Volunteered at a trail day</li>
             <li>Sep 2026 · Leo enrolled, saving ahead</li>
             <li>Mar 2027 · Thank-you for Maya's week queued</li>
           </ul>
@@ -347,7 +354,46 @@ dialog .act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
       <div class="nums">
         <div><b>1,284</b><span>families who become named supporters (sample)</span></div>
         <div><b>3 per year</b><span>touches per family: thank-you, story, invitation</span></div>
-        <div class="sf"><b>One place</b><span>for donors, grants and Lab Card, in <mark class="sf">Salesforce</mark>, instead of Bloomerang plus spreadsheets</span></div>
+        <div class="sf"><b>One place</b><span>for donors, grants, Lab Card and email, in <mark class="sf">Salesforce</mark>, instead of Bloomerang, TrackVia and spreadsheets</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Email and giving view -->
+  <section class="view" id="email" role="tabpanel" aria-labelledby="t-email" hidden>
+    <div class="intro">
+      <div><h2>Email that runs itself</h2>
+      <p>Today the quarterly Lab Card emails go out by hand, one per child. Here each household gets one email covering all their kids, on schedule, and staff still send newsletters to the whole list.</p></div>
+      <span class="pill lake key">Blue = Salesforce</span>
+    </div>
+    <div class="flow" style="margin-bottom:16px">
+      <div class="step sf"><b>Week 1: Time to redeem</b><p>One email per household, covering every child. Sent automatically by <mark class="sf">Salesforce</mark>.</p></div>
+      <div class="step sf"><b>Day 10: Redemption closes Friday</b><p>Only to households that haven't redeemed yet.</p></div>
+      <div class="step sf"><b>Week 3: Your family's totals</b><p>Maya and Leo in one email to the Riveras, not two.</p></div>
+      <div class="step give"><b>Then: an invitation</b><p>Colorado Gives Day, a trail day, or After Dark.</p></div>
+    </div>
+    <div class="grid g2">
+      <div class="email sf" style="align-self:start">
+        <div class="meta">Quarterly totals email, sent automatically from <mark class="sf">Salesforce</mark></div>
+        <p><b>Subject: Maya and Leo's Lab Card totals</b></p>
+        <p style="margin-top:8px">Hi Rivera family,</p>
+        <p style="margin-top:8px">This quarter your four shoppers earned $25.35. Maya is at $212 of $300 for Windy Peak, and Leo has $40 saved ahead.</p>
+        <p style="margin-top:8px">See it any time, or invite another shopper, on your Lab Card page.</p>
+        <p style="margin-top:8px">Thank you,<br>Outdoor Lab Foundation</p>
+      </div>
+      <div class="grid" style="gap:16px">
+        <div class="card">
+          <h3>Newsletter</h3>
+          <p class="small muted">Send to the same list you reach today, picked by anything on the record:</p>
+          <p style="margin:10px 0;display:flex;gap:6px;flex-wrap:wrap"><span class="pill green">Lab Card families</span><span class="pill green">$1,000+ donors</span><span class="pill green">Monthly donors</span><span class="pill green">Volunteers</span></p>
+          <p class="small">Sent from your own outdoorlabfoundation.org address, with the domain records (SPF, DKIM, DMARC) that tell Gmail and Outlook it's really you. Open rates are reported on every send.</p>
+          <p class="small muted" style="margin-top:8px">Which tool sends it, <mark class="sf">Salesforce</mark>'s own email or Mailchimp synced to it, is something we'll try in the pilot. Any added cost is shown up front.</p>
+        </div>
+        <div class="card">
+          <h3>Giving page</h3>
+          <p style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap"><span class="pill sun">Card</span><span class="pill sun">Bank (ACH)</span><span class="pill sun">PayPal</span><span class="pill sun">Apple Pay</span><span class="pill sun">Google Pay</span><span class="pill sun">Donor-advised fund</span></p>
+          <p class="small">The same ways to give as today, processed by Stripe. Each gift lands on the household record in <mark class="sf">Salesforce</mark> and gets its thank-you and receipt automatically.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -384,7 +430,7 @@ function show(id) {
 }
 tabs.forEach(t => t.addEventListener('click', () => show(t.getAttribute('aria-controls'))));
 const start = location.hash.slice(1);
-if (['family', 'staff', 'supporters'].includes(start)) show(start);
+if (['family', 'staff', 'supporters', 'email'].includes(start)) show(start);
 
 // Family balances
 let maya = 212, leo = 40, pick = 25;
