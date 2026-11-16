@@ -106,7 +106,7 @@ export async function createScheduledAsks(db, today) {
 export async function pendingFor(db, user, clientId) {
   if (!user || user.role === 'pt' || user.client_id !== clientId) return null;
   const quiet = await db.prepare(
-    `SELECT 1 FROM feedback WHERE user_id = ? AND kind IN ${QUIET_KINDS} AND answered_at > datetime('now', '-${QUIET_DAYS} days')`
+    `SELECT 1 FROM feedback WHERE user_id = ? AND kind IN ${QUIET_KINDS} AND starts_quiet = 1 AND answered_at > datetime('now', '-${QUIET_DAYS} days')`
   ).bind(user.id).first();
   const row = await db.prepare(
     `SELECT id, kind, label, scale FROM feedback
