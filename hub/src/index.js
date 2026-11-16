@@ -13,6 +13,7 @@ import {
 import { InputError, PENDING, PENDING_STATUSES, clip, logEvent, spendRow, applyTriage, askQuestion } from './triage.js';
 import { scoreManualTriage, careAnswer, runPatch } from './patch.js';
 import { estimatesFor, donatedTimeFor, decideEstimate, canDecideEstimate } from './estimates.js';
+import { askPhase, askCare, pendingFor, answerAsk, runFeedback } from './feedback.js';
 export { windowEnd };
 
 // Credit routes take JSON only (the Origin check for every client write is in fetch below).
@@ -312,6 +313,8 @@ async function careRoute({ request, db, user, client, rawId, action, method }) {
       closeItem,
       event('shipped', `${TYPE_NAMES[care.type] || 'Request'} is live`)
     ]);
+    // One thumbs up/down for whoever asked for it (src/feedback.js). Never blocks the ship.
+    await askCare(db, client.id, item).catch(error => console.error('feedback_ask_failed', error.message));
     return done();
   }
   if (action === 'cancel') {
@@ -348,6 +351,9 @@ export default {
     // Phases whose testing window ended with no problems get a Salesforce Task to confirm and invoice (src/phasetask.js).
     ctx.waitUntil(checkTestingWindows(env, env.DB, localDay(Date.now())).then(r => console.log('testing_windows', JSON.stringify(r)))
       .catch(error => console.error('testing_windows_failed', error.message)));
+    // Client feedback: value and quarterly asks, plus a retry for answers whose Salesforce Tasks failed (src/feedback.js).
+    ctx.waitUntil(runFeedback(env, env.DB, localDay(Date.now())).then(r => console.log('feedback_run', JSON.stringify(r)))
+      .catch(error => console.error('feedback_run_failed', error.message)));
     ctx.waitUntil(runPatch(env, 'cron').then(r => console.log('patch_run', r.ran ? `checked ${r.checked}, failed ${r.failed}` : r.reason))
       .catch(error => console.error('patch_run_failed', error.message)));
   },
@@ -506,12 +512,26 @@ export default {
         return json({ ok: true, ...result, items: await listItems(db, client.id, user) });
       }
 
-      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications|status|care)(?:\/(\d+))?(?:\/(move|signoff|triage|answer|confirm|decline|ship|cancel))?$/);
+      const match = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/(projects|items|releases|people|notifications|status|care|feedback)(?:\/(\d+))?(?:\/(move|signoff|triage|answer|confirm|decline|ship|cancel))?$/);
       if (!match) return json({ error: 'Not found.' }, 404);
       const [, slug, resource, rawId, action] = match;
       const client = await scope(db, user, slug);
 
       if (resource === 'care') return await careRoute({ request, db, user, client, rawId, action, method });
+
+      // How it went: the one question this person has waiting (src/feedback.js). Positive Tribes never answers; with
+      // ?as=<email> it sees a client person's question read-only, for "Preview as".
+      if (resource === 'feedback' && !rawId && !action && method === 'GET') {
+        if (user.role !== 'pt') return json({ ask: await pendingFor(db, user, client.id) });
+        const as = url.searchParams.get('as');
+        const person = as && await db.prepare('SELECT id, email, name, role, client_id FROM users WHERE email = ? AND client_id = ?').bind(as, client.id).first();
+        return json({ ask: person ? await pendingFor(db, person, client.id) : null });
+      }
+      if (resource === 'feedback' && rawId && !action && method === 'POST') {
+        if (!isJson(request)) throw new InputError('Send JSON.', 415);
+        return json(await answerAsk(env, db, url.hostname, user, client, rawId, await body(request)));
+      }
+      if (resource === 'feedback') return json({ error: 'Not found.' }, 404);
 
       // The client's people, for Positive Tribes' "Preview as" menu. Clients never see this list.
       if (resource === 'people' && !rawId && method === 'GET') {
@@ -575,6 +595,8 @@ export default {
         ]);
         // A reminder in Salesforce to send the acceptance invoice (src/phasetask.js). Never blocks the sign-off.
         await pushPhaseTask(env, db, url.hostname, release.id, 'signed_off', localDay(Date.now()));
+        // "How did it go?" for the director and whoever signed off (src/feedback.js). Never blocks the sign-off.
+        await askPhase(db, client.id, release.id, user.role === 'pt' ? null : user.id).catch(error => console.error('feedback_ask_failed', error.message));
         return json({ ok: true, releases: await listReleases(db, client.id) });
       }
       if (resource !== 'items') return json({ error: 'Not found.' }, 404);
