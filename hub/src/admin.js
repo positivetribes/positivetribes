@@ -14,6 +14,7 @@ import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
 import { webAdmin, latestWebDigest } from './web.js';
 import { timelineAdmin } from './timeline.js';
 import { feedbackOverview } from './feedback.js';
+import { emailFilingOverview } from './emailfix.js';
 import { PLAYBOOK } from './playbook-data.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
@@ -802,7 +803,9 @@ export async function handleAdmin(request, env, url, who) {
       const answers = inbox.items.filter(i => i.answered).map(i => ({ backlog: i.backlog, client: i.client, title: i.title, url: i.url, at: i.at, by: i.answered.by, text: i.answered.text, eventIds: i.eventIds }));
       // Client feedback (src/feedback.js): the last 90 days of answers and the 30-day summary. A broken read never hides Today.
       const feedback = env.DB ? await feedbackOverview(env.DB).catch(error => { console.error('admin_feedback_failed', error.message); return null; }) : null;
-      return json({ ...view, testing, needsReply, estimates, donated, web, answers, feedback, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
+      // Email filing check (src/emailfix.js): the latest nightly run and what it moved this week. A broken read never hides Today.
+      const emailFiling = await emailFilingOverview(db).catch(error => { console.error('admin_email_filing_failed', error.message); return null; });
+      return json({ ...view, testing, needsReply, estimates, donated, web, answers, feedback, emailFiling, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });

@@ -99,6 +99,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     if (data.salesforce === 'error') html += '<div class="banner">Salesforce could not be reached, so only your notes, steps and synced activity are shown. Reload the page in a minute.</div>';
     if (data.salesforce === 'off') html += '<div class="banner">Salesforce is not connected on this deployment, so no clients are listed.</div>';
     if (data.lastSync && Date.now() - Date.parse(data.lastSync.ran_at) > 36 * 3600e3) html += '<div class="banner">The daily activity sync has not run in over 36 hours. Check the Claude routine.</div>';
+    const ef = data.emailFiling?.latest;
+    if (ef && ef.error) html += '<div class="banner">The nightly email filing check failed: ' + esc(ef.error) + '. Emails Gmail filed on the wrong client are not being moved.</div>';
+    else if (ef && Date.now() - Date.parse(ef.ran_at) > 36 * 3600e3) html += '<div class="banner">The nightly email filing check has not run in over 36 hours. Check the hub Worker\'s cron logs.</div>';
     return html;
   }
 
@@ -227,6 +230,20 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       ${f.recent.length ? `<ul class="reply-list">${f.recent.slice(0, 20).map(row).join('')}</ul>` : '<p class="muted small">No answers yet.</p>'}
       <p class="muted small">Asked in the hub after a sign-off, a shipped care request, 30 days after launch, and quarterly on a care plan. Each answer is a Salesforce Task; a low one adds a follow-up.</p></details>` };
   };
+  // Email filing check (src/emailfix.js): one folded line listing the emails moved off another client's record this week.
+  // Rust when a move failed. Quiet (hidden) when nothing moved.
+  const emailFilingPart = data => {
+    const f = data.emailFiling;
+    if (!f || !f.moves.length) return { body: '', late: false };
+    const failed = f.moves.filter(m => !m.ok).length, moved = f.moves.length - failed;
+    const when = d => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const row = m => `<li class="${m.ok ? '' : 'late'}"><span class="what">${esc(m.subject || 'Email')}</span>
+      <span class="meta">${esc(m.contact)} · ${esc(m.from)} → ${m.ok ? '' : '<strong>failed:</strong> '}${esc(m.to)} · ${esc(when(m.at))}</span><span class="meta muted">${m.ok ? '' : esc(m.error || '')}</span></li>`;
+    const parts = [moved ? moved + (moved === 1 ? ' email' : ' emails') + ' moved to the right client' : '', failed ? failed + ' could not be moved' : ''].filter(Boolean);
+    return { late: failed > 0, body: `<details class="est-group${failed ? ' late' : ''}"><summary><span class="who">Email filing</span>
+      <span class="meta">${esc(parts.join(' · '))}</span></summary><ul class="reply-list">${f.moves.slice(0, 30).map(row).join('')}</ul>
+      <p class="muted small">Each night the hub moves Gmail-logged emails filed on another client's record to the contact's own Opportunity (or Account). Last 7 days.</p></details>` };
+  };
   // Client phases in testing, one row each. Late only once the window has passed.
   const countdownRows = data => {
     const rows = (data.testing || []).map(r => {
@@ -306,7 +323,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   function renderToday(box, data) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
-    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data), fb = feedbackPart(data);
+    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data), fb = feedbackPart(data), ef = emailFilingPart(data);
     const now = nowList(data), inNow = now[0]?.type === 'reply' ? now[0].id : '';
     const group = label => `<h3 class="group-label">${esc(label)}</h3>`;
     const hour = new Date().getHours();
@@ -318,8 +335,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { tick: doneControl })}</section>
       <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${shortList(data.recent)}</section>
     </div>
-    ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late || fb.late ? ' late' : ''}" aria-label="This week">
-      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}${fb.body}</section>`;
+    ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late || fb.late || ef.late ? ' late' : ''}" aria-label="This week">
+      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}${fb.body}${ef.body}</section>`;
     wireNow(box);
     box.onclick = async e => {
       const t = e.target.closest('[data-today-done]');
