@@ -7,6 +7,11 @@ export const PLAYBOOK = {
       "description": "Build and send a Positive Tribes intro packet (personal cover + one-pager + showcase cases, one PDF) for a new prospect. Use when Eric says /intro-package <client>, asks for an intro package or packet, or is about to send a first or follow-up email introducing Positive Tribes to a prospect."
     },
     {
+      "name": "log-sent",
+      "args": "<client>",
+      "description": "Log an email Eric just sent to a client or prospect. Checks the Task Gmail logged in Salesforce is on the right record and moves it if not, closes the Task the email completes, adds a dated follow-up, records attachments in the hub and Drive, and updates the client's notes. Use when Eric says /log-sent, \"sent\", \"email…"
+    },
+    {
       "name": "wrapup",
       "args": "",
       "description": "Run before /clear or when switching tasks. Checks the session for unlogged Salesforce, hub, document and memory updates, applies them, and says whether it is safe to clear."
