@@ -684,3 +684,16 @@ test('the playbook route lists commands and kits for Positive Tribes only', asyn
   // The sync routine's service token cannot read it.
   assert.equal((await call(db, 'GET', '/api/admin/playbook', undefined, { who: ROUTINE })).status, 403);
 });
+
+test('a Task finished before its due date leaves Coming up and shows on the day it was done', () => {
+  const due = '2026-11-16', doneAt = '2026-11-15T13:29:46.000+0000';
+  const tasks = [
+    { Id: '00TD1', Subject: 'Send the Phase 2 invoice', ActivityDate: due, CreatedDate: '2026-11-15T12:00:00.000+0000', CompletedDateTime: doneAt, IsClosed: true, AccountId: UEP },
+    { Id: '00TD2', Subject: 'Still to do', ActivityDate: due, CreatedDate: '2026-11-15T12:00:00.000+0000', IsClosed: false, AccountId: UEP }
+  ];
+  const view = buildClient(SF_ENV, { account: sf.accounts[0], tasks, events: [], cases: [], contacts: [], history: [] },
+    { meta: null, steps: [], notes: [], activity: [] }, '2026-11-15');
+  assert.deepEqual(view.future.filter(i => i.type === 'task').map(i => i.title), ['Still to do']);
+  const done = view.past.find(i => i.title === 'Send the Phase 2 invoice');
+  assert.equal(done.day, '2026-11-15');
+});

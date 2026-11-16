@@ -126,7 +126,7 @@ async function salesforceOverview(env, refresh) {
   const auth = await salesforce(env);
   const [accounts, tasks, events, cases, leads] = await Promise.all([
     records(auth, 'SELECT Id, Name, Type, Website, (SELECT Id, Name, StageName, CloseDate, NextStep, IsClosed, IsWon FROM Opportunities ORDER BY CloseDate) FROM Account WHERE IsPersonAccount = false AND Name != ' + quote(OWN_ACCOUNT) + ' ORDER BY Name LIMIT 200'),
-    records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId, OwnerId, Owner.Name, Who.Name FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
+    records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, CompletedDateTime, IsClosed, AccountId, OwnerId, Owner.Name, Who.Name FROM Task WHERE AccountId != null AND (IsClosed = false OR CreatedDate = LAST_N_DAYS:60) ORDER BY CreatedDate DESC LIMIT 400'),
     records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId != null AND IsChild = false AND (ActivityDate = LAST_N_DAYS:60 OR ActivityDate = NEXT_N_DAYS:30) ORDER BY ActivityDate LIMIT 300'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, AccountId FROM Case WHERE IsClosed = false ORDER BY CreatedDate DESC LIMIT 100'),
     records(auth, "SELECT Id, Name, Company, Status, Rating, LeadSource, CreatedDate, LastActivityDate FROM Lead WHERE IsConverted = false AND (Rating = null OR Rating != 'Cold') ORDER BY CreatedDate DESC LIMIT 50")
@@ -140,7 +140,7 @@ async function salesforceClient(env, accountId) {
   const id = quote(accountId);
   const [accounts, tasks, events, cases, contacts, history] = await Promise.all([
     records(auth, 'SELECT Id, Name, Type, Website, Description, (SELECT Id, Name, StageName, CloseDate, NextStep, IsClosed, IsWon FROM Opportunities ORDER BY CloseDate) FROM Account WHERE Id = ' + id),
-    records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, IsClosed, AccountId, OwnerId, Owner.Name, Who.Name FROM Task WHERE AccountId = ' + id + ' ORDER BY CreatedDate DESC LIMIT 300'),
+    records(auth, 'SELECT Id, Subject, ActivityDate, CreatedDate, CompletedDateTime, IsClosed, AccountId, OwnerId, Owner.Name, Who.Name FROM Task WHERE AccountId = ' + id + ' ORDER BY CreatedDate DESC LIMIT 300'),
     records(auth, 'SELECT Id, Subject, StartDateTime, IsAllDayEvent, ActivityDate, AccountId FROM Event WHERE AccountId = ' + id + ' AND IsChild = false ORDER BY ActivityDate DESC LIMIT 200'),
     records(auth, 'SELECT Id, CaseNumber, Subject, Status, Priority, CreatedDate, ClosedDate, IsClosed, AccountId FROM Case WHERE AccountId = ' + id + ' ORDER BY CreatedDate DESC LIMIT 100'),
     records(auth, 'SELECT Id, Name, Title, Email, Phone FROM Contact WHERE AccountId = ' + id + ' ORDER BY Name LIMIT 100'),
@@ -167,7 +167,8 @@ function salesforceItems(env, { tasks = [], events = [], cases = [], history = [
   for (const t of tasks) {
     // A Task that is also a next step shows once, as the step.
     if (linked.has(t.Id)) continue;
-    const at = t.IsClosed ? (t.ActivityDate || t.CreatedDate) : (t.ActivityDate || null);
+    // A finished Task sits on the day it was done, not its due date, so one finished early never looks upcoming.
+    const at = t.IsClosed ? (t.CompletedDateTime || t.ActivityDate || t.CreatedDate) : (t.ActivityDate || null);
     if (!at) continue;
     const email = /^email:/i.test(t.Subject || '');
     const who = t.Who?.Name || '';
@@ -319,7 +320,7 @@ export function buildClient(env, sf, local, today) {
   const account = sf.account;
   const items = mergeMeetings([...salesforceItems(env, { tasks: sf.tasks, events: sf.events, cases: sf.cases, history: sf.history, accounts: [account] }, linkedTasks(local.steps)), ...localItems(env, local)])
     .map(i => ({ ...i, day: localDay(i.at) }))
-    .map(i => ({ ...i, future: i.day > today || (i.day === today && i.open !== false && !['note', 'email', 'stage', 'case'].includes(i.type)) }))
+    .map(i => ({ ...i, future: i.open !== false && (i.day > today || (i.day === today && !['note', 'email', 'stage', 'case'].includes(i.type))) }))
     .sort((x, y) => y.at.localeCompare(x.at));
   return {
     today,
