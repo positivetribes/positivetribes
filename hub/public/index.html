@@ -127,6 +127,13 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 /* When nothing waits on the client, and when every system is up, each is one quiet line. */
 .next.caught{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding-top:14px;padding-bottom:14px}
 .next.caught p{margin:0}
+.ask{padding-top:14px;padding-bottom:14px}
+.ask .q{margin:0 0 10px}
+.ask .scale{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ask .scale .btn{min-width:44px}
+.ask .ends{margin:6px 0 0}
+.ask .later{margin-left:auto}
+.ask textarea{width:100%;min-height:72px;margin:6px 0 8px;font:inherit}
 .status-line>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
 .status-line>summary::-webkit-details-marker{display:none}
 .status-line>summary:focus:not(:focus-visible){outline:none}
@@ -621,7 +628,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 
   async function loadClient(slug) {
     const [p, i, d, st, care] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items'), api('/ideas').catch(() => ({ ideas: [] })), api('/c/' + slug + '/status').catch(() => null), api('/c/' + slug + '/care').catch(() => null)]);
-    Object.assign(state, { care, status: st, slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], timeline: p.timeline || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
+    // How it went: the one quick question waiting for this person, if any (src/feedback.js). Never blocks the page.
+    const ask = await api('/c/' + slug + '/feedback').then(r => r.ask).catch(() => null);
+    Object.assign(state, { ask, askStep: null, askScore: null, care, status: st, slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], timeline: p.timeline || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
     if (state.me.user.role === 'pt') { try { state.people = (await api('/c/' + slug + '/people')).people; } catch {} }
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
@@ -923,7 +932,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             ? h('p', {}, h('b', {}, 'Anything else?'), h('span', { class: 'muted' }, ' Questions and change ideas go here, apart from testing.'))
             : h('p', {}, h('b', {}, 'You’re all caught up.'), h('span', { class: 'muted' }, ' We’ll tell you here, and by email, when we need something.')),
           h('a', { class: 'btn ghost small', href: link('backlog') }, 'Suggest a change or ask a question'));
-    return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero, carePlan(),
+    return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero, askCard(), carePlan(),
       // Projects with several client phases come first and span the row; the rest share the next row evenly.
       ...[true, false].map(wide => { const group = state.projects.filter(p => (state.releases.filter(r => r.project_id === p.id).length > 1) === wide); return group.length > 0 && h('div', { class: 'grid' }, group.map(p => {
         // A project without a prototype (such as a data migration) skips that step in its progress line.
@@ -1309,6 +1318,47 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const gifted = e && e.donated && ['offered', 'approved_now'].concat(ptNow ? ['draft'] : []).includes(e.status);
     if (gifted && nodes.length) nodes.unshift(giftBadge(e.status === 'approved_now' ? 'Positive Tribes donated this change.' : 'Positive Tribes offers this change at no charge.'));
     return nodes.length ? h('div', { class: 'estimate stack' + (gifted ? ' gifted' : '') }, nodes) : null;
+  }
+
+  // ---- How it went: one quick question at a time, never a pop-up (src/feedback.js) ----
+  // One tap sends the rating; a comment box then opens, optional. "Not now" hides it. Preview as shows it read-only.
+  function askCard() {
+    if (state.askStep === 'thanks') return h('div', { class: 'card next caught' }, h('p', {}, h('b', {}, 'Thank you.'), h('span', { class: 'muted' }, ' It helps us do better work for you.')));
+    const a = state.ask;
+    if (!a) return null;
+    const off = state.preview ? { disabled: true, title: 'Preview only' } : {};
+    const send = async payload => {
+      showError('');
+      try { await api(base() + '/feedback/' + a.id, post(payload)); return true; } catch (e) { showError(e.message); return false; }
+    };
+    const finish = () => { state.ask = null; state.askStep = 'thanks'; render(); };
+    if (state.askStep === 'comment') {
+      const low = state.askScore != null && state.askScore <= a.low;
+      const box = h('textarea', { id: 'ask-comment', maxlength: '1000', 'aria-label': 'Your comment (optional)' });
+      return h('div', { class: 'card ask' },
+        h('p', { class: 'q' }, h('b', {}, low ? 'Sorry it fell short. What would have made it better?' : 'Thanks! Anything we could do better?'), h('span', { class: 'muted' }, ' Optional. Only Positive Tribes sees this.')),
+        box,
+        h('div', { class: 'scale' },
+          h('button', { class: 'btn small', type: 'button', onclick: async () => { const text = box.value.trim(); if (!text || await send({ comment: text })) finish(); } }, 'Send'),
+          h('button', { class: 'btn ghost small', type: 'button', onclick: finish }, 'Skip')));
+    }
+    const choose = score => async () => {
+      if (await send({ score })) { state.askScore = score; state.askStep = 'comment'; render(); const box = document.getElementById('ask-comment'); if (box) box.focus(); }
+    };
+    const btn = (score, label, aria) => h('button', { class: 'btn ghost small', type: 'button', 'aria-label': aria || label, onclick: choose(score), ...off }, label);
+    const range = (from, to) => Array.from({ length: to - from + 1 }, (_, n) => from + n);
+    const scales = {
+      five: () => [range(1, 5).map(n => btn(n, String(n), n + ' out of 5'))],
+      nps: () => [range(0, 10).map(n => btn(n, String(n), n + ' out of 10'))],
+      thumbs: () => [btn(1, 'Yes'), btn(0, 'Not quite')],
+      value: () => [btn(3, 'Yes, a lot'), btn(2, 'Some'), btn(1, 'Not yet')]
+    };
+    const ends = { five: ['Not well', 'Very well'], nps: ['Not likely', 'Very likely'] }[a.scale];
+    return h('div', { class: 'card ask', 'aria-label': 'Quick question' },
+      h('p', { class: 'q' }, h('span', { class: 'meta' }, 'Quick question \u00b7 '), h('b', {}, a.question)),
+      h('div', { class: 'scale' }, ...scales[a.scale](),
+        h('button', { class: 'btn ghost small later', type: 'button', ...off, onclick: async () => { if (await send({ dismiss: true })) { state.ask = null; render(); } } }, 'Not now')),
+      ends && h('p', { class: 'meta ends' }, (a.scale === 'nps' ? '0' : '1') + ' = ' + ends[0].toLowerCase() + ', ' + (a.scale === 'nps' ? '10' : '5') + ' = ' + ends[1].toLowerCase()));
   }
 
   // ---- System status: live up/down for the client's apps, from the status Worker ----
@@ -2112,9 +2162,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   });
   function setPreview(email) {
     state.preview = state.people.find(u => u.email === email) || null;
-    Object.assign(state, { editing: null, confirming: null, signing: null, ideaEditing: null });
+    Object.assign(state, { editing: null, confirming: null, signing: null, ideaEditing: null, askStep: null });
     showError('');
     render();
+    // The person's own quick question, read-only; Positive Tribes' own view has none.
+    api(base() + '/feedback' + (state.preview ? '?as=' + encodeURIComponent(state.preview.email) : '')).then(r => { state.ask = r.ask; render(); }).catch(() => {});
     bell.refresh(true);
   }
   $('preview').addEventListener('change', e => setPreview(e.target.value));

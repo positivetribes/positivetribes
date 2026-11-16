@@ -212,6 +212,21 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       ${d.pages ? `<p class="label"><strong>Pages that show interest</strong></p><ul class="reply-list">${d.pages.map(p => vsRow(p.path, p)).join('')}</ul>` : ''}
       ${trend}<p class="muted small">Leads and gifts from Salesforce; visits from Cloudflare Web Analytics (sampled, so round numbers are estimates; our own visits are included). Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details>` };
   };
+  // Client feedback (src/feedback.js): one folded line, opening to the latest answers. Rust while a low score is in the last 30 days.
+  const feedbackPart = data => {
+    const f = data.feedback;
+    if (!f || (!f.recent.length && !f.waiting)) return { body: '', late: false };
+    const parts = [f.answered30 + (f.answered30 === 1 ? ' answer' : ' answers') + ' in 30 days', f.avgFive30 != null ? 'phases avg ' + f.avgFive30 + '/5' : '',
+      f.low30 ? f.low30 + ' low' : '', f.waiting ? f.waiting + ' waiting for an answer' : ''].filter(Boolean);
+    const when = d => new Date(String(d).replace(' ', 'T') + 'Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const row = r => `<li class="${r.low ? 'late' : ''}"><a href="#/${esc(r.workspace)}/home"><span class="who">${esc(r.client)}</span> <span class="what">${esc(r.label)}</span></a>
+      <span class="meta">${r.low ? '<strong>' + esc(r.words) + '</strong>' : esc(r.words)} · ${esc(r.person || '')} · ${esc(when(r.answered_at))}${r.sf_error ? ' · <strong>Salesforce Task failed</strong>' : ''}</span>
+      <span class="meta muted">${r.comment ? '“' + esc(r.comment) + '”' : ''}</span></li>`;
+    return { late: f.low30 > 0, body: `<details class="est-group${f.low30 ? ' late' : ''}"><summary><span class="who">Client feedback</span>
+      <span class="meta">${esc(parts.join(' · '))}</span></summary>
+      ${f.recent.length ? `<ul class="reply-list">${f.recent.slice(0, 20).map(row).join('')}</ul>` : '<p class="muted small">No answers yet.</p>'}
+      <p class="muted small">Asked in the hub after a sign-off, a shipped care request, 30 days after launch, and quarterly on a care plan. Each answer is a Salesforce Task; a low one adds a follow-up.</p></details>` };
+  };
   // Client phases in testing, one row each. Late only once the window has passed.
   const countdownRows = data => {
     const rows = (data.testing || []).map(r => {
@@ -291,7 +306,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   function renderToday(box, data) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
-    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data);
+    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data), fb = feedbackPart(data);
     const now = nowList(data), inNow = now[0]?.type === 'reply' ? now[0].id : '';
     const group = label => `<h3 class="group-label">${esc(label)}</h3>`;
     const hour = new Date().getHours();
@@ -303,8 +318,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { tick: doneControl })}</section>
       <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${shortList(data.recent)}</section>
     </div>
-    ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late ? ' late' : ''}" aria-label="This week">
-      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}</section>`;
+    ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late || fb.late ? ' late' : ''}" aria-label="This week">
+      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}${fb.body}</section>`;
     wireNow(box);
     box.onclick = async e => {
       const t = e.target.closest('[data-today-done]');
