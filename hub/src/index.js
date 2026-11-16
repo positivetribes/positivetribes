@@ -1,5 +1,6 @@
 // Tribe Hub API: one Worker for every client. Sign-in is Cloudflare Access (emailed one-time PIN); the email is
 // mapped to a users row, which decides which client the person may see. Tenant checks happen in one place (scope).
+import { clientTimeline } from './timeline.js';
 import { accessIdentity } from './access.js';
 import { handleAdmin, localDay } from './admin.js';
 import { runWebDigest } from './web.js';
@@ -565,7 +566,9 @@ export default {
           client: { slug: client.slug, name: client.name, accent: client.accent, status: client.status, go_live_date: client.go_live_date, salesforce_url: safeSalesforceUrl(client.salesforce_url), logo: /^\/logos\/[a-z0-9-]+\.(png|svg|webp)$/.test(client.logo || '') ? client.logo : '' },
           projects: results,
           releases: await listReleases(db, client.id),
-          documents: await listDocuments(db, client.id, user.role === 'pt')
+          documents: await listDocuments(db, client.id, user.role === 'pt'),
+          // Only entries marked for the client, for everyone here (Positive Tribes sees the rest in the command center).
+          timeline: await clientTimeline(db, client.id)
         });
       }
 

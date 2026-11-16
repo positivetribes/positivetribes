@@ -1,7 +1,8 @@
 // The schedule (command center Timeline tab, #/command/timeline): every client's projects, phases, proposed work and key
 // dates on one month axis. Rows live in timeline_entries (hub-db, migration 0033). A bar linked to a client phase
 // (release_id) takes that phase's live stage, so a sign-off or a testing start shows here without editing the bar.
-// Positive Tribes only: these routes sit behind handleAdmin's door, and nothing here is shown to a client yet.
+// The admin routes sit behind handleAdmin's door (Positive Tribes only). A client sees only the entries Positive Tribes
+// marked client_visible, in its own workspace's Timeline tab (clientTimeline, read through the projects route).
 
 import { InputError } from './triage.js';
 import { windowEnd } from './dates.js';
@@ -35,7 +36,9 @@ export async function entryInput(db, input, text, clientId) {
   let end = MARKS.includes(kind) ? '' : dateOf(input.end_date, 'End date');
   if (end && end < start) throw new InputError('The end date is before the start date.');
   if (end === start) end = '';
-  if (MARKS.includes(kind)) return { kind, label, start, end, project: null, release: null, lane: '' };
+  if (input.client_visible !== undefined && typeof input.client_visible !== 'boolean') throw new InputError('Choose whether the client sees this.');
+  const shown = input.client_visible === true ? 1 : 0;
+  if (MARKS.includes(kind)) return { kind, label, start, end, project: null, release: null, lane: '', shown };
 
   let project = idOf(input.project_id, 'Project');
   const release = idOf(input.release_id, 'Phase');
@@ -50,7 +53,16 @@ export async function entryInput(db, input, text, clientId) {
   }
   const lane = project ? '' : text(input.lane, 60, { label: 'Row name' });
   if (!project && !lane) throw new InputError('Choose a project or name a row for it.');
-  return { kind, label, start, end, project, release, lane };
+  return { kind, label, start, end, project, release, lane, shown };
+}
+
+// What one client may see: only its own entries marked client_visible, and only the columns the chart needs.
+export async function clientTimeline(db, clientId) {
+  const { results } = await db.prepare(
+    `SELECT id, project_id, release_id, lane, label, start_date, end_date, kind FROM timeline_entries
+     WHERE client_id = ? AND client_visible = 1 ORDER BY start_date, id`
+  ).bind(clientId).all();
+  return results;
 }
 
 export async function loadTimeline(db) {
@@ -58,7 +70,7 @@ export async function loadTimeline(db) {
     db.prepare('SELECT id, slug, name FROM clients ORDER BY id').all(),
     db.prepare('SELECT id, client_id, name, phase, position FROM projects ORDER BY client_id, position, id').all(),
     db.prepare('SELECT id, client_id, project_id, number, name, stage, uat_started, uat_days, uat_day_type FROM releases ORDER BY project_id, number').all(),
-    db.prepare('SELECT id, client_id, project_id, release_id, lane, label, start_date, end_date, kind, updated_at FROM timeline_entries ORDER BY client_id, start_date, id').all()
+    db.prepare('SELECT id, client_id, project_id, release_id, lane, label, start_date, end_date, kind, client_visible, updated_at FROM timeline_entries ORDER BY client_id, start_date, id').all()
   ]);
   const phases = releases.results.map(r => ({
     id: r.id, client_id: r.client_id, project_id: r.project_id, number: r.number, name: r.name, stage: r.stage,
@@ -68,7 +80,7 @@ export async function loadTimeline(db) {
     ...c,
     projects: projects.results.filter(p => p.client_id === c.id),
     releases: phases.filter(r => r.client_id === c.id),
-    entries: entries.results.filter(e => e.client_id === c.id)
+    entries: entries.results.filter(e => e.client_id === c.id).map(e => ({ ...e, client_visible: Boolean(e.client_visible) }))
   }));
 }
 
@@ -85,8 +97,8 @@ export async function timelineAdmin({ request, env, route, path, method, json, b
     const clientId = idOf(input.client_id, 'Client');
     if (!clientId || !await db.prepare('SELECT 1 FROM clients WHERE id = ?').bind(clientId).first()) throw new InputError('Choose a client.');
     const e = await entryInput(db, input, text, clientId);
-    const done = await db.prepare('INSERT INTO timeline_entries (client_id, project_id, release_id, lane, label, start_date, end_date, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(clientId, e.project, e.release, e.lane, e.label, e.start, e.end, e.kind).run();
+    const done = await db.prepare('INSERT INTO timeline_entries (client_id, project_id, release_id, lane, label, start_date, end_date, kind, client_visible) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(clientId, e.project, e.release, e.lane, e.label, e.start, e.end, e.kind, e.shown).run();
     return json({ ok: true, id: done.meta.last_row_id });
   }
 
@@ -98,9 +110,12 @@ export async function timelineAdmin({ request, env, route, path, method, json, b
       await db.prepare('DELETE FROM timeline_entries WHERE id = ?').bind(id).run();
       return json({ ok: true });
     }
-    const e = await entryInput(db, await body(request), text, row.client_id);
-    await db.prepare('UPDATE timeline_entries SET project_id = ?, release_id = ?, lane = ?, label = ?, start_date = ?, end_date = ?, kind = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .bind(e.project, e.release, e.lane, e.label, e.start, e.end, e.kind, id).run();
+    const input = await body(request);
+    const e = await entryInput(db, input, text, row.client_id);
+    // Left out of an edit, the client_visible choice stays as it was.
+    await db.prepare(`UPDATE timeline_entries SET project_id = ?, release_id = ?, lane = ?, label = ?, start_date = ?, end_date = ?, kind = ?,
+        client_visible = CASE WHEN ? THEN ? ELSE client_visible END, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .bind(e.project, e.release, e.lane, e.label, e.start, e.end, e.kind, input.client_visible === undefined ? 0 : 1, e.shown, id).run();
     return json({ ok: true });
   }
   return json({ error: 'Not found.' }, 404);

@@ -12,7 +12,7 @@ function setup() {
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name, phase, position) VALUES (1, 'scheduler', 'Scheduler', 'uat', 1), (1, 'fundraising', 'Fundraising', 'build', 2), (2, 'chapters', 'Chapters', 'prototype', 1);
-    INSERT INTO users (email, name, role, client_id) VALUES ('molly@uep.org', 'Molly', 'ed', 1), ('eric@positivetribes.org', 'Eric', 'pt', NULL);
+    INSERT INTO users (email, name, role, client_id) VALUES ('molly@uep.org', 'Molly', 'ed', 1), ('eric@positivetribes.org', 'Eric', 'pt', NULL), ('sam@safe.org', 'Sam', 'ed', 2);
     INSERT INTO releases (client_id, project_id, number, stage, uat_started, uat_days, uat_day_type) VALUES
       (1, 1, 2, 'signed_off', '2026-11-04', 10, 'business'), (1, 1, 3, 'uat', '2026-11-15', 10, 'business');
   `);
@@ -88,4 +88,36 @@ test('clients cannot read or change the timeline', async () => {
   const { call } = setup();
   assert.equal((await call('molly@uep.org', 'admin/timeline')).status, 404);
   assert.equal((await call('molly@uep.org', 'admin/timeline', 'POST', { client_id: 1, label: 'x', start_date: '2027-01-01', lane: 'Row' })).status, 404);
+});
+
+test('a client sees only its own entries marked for it, with no internal columns', async () => {
+  const { call, row } = setup();
+  const shown = await call(ERIC, 'admin/timeline', 'POST', { client_id: 1, kind: 'work', label: 'Pilot', start_date: '2027-01-11', end_date: '2027-01-24', project_id: 1, client_visible: true });
+  const hidden = await call(ERIC, 'admin/timeline', 'POST', { client_id: 1, kind: 'proposed', label: 'Website idea', start_date: '2027-03-01', end_date: '2027-06-30', lane: 'Website' });
+  await call(ERIC, 'admin/timeline', 'POST', { client_id: 2, kind: 'milestone', label: 'Sober AF launch', start_date: '2027-02-01', client_visible: true });
+  assert.equal(row(shown.body.id).client_visible, 1);
+  assert.equal(row(hidden.body.id).client_visible, 0);
+
+  const molly = await call('molly@uep.org', 'c/uep/projects');
+  assert.equal(molly.status, 200);
+  assert.deepEqual(molly.body.timeline.map(e => e.label), ['Pilot']);
+  assert.deepEqual(Object.keys(molly.body.timeline[0]).sort(), ['end_date', 'id', 'kind', 'label', 'lane', 'project_id', 'release_id', 'start_date']);
+  // Positive Tribes, in the client's workspace, sees what the client sees; the rest is in the command center.
+  assert.deepEqual((await call(ERIC, 'c/uep/projects')).body.timeline.map(e => e.label), ['Pilot']);
+  // Another client's person can't open UEP at all, and sees only their own date.
+  assert.equal((await call('sam@safe.org', 'c/uep/projects')).status, 404);
+  assert.deepEqual((await call('sam@safe.org', 'c/safe/projects')).body.timeline.map(e => e.label), ['Sober AF launch']);
+});
+
+test('show-to-client is a yes/no, kept when an edit leaves it out', async () => {
+  const { call, row } = setup();
+  const made = await call(ERIC, 'admin/timeline', 'POST', { client_id: 1, kind: 'work', label: 'Pilot', start_date: '2027-01-11', project_id: 1, client_visible: true });
+  assert.equal((await call(ERIC, 'admin/timeline', 'POST', { client_id: 1, kind: 'work', label: 'X', start_date: '2027-01-11', project_id: 1, client_visible: 'yes' })).status, 400);
+  await call(ERIC, 'admin/timeline/' + made.body.id, 'PUT', { kind: 'work', label: 'Pilot, 4 sites', start_date: '2027-01-11', project_id: 1 });
+  assert.equal(row(made.body.id).client_visible, 1);
+  await call(ERIC, 'admin/timeline/' + made.body.id, 'PUT', { kind: 'work', label: 'Pilot, 4 sites', start_date: '2027-01-11', project_id: 1, client_visible: false });
+  assert.equal(row(made.body.id).client_visible, 0);
+  assert.deepEqual((await call('molly@uep.org', 'c/uep/projects')).body.timeline, []);
+  const { body } = await call(ERIC, 'admin/timeline');
+  assert.equal(body.clients.find(c => c.slug === 'uep').entries[0].client_visible, false);
 });
