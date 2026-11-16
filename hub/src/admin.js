@@ -12,6 +12,7 @@ import { patchAdmin, patchInbox, aiCost } from './patch.js';
 import { replyAdmin } from './reply.js';
 import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
 import { webAdmin, latestWebDigest } from './web.js';
+import { PLAYBOOK } from './playbook-data.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
 const TIME_ZONE = 'America/Denver';
@@ -884,6 +885,8 @@ export async function handleAdmin(request, env, url, who) {
     }
 
     if (route === 'GET /api/admin/search') return json(await loadSearchIndex(env.DB, db));
+    // The Playbook tab: Claude Code commands and kits, generated at deploy by scripts/playbook.mjs (names and one-liners only).
+    if (route === 'GET /api/admin/playbook') return json(PLAYBOOK);
 
     const docId = path.match(/^\/api\/admin\/documents(?:\/(\d+))?$/);
     if (docId) {

@@ -631,6 +631,28 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <p class="err" data-err="${c.client.id}"></p></section>`;
   }
 
+  // Playbook: what to type in Claude Code, and the kits behind it. Data is generated from the commands and kits at deploy.
+  function renderPlaybook(box, data) {
+    const commands = data.commands || [], kits = data.kits || [];
+    const cmd = c => {
+      const line = '/' + c.name + (c.args ? ' ' + c.args : '');
+      return `<li><div class="play-cmd"><code>${esc(line)}</code><button type="button" data-copy="${esc('/' + c.name + ' ')}" aria-label="Copy /${esc(c.name)}">Copy</button></div><p class="small muted">${esc(c.description)}</p></li>`;
+    };
+    const kit = k => `<li><strong>${esc(k.title)}</strong><p class="small muted">${esc(k.summary)}</p><p class="small"><span class="play-path">${esc(k.path)}</span></p></li>`;
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Playbook</h2><p class="muted small">Commands to type in Claude Code from any project folder, and the kits they use. This list updates itself from the commands and kits at each hub deploy.</p></div></div>
+      <div class="cols two">
+        <section class="panel"><h2>Commands<span class="count">${commands.length}</span></h2>${commands.length ? `<ul class="items">${commands.map(cmd).join('')}</ul>` : '<p class="empty">No commands yet.</p>'}</section>
+        <section class="panel"><h2>Kits<span class="count">${kits.length}</span></h2>${kits.length ? `<ul class="items">${kits.map(kit).join('')}</ul>` : '<p class="empty">No kits yet.</p>'}<p class="small muted">Kits live in ~/Projects/PositiveTribes.</p></section>
+      </div>`;
+    box.onclick = async e => {
+      const b = e.target.closest('[data-copy]');
+      if (!b) return;
+      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; }
+      catch { b.textContent = 'Copy failed'; }
+      setTimeout(() => { b.textContent = 'Copy'; }, 1500);
+    };
+  }
+
   function renderCare(box, data) {
     const active = data.clients.filter(c => c.plan && c.plan.status === 'active');
     const credits = active.reduce((n, c) => n + (c.balance ? c.balance.available : 0), 0);
@@ -811,13 +833,13 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     } catch (error) { out.innerHTML = `<p class="err">${esc(error.message)}</p>`; }
   }
 
-  // sub is what follows #/command: '', 'inbox', 'clients', 'care', 'care/triage', 'documents', 'ideas' or
+  // sub is what follows #/command: '', 'inbox', 'clients', 'care', 'care/triage', 'documents', 'playbook', 'ideas' or
   // 'client/<Salesforce account id>'. The old 'triage' address still opens Triage.
   const viewOf = sub => {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
     if (client) return { view: 'client', id: client[1] };
     if (sub === 'care/triage' || sub === 'triage') return { view: 'triage' };
-    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas'].includes(sub) ? sub : 'today' };
+    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas', 'playbook'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
@@ -843,6 +865,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         if (current.box !== box) return;
         document.title = 'Documents | Command center';
         renderDocuments(box, data);
+      } else if (view === 'playbook') {
+        const data = await api('/playbook');
+        if (current.box !== box) return;
+        document.title = 'Playbook | Command center';
+        renderPlaybook(box, data);
       } else if (view === 'care') {
         const data = await api('/care');
         if (current.box !== box) return;

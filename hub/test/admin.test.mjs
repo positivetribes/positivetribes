@@ -674,3 +674,13 @@ test('command center search: one index of every client for Positive Tribes, nobo
   for (const who of ['molly@uep.org', 'dana@safe.org', 'stranger@example.org']) assert.equal((await as(who, 'GET', 'admin/search')).status, 404, who);
   assert.equal((await as(SYNC, 'GET', 'admin/search', undefined, { service: true })).status, 403);
 });
+
+test('the playbook route lists commands and kits for Positive Tribes only', async () => {
+  const { db } = database();
+  const r = await call(db, 'GET', '/api/admin/playbook');
+  assert.equal(r.status, 200);
+  assert.ok(Array.isArray(r.body.commands) && Array.isArray(r.body.kits));
+  for (const c of r.body.commands) assert.ok(c.name && c.description);
+  // The sync routine's service token cannot read it.
+  assert.equal((await call(db, 'GET', '/api/admin/playbook', undefined, { who: ROUTINE })).status, 403);
+});
