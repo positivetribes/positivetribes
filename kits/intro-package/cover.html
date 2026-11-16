@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Positive Tribes Introduction</title>
+<style>
+@font-face{font-family:'Fraunces';font-weight:400;src:url('fonts/fraunces-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Fraunces';font-style:italic;font-weight:400;src:url('fonts/fraunces-latin-400-italic.woff2') format('woff2')}
+@font-face{font-family:'Fraunces';font-weight:500;src:url('fonts/fraunces-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:400;src:url('fonts/dm-sans-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:600;src:url('fonts/dm-sans-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'DM Sans';font-weight:700;src:url('fonts/dm-sans-latin-700-normal.woff2') format('woff2')}
+:root{--paper:#f7f6ef;--ink:#243f36;--rust:#a94c32;--pale:#e9eddf;--line:#d9dfd4;--muted:#59665e}
+@page{size:8.5in 11in;margin:0}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{width:8.5in;height:11in;padding:.6in .75in .5in;font:400 12.5px/1.55 'DM Sans',Arial,sans-serif;color:var(--ink);display:flex;flex-direction:column;overflow:hidden}
+h1,h2,h3{font-family:'Fraunces',Georgia,serif;font-weight:500;margin:0}
+.top{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid var(--rust);padding-bottom:12px}
+.top img{height:36px}.top span{font-size:9px;letter-spacing:1.6px;text-transform:uppercase;font-weight:600;color:var(--muted)}
+.for{margin:26px 0 0;font-size:9.5px;letter-spacing:1.8px;font-weight:700;text-transform:uppercase;color:var(--rust)}
+h1{font-size:38px;line-height:1.08;letter-spacing:-1.2px;margin:8px 0 14px}h1 em{color:var(--rust)}
+.why p{margin:0 0 10px;font-size:13px;color:var(--ink)}
+.kicker{font-size:9px;letter-spacing:1.8px;font-weight:700;text-transform:uppercase;color:var(--rust);margin:0 0 8px}
+section{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+.ideas{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.idea{background:var(--pale);border-radius:6px;padding:11px 13px}
+.idea h3{font-size:14.5px;margin-bottom:3px}.idea p{margin:0;color:var(--muted);font-size:11.5px;line-height:1.45}
+.inside ol{margin:0;padding-left:18px;display:grid;gap:4px}.inside li::marker{color:var(--rust);font-weight:700}
+.inside b{font-weight:600}
+.cta{margin-top:auto;border-top:1.5px solid var(--rust);padding-top:14px;display:flex;justify-content:space-between;gap:24px;align-items:flex-end}
+.cta h2{font-size:19px;line-height:1.25;max-width:4.2in}.cta h2 em{color:var(--rust)}
+.cta div{font-size:11.5px;text-align:right;line-height:1.5}
+a{color:var(--rust);text-decoration:none}
+.fine{font-size:8.5px;color:var(--muted);margin:10px 0 0}
+</style></head><body>
+<div class="top"><img src="brand/positive-tribes-logo-horizontal.svg" alt="Positive Tribes"><span>Technology for healthier communities</span></div>
+
+<p class="for">{{FOR}}</p>
+<h1>{{HEADLINE}}</h1>
+<div class="why">{{WHY}}</div>
+
+<section><p class="kicker">Ideas to start the conversation</p><div class="ideas">{{IDEAS}}</div></section>
+
+<section class="inside"><p class="kicker">In this packet</p><ol>{{INSIDE}}</ol></section>
+
+<div class="cta"><h2>{{ASK}}</h2><div>Eric Roberts, Founder<br><a href="mailto:eric@positivetribes.org">eric@positivetribes.org</a><br>720-762-0570<br><a href="https://positivetribes.org">positivetribes.org</a></div></div>
+<p class="fine">Positive Tribes is a 501(c)(3) nonprofit in Golden, Colorado. EIN 99-2221407. Screens in this packet show sample data only.</p>
+</body></html>
