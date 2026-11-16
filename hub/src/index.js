@@ -6,6 +6,7 @@ import { handleAdmin, localDay } from './admin.js';
 import { runWebDigest } from './web.js';
 import { windowEnd } from './dates.js';
 import { pushPhaseTask, checkTestingWindows } from './phasetask.js';
+import { runEmailFiling } from './emailfix.js';
 import { listForClient, markRead } from './notifications.js';
 import {
   TYPE_NAMES, costLabel, planFor, ensureGrants, ledgerOf, balanceOf, canConfirm, isLive,
@@ -355,6 +356,9 @@ export default {
     // Client feedback: value and quarterly asks, plus a retry for answers whose Salesforce Tasks failed (src/feedback.js).
     ctx.waitUntil(runFeedback(env, env.DB, localDay(Date.now())).then(r => console.log('feedback_run', JSON.stringify(r)))
       .catch(error => console.error('feedback_run_failed', error.message)));
+    // Email filing check: Gmail-logged email Tasks filed on another client's record move to the Contact's own (src/emailfix.js).
+    ctx.waitUntil(runEmailFiling(env, env.ADMIN_DB).then(r => console.log('email_filing', JSON.stringify(r)))
+      .catch(error => console.error('email_filing_failed', error.message)));
     ctx.waitUntil(runPatch(env, 'cron').then(r => console.log('patch_run', r.ran ? `checked ${r.checked}, failed ${r.failed}` : r.reason))
       .catch(error => console.error('patch_run_failed', error.message)));
   },
