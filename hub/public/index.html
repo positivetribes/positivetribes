@@ -319,6 +319,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .cols.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .cc .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow)}
 .cc .count{font-size:13px;color:var(--muted);margin-left:6px}
+.cc .play-cmd{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px}.cc .play-cmd code,.cc .play-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;background:var(--soft);padding:2px 8px;border-radius:6px;overflow-wrap:anywhere}
 .cc .hub-new{color:var(--rust);font-weight:600}
 .cc ul.items{list-style:none;margin:0;padding:0}
 .cc ul.items li{padding:10px 0;border-top:1px solid var(--line)}
@@ -676,10 +677,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (sub === 'triage') { location.replace('#/command/care/triage'); return; }
     const current = (key, also) => view === key || view === also ? { 'aria-current': 'page' } : {};
     const tab = (key, href, label, extra, also) => h('a', { href, ...current(key, also) }, label, extra);
-    // Four daily tabs. What clients changed lives in the bell (its "See all" opens #/command/inbox) and on each client's card,
+    // Four daily tabs, then the Playbook (commands and kits). What clients changed lives in the bell (its "See all" opens #/command/inbox) and on each client's card,
     // so Inbox has no tab of its own. Improve this hub sits apart at the right end.
     const tabs = (inboxBadge, careBadge) => [tab('today', '#/command', 'Today'), tab('clients', '#/command/clients', 'Clients', null, 'client'),
-      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents')];
+      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents'), tab('playbook', '#/command/playbook', 'Playbook')];
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {
