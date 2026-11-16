@@ -367,41 +367,43 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .docform>form{padding:0 24px 22px}
 .cc .docform .fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;margin-top:6px}
 /* Timeline (#/command/timeline): month axis, one row per project, bars placed by percent of the chart's width. */
-.cc .tl-panel{margin-bottom:18px}
-.cc .tl-scroll{overflow-x:auto;margin-top:10px;padding-bottom:4px}
-.cc .tl{--tl-name:170px}
-.cc .tl-head,.cc .tl-lane{display:grid;grid-template-columns:var(--tl-name) minmax(0,1fr)}
-.cc .tl-months{position:relative;height:24px;border-bottom:1px solid var(--line)}
-.cc .tl-month{position:absolute;top:2px;padding-left:4px;font-size:12px;color:var(--muted);white-space:nowrap}
-.cc .tl-body{position:relative;padding-bottom:22px}
-.cc .tl-lines{position:absolute;top:0;bottom:0;left:var(--tl-name);right:0;pointer-events:none}
-.cc .tl-grid{position:absolute;top:0;bottom:22px;border-left:1px solid var(--line)}
-.cc .tl-line{position:absolute;top:0;bottom:22px;border-left:2px solid var(--muted);pointer-events:auto}
-.cc .tl-line.m-deadline{border-left:2px dashed var(--must)}
-.cc .tl-line.today{border-left-color:var(--rust);pointer-events:none}
-.cc .tl-line.today b{position:absolute;bottom:-20px;left:-14px;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--rust)}
-.cc .tl-lane{border-bottom:1px solid var(--line);padding:6px 0}
-.cc .tl-name{align-self:center;padding-right:12px;font-weight:600;font-size:14px}
-.cc .tl-track{position:relative}
-.cc .tl-row{position:relative;height:44px;margin:3px 0}
-.cc .tl .tl-bar{position:absolute;top:0;height:44px;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:3px 8px;border:0;border-radius:8px;background:none;text-align:left;font-size:12.5px;line-height:1.25;color:var(--ink);overflow:hidden;z-index:1}
-.cc .tl-fill{position:absolute;top:0;bottom:0;left:0;border:1px solid color-mix(in srgb,var(--tc) 55%,transparent);border-left:4px solid var(--tc);border-radius:8px;background:color-mix(in srgb,var(--tc) 24%,var(--card));z-index:-1}
-.cc .tl-bar span,.cc .tl-bar small{position:relative}
-.cc .tl-bar span,.cc .tl-bar small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cc .tl-bar span{font-weight:600}
-.cc .tl-bar small{font-size:11px;color:var(--muted)}
+.tl-panel{margin-bottom:18px}
+.tl-scroll{overflow-x:auto;margin-top:10px;padding-bottom:4px}
+.tl{--tl-name:170px}
+.tl-head,.tl-lane{display:grid;grid-template-columns:var(--tl-name) minmax(0,1fr)}
+.tl-months{position:relative;height:24px;border-bottom:1px solid var(--line)}
+.tl-month{position:absolute;top:2px;padding-left:4px;font-size:12px;color:var(--muted);white-space:nowrap}
+.tl-body{position:relative;padding-bottom:22px}
+.tl-lines{position:absolute;top:0;bottom:0;left:var(--tl-name);right:0;pointer-events:none}
+.tl-grid{position:absolute;top:0;bottom:22px;border-left:1px solid var(--line)}
+.tl-line{position:absolute;top:0;bottom:22px;border-left:2px solid var(--muted);pointer-events:auto}
+.tl-line.m-deadline{border-left:2px dashed var(--must)}
+.tl-line.today{border-left-color:var(--rust);pointer-events:none}
+.tl-line.today b{position:absolute;bottom:-20px;left:-14px;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:var(--rust)}
+.tl-lane{border-bottom:1px solid var(--line);padding:6px 0}
+.tl-name{align-self:center;padding-right:12px;font-weight:600;font-size:14px}
+.tl-track{position:relative}
+.tl-row{position:relative;height:44px;margin:3px 0}
+.tl .tl-bar{position:absolute;top:0;height:44px;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:3px 8px;border:0;border-radius:8px;background:none;text-align:left;font-size:12.5px;line-height:1.25;color:var(--ink);overflow:hidden;z-index:1}
+.tl-fill{position:absolute;top:0;bottom:0;left:0;border:1px solid color-mix(in srgb,var(--tc) 55%,transparent);border-left:4px solid var(--tc);border-radius:8px;background:color-mix(in srgb,var(--tc) 24%,var(--card));z-index:-1}
+.tl-bar span,.tl-bar small{position:relative}
+.tl-bar span,.tl-bar small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-bar span{font-weight:600}
+.tl-bar small{font-size:11px;color:var(--muted)}
 /* Each row's tone: a solid left edge and a tinted fill mixed from it, so bars stand out in light and dark. */
-.cc .tl-bar.t0{--tc:var(--idea)}.cc .tl-bar.t1{--tc:var(--nice)}.cc .tl-bar.t2{--tc:var(--ok)}.cc .tl-bar.t3{--tc:var(--muted)}
-.cc .tl-bar.k-ongoing .tl-fill{background:color-mix(in srgb,var(--tc) 12%,var(--card))}
-.cc .tl-bar.k-proposed .tl-fill{background:var(--card);border:1.5px dashed var(--tc)}
-.cc .tl .tl-bar.done span{color:var(--ok)}
-.cc .tl-bar:hover .tl-fill{border-color:var(--ink)}
-.cc .tl-bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
-.cc .tl .tl-bar.editing{outline:2px solid var(--rust);outline-offset:1px}
-.cc .tl-keys{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px}
-.cc .tl-keys button{border:0;background:none;padding:0;min-height:0;font-size:13px;text-align:left}
-.cc .tl-keys i{display:inline-block;width:3px;height:12px;margin-right:7px;vertical-align:-1px;background:var(--muted)}
-.cc .tl-keys .m-deadline i{background:var(--must)}
+.tl-bar.t0{--tc:var(--idea)}.tl-bar.t1{--tc:var(--nice)}.tl-bar.t2{--tc:var(--ok)}.tl-bar.t3{--tc:var(--muted)}
+.tl-bar.k-ongoing .tl-fill{background:color-mix(in srgb,var(--tc) 12%,var(--card))}
+.tl-bar.k-proposed .tl-fill{background:var(--card);border:1.5px dashed var(--tc)}
+.tl .tl-bar.done span{color:var(--ok)}
+.tl-bar:hover .tl-fill{border-color:var(--ink)}
+.tl-bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.tl-bar.shown span::before{content:'';display:inline-block;width:12px;height:12px;margin-right:5px;vertical-align:-1px;background:currentColor;-webkit-mask:var(--tl-eye) center/contain no-repeat;mask:var(--tl-eye) center/contain no-repeat}
+.tl{--tl-eye:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2'%3E%3Cpath d='M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E")}
+.tl .tl-bar.editing{outline:2px solid var(--rust);outline-offset:1px}
+.tl-keys{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px}
+.tl-keys button{border:0;background:none;padding:0;min-height:0;font-size:13px;text-align:left}
+.tl-keys i{display:inline-block;width:3px;height:12px;margin-right:7px;vertical-align:-1px;background:var(--muted)}
+.tl-keys .m-deadline i{background:var(--must)}
 .cc .docform label{display:flex;flex-direction:column;gap:5px;margin:0;font-size:13px;font-weight:600;color:var(--muted)}
 .cc .docform label.wide{grid-column:span 2}
 .cc .docform label.check{flex-direction:row;align-items:center;color:var(--ink);font-weight:400;font-size:14px}
@@ -505,6 +507,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   <div id="error" class="error" role="alert" hidden></div>
   <main id="main" aria-live="polite"><p class="muted">Loading your workspace…</p></main>
 </div>
+<script src="/timeline.js"></script>
 <script src="/command.js"></script>
 <dialog id="shot-view" class="shot-view" aria-label="Screenshot"><div class="bar"><a class="btn small" id="shot-open" target="_blank" rel="noopener">Open full size</a><button class="btn small" type="button" id="shot-close">Close</button></div><img id="shot-img" alt=""></dialog>
 <script>
@@ -618,7 +621,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 
   async function loadClient(slug) {
     const [p, i, d, st, care] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items'), api('/ideas').catch(() => ({ ideas: [] })), api('/c/' + slug + '/status').catch(() => null), api('/c/' + slug + '/care').catch(() => null)]);
-    Object.assign(state, { care, status: st, slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
+    Object.assign(state, { care, status: st, slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], timeline: p.timeline || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
     if (state.me.user.role === 'pt') { try { state.people = (await api('/c/' + slug + '/people')).people; } catch {} }
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
@@ -640,7 +643,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     // Coming back from the command center to the same client restores its accent and title.
     document.documentElement.style.setProperty('--client', state.client.accent);
     document.title = state.client.name + ' | Positive Tribes';
-    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : view === 'ideas' ? 'ideas' : view === 'documents' ? 'documents' : view === 'waiting' ? 'waiting' : 'home';
+    state.view = view === 'backlog' || view === 'problems' ? 'backlog' : view === 'ideas' ? 'ideas' : view === 'documents' ? 'documents' : view === 'waiting' ? 'waiting' : view === 'timeline' ? 'timeline' : 'home';
     // #/uep/problems opens the test problems of the project being tested (the link in UAT scripts).
     if (view === 'problems') {
       const testing = state.releases.find(r => r.stage === 'uat');
@@ -784,15 +787,36 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         h('a', { href: link('home'), ...(state.view === 'home' ? { 'aria-current': 'page' } : {}) }, 'What’s next'),
         h('a', { href: link('backlog'), ...(state.view === 'backlog' ? { 'aria-current': 'page' } : {}) }, 'Questions & changes', h('span', { class: 'badge' }, waiting ? String(waiting) : '')),
         (forYou > 0 || state.view === 'waiting') && h('a', { href: link('waiting'), ...(state.view === 'waiting' ? { 'aria-current': 'page' } : {}) }, ptOwn ? 'Waiting on them' : 'Waiting on you', h('span', { class: 'badge' }, forYou ? String(forYou) : '')),
-        h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents')), searchBox()),
+        h('a', { href: link('documents'), ...(state.view === 'documents' ? { 'aria-current': 'page' } : {}) }, 'Documents'),
+        (state.timeline.length > 0 || state.view === 'timeline') && h('a', { href: link('timeline'), ...(state.view === 'timeline' ? { 'aria-current': 'page' } : {}) }, 'Timeline')), searchBox()),
       h('div', { id: 'view-slot' }, state.query ? searchView() : viewNode(isPt)));
     $('main').querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
     // A background refresh re-renders the page; keep the cursor in the search box if it was there.
     if (searching) { const box = $('hub-search'); box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
   }
   function viewNode(isPt) {
-    return state.view === 'home' ? home() : state.view === 'waiting' ? waitingView(isPt) : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt);
+    return state.view === 'home' ? home() : state.view === 'timeline' ? timelineView() : state.view === 'waiting' ? waitingView(isPt) : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt);
   }
+
+  // ---- Timeline: the dates Positive Tribes chose to share (client_visible entries only; the server sends nothing else).
+  // Read-only here; Positive Tribes edits it in the command center. Phases update themselves from the hub's own phases.
+  function timelineView() {
+    const card = h('div', { class: 'card tl-client' }, h('h2', {}, 'Timeline'),
+      h('p', { class: 'muted small' }, 'The plan as it stands today. A tick means you have signed off that phase; a phase being tested shows when testing ends. Dates can move: we update this page when they do.'));
+    if (!state.timeline.length) { card.append(h('p', { class: 'muted' }, 'Positive Tribes will share the schedule here.')); return card; }
+    const chart = document.createElement('div');
+    const room = Math.floor(Math.min($('main').clientWidth || 1000, 1200) - 64 - window.HubTimeline.NAME);
+    const releases = state.releases.map(r => ({ id: r.id, project_id: r.project_id, stage: r.stage, window_end: r.stage === 'uat' ? r.uat_due : null }));
+    // chart() escapes every word it is given, so its HTML is safe to place here.
+    chart.innerHTML = window.HubTimeline.chart({ projects: state.projects, releases, entries: state.timeline }, new Date().toLocaleDateString('en-CA'), room, { readOnly: true });
+    card.append(chart);
+    return card;
+  }
+  let timelineResize = null;
+  addEventListener('resize', () => {
+    clearTimeout(timelineResize);
+    timelineResize = setTimeout(() => { if (state.mode === 'client' && state.view === 'timeline' && !state.query) render(); }, 200);
+  });
 
   // ---- Search: every item this person can already see (state.items), in the browser; nothing new is fetched ----
   // "133" or "#133" opens that item; words match title, details and the answer or reply, all words required.
