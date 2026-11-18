@@ -198,6 +198,7 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .shot button.thumb{padding:0;border:1px solid var(--line);border-radius:8px;background:var(--soft);overflow:hidden;width:132px;height:88px;display:block}
 .shot button.thumb:hover{border-color:var(--ink)}
 .shot img{width:100%;height:100%;object-fit:cover;object-position:top left;display:block}
+.shot-why{border-left:3px solid var(--rust);padding:6px 10px;background:var(--soft);border-radius:6px;font-size:15px}
 .drop{border:2px dashed var(--line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:15px;color:var(--muted)}
 .drop.over{border-color:var(--client);background:color-mix(in srgb,var(--client) 8%,transparent)}
 .drop input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
@@ -1571,6 +1572,30 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     return h('div', { class: 'stack' }, nodes);
   }
 
+  // ---- Screenshots on items. A screenshot is the fastest way for us to see what someone saw, so the add form asks
+  // for one, most strongly on test problems and help requests. ----
+  const SHOT_WHY = {
+    problem: 'A screenshot helps a great deal. It shows us exactly what you saw, so we can find and fix the problem much faster, often without a back-and-forth.',
+    request: 'A screenshot helps a great deal. It shows us exactly what you are looking at, so we can help much faster.',
+    change: 'A screenshot of the screen you mean helps us understand the change quickly.',
+    question: 'If it is about something on screen, a screenshot helps us answer faster.'
+  };
+  const SHOT_HOW = 'To take one: on a Mac press Shift-Command-4, on Windows press Windows-Shift-S, then paste it here (Command-V or Ctrl-V).';
+  const itemShotPath = (item, id) => '/api' + base() + '/items/' + item.id + '/images' + (id ? '/' + id : '');
+  const itemShotList = (item, remove) => item.images && item.images.length > 0 && h('div', { class: 'shots' }, item.images.map((img, n) => h('div', { class: 'shot' },
+    h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1) + ' for ' + item.title, onclick: e => showShot(e.currentTarget.querySelector('img')) }, shotImg(itemShotPath(item, img.id), 'Screenshot ' + (n + 1) + ' for ' + item.title)),
+    remove && !state.preview && (img.mine || viewer().role === 'pt') && h('button', { type: 'button', class: 'btn ghost small', onclick: () => remove(img.id) }, 'Remove'))));
+  // Screenshot changes on an open item save right away and keep the editor open.
+  const itemShotsSaved = data => { state.items = data.items; render(); };
+  const addItemShots = (item, files) => addShots(files, MAX_SHOTS - item.images.length, async blob => itemShotsSaved(await uploadShot(itemShotPath(item), blob)));
+  function itemShotsEditor(item) {
+    if (item.done) return item.images.length > 0 && h('div', {}, h('label', {}, 'Screenshots'), itemShotList(item));
+    return h('div', {}, h('label', {}, 'Screenshots'),
+      h('p', { class: 'meta', style: 'margin-bottom:8px' }, (SHOT_WHY[item.kind] || '') + ' Adding or removing a screenshot saves right away.'),
+      itemShotList(item, async id => { showError(''); try { itemShotsSaved(await api(base() + '/items/' + item.id + '/images/' + id, { method: 'DELETE' })); } catch (e) { showError(e.message); } }),
+      item.images.length < MAX_SHOTS && !state.preview && h('div', { style: 'margin-top:8px' }, shotPicker('e-shots', MAX_SHOTS - item.images.length, files => addItemShots(item, files))));
+  }
+
   function addForm() {
     const { kind } = state;
     const verb = { question: ['Ask a question', 'What do we need to know?', 'Add question'], change: ['Suggest a change', 'What should change?', 'Add suggestion'], problem: ['Report a problem', 'What went wrong?', 'Add problem'], request: ['Ask for help', 'What do you need?', 'Send request'] }[kind];
@@ -1583,21 +1608,46 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('option', { value: '', disabled: true, selected: true }, 'Choose one'),
       TIER_NAMES[kind].map(([k, l]) => h('option', { value: k }, l)));
     const owner = h('input', { type: 'text', maxlength: 60, id: 'f-owner', placeholder: kind === 'problem' ? 'Test 3, step 5' : 'Who can answer?', ...(kind === 'question' ? { list: 'f-owner-list', autocomplete: 'off' } : {}) });
-    return h('form', { class: 'card stack', onsubmit: async e => {
+    // Screenshots wait in the browser until the item is added; only this part redraws, so typed text is kept.
+    state.itemFiles = state.itemFiles || [];
+    const files = state.itemFiles;
+    const asked = kind === 'problem' || kind === 'request';
+    const pending = h('div', {});
+    const take = list => addShots(list, MAX_SHOTS - files.length, async blob => { files.push({ blob, url: URL.createObjectURL(blob) }); drawPending(); });
+    const drawPending = () => pending.replaceChildren(...[
+      h('label', {}, asked ? 'Screenshots (recommended)' : 'Screenshots (optional)'),
+      h('p', { class: asked ? 'shot-why' : 'meta', style: 'margin-bottom:8px' }, SHOT_WHY[kind] + ' ' + SHOT_HOW),
+      files.length > 0 && h('div', { class: 'shots', style: 'margin-bottom:8px' }, files.map((f, n) => h('div', { class: 'shot' },
+        h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1), onclick: e => showShot(e.currentTarget.querySelector('img')) }, h('img', { src: f.url, alt: 'Screenshot ' + (n + 1) })),
+        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { URL.revokeObjectURL(f.url); files.splice(n, 1); drawPending(); } }, 'Remove')))),
+      files.length < MAX_SHOTS && shotPicker('f-shots', MAX_SHOTS - files.length, take)].filter(Boolean));
+    drawPending();
+    const clearFiles = () => { files.forEach(f => URL.revokeObjectURL(f.url)); state.itemFiles = []; };
+    const form = h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
+      const button = form.querySelector('button[type=submit]');
+      button.disabled = true;
       try {
         const payload = { kind, project_id: state.project, title: title.value, details: details.value, tier: tier.value };
         if (kind === 'question' || kind === 'problem') payload.owner = owner.value;
-        state.items = (await api(base() + '/items', post(payload))).items; state.adding = false; render();
-      } catch (err) { showError(err.message); }
+        const created = await api(base() + '/items', post(payload));
+        state.items = created.items;
+        // The item is saved; a screenshot that fails is reported, and can be added again from Edit.
+        try { for (const f of files) state.items = (await uploadShot(itemShotPath({ id: created.id }), f.blob)).items; }
+        catch (err) { showError('Your ' + ({ question: 'question', change: 'suggestion', problem: 'problem', request: 'request' }[kind]) + ' was added, but a screenshot was not: ' + err.message + ' Open it and choose Edit to try again.'); }
+        finally { clearFiles(); state.adding = false; render(); }
+      } catch (err) { showError(err.message); button.disabled = false; }
     } },
       h('h2', {}, verb[0]),
       h('div', {}, h('label', { for: 'f-title' }, verb[1]), title),
       h('div', {}, h('label', { for: 'f-details' }, 'More detail (optional)'), details),
+      pending,
       h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier, meaning),
         (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, kind === 'question' && ownerList('f-owner-list'))),
       kind === 'change' && h('p', { class: 'meta' }, 'We’ll reply and tell you whether this is already in your agreement or needs an estimate. Nothing is added or charged until you approve it.'),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.adding = false; render(); } }, 'Cancel')));
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { clearFiles(); state.adding = false; render(); } }, 'Cancel')));
+    form.addEventListener('paste', e => { const pasted = pastedImages(e); if (pasted.length) { e.preventDefault(); take(pasted); } });
+    return form;
   }
 
   // "Request an improvement": for tools that are live on an active care plan. Other tools keep the plain help request.
@@ -1707,6 +1757,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', { class: 'actions' }, h('a', { class: 'item-no', href: item.legacy_id ? link('old', item.legacy_id) : link('backlog', item.id), title: 'Link to this card', 'aria-label': 'Item ' + itemNo(item) }, '#' + itemNo(item)), pills),
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
+      itemShotList(item),
       item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), answerText,
         long && h('button', { type: 'button', class: 'show-all', onclick: e => { const shut = answerText.classList.toggle('clamp'); e.target.textContent = shut ? 'Show all' : 'Show less'; } }, 'Show all')),
       careBlock(item, isPt),
@@ -1789,6 +1840,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     } },
       h('div', {}, h('label', { for: 'e-title' }, 'Title'), title),
       h('div', {}, h('label', { for: 'e-details' }, 'Details'), details),
+      itemShotsEditor(item),
       asks && h('div', {}, h('label', { for: 'e-owner' }, item.kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, item.kind === 'question' && ownerList('e-owner-list')),
       (asks || replies) && h('div', {}, h('label', { for: 'e-answer' }, replies ? 'Our reply' : item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
       canDraft && h('div', { class: 'stack' }, draftButton, suggestion),
@@ -1809,16 +1861,17 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     try { state.ideas = (await api('/ideas' + path, options)).ideas; state.ideaEditing = null; render(); }
     catch (e) { showError(e.message); }
   };
-  // ---- Screenshots on ideas ----
+  // ---- Screenshots on hub ideas and on items ----
   // Images are fetched with the same sign-in as the rest of the page and shown from memory (object URLs).
   const MAX_SHOTS = 4, SHOT_BYTES = 1400000;
   const shotCache = new Map();
   function devHeaders(extra = {}) { const x = { ...extra }; if (store.get('hub-dev-email')) x['x-dev-email'] = store.get('hub-dev-email'); return x; }
-  function shotImg(ideaId, imgId, alt) {
+  // src is the image's API path, such as /api/ideas/3/images/7.
+  function shotImg(src, alt) {
     const img = h('img', { alt });
-    const key = ideaId + '/' + imgId;
+    const key = src;
     if (!shotCache.has(key)) {
-      shotCache.set(key, fetch('/api/ideas/' + ideaId + '/images/' + imgId, { headers: devHeaders() })
+      shotCache.set(key, fetch(src, { headers: devHeaders() })
         .then(r => { if (!r.ok) throw new Error('missing'); return r.blob(); }).then(b => URL.createObjectURL(b))
         .catch(e => { shotCache.delete(key); throw e; }));
     }
@@ -1848,10 +1901,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (!blob || blob.size > SHOT_BYTES) throw new Error('That screenshot is too large. Try a smaller one.');
     return blob;
   }
-  async function uploadShot(ideaId, blob) {
+  // path is where the screenshot goes: /api/ideas/<id>/images or /api/c/<slug>/items/<id>/images.
+  async function uploadShot(path, blob) {
     if (state.preview) throw new Error('This is a read-only preview. Exit the preview to make changes.');
     let response;
-    try { response = await fetch('/api/ideas/' + ideaId + '/images', { method: 'POST', headers: devHeaders({ 'content-type': blob.type }), body: blob }); }
+    try { response = await fetch(path, { method: 'POST', headers: devHeaders({ 'content-type': blob.type }), body: blob }); }
     catch { throw new Error('Could not reach the server. Check your connection and try again.'); }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Could not add the screenshot. Please try again.');
@@ -1873,7 +1927,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     showError('');
     const images = files.filter(f => /^image\//.test(f.type));
     if (!images.length) { if (files.length) showError('Choose an image file, such as a PNG or JPEG screenshot.'); return; }
-    if (images.length > room) showError('An idea can have at most ' + MAX_SHOTS + ' screenshots. Only the first ' + room + ' were added.');
+    if (images.length > room) showError('You can add at most ' + MAX_SHOTS + ' screenshots. Only the first ' + room + ' were added.');
     for (const file of images.slice(0, Math.max(0, room))) {
       try { await use(await shrink(file)); } catch (e) { showError(e.message); return; }
     }
@@ -1920,7 +1974,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       try {
         const created = await api('/ideas', post({ title: title.value, details: details.value, tier: tier.value }));
         state.ideas = created.ideas;
-        try { for (const f of state.ideaFiles) state.ideas = (await uploadShot(created.id, f.blob)).ideas; }
+        try { for (const f of state.ideaFiles) state.ideas = (await uploadShot('/api/ideas/' + created.id + '/images', f.blob)).ideas; }
         finally { state.ideaFiles.forEach(f => URL.revokeObjectURL(f.url)); state.ideaFiles = []; render(); }
       } catch (err) { showError(err.message); button.disabled = false; button.textContent = 'Send idea'; }
     } },
@@ -1933,7 +1987,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     return form;
   }
   const shotList = (i, remove) => i.images.length > 0 && h('div', { class: 'shots' }, i.images.map((id, n) => h('div', { class: 'shot' },
-    h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1) + ' for ' + i.title, onclick: e => showShot(e.currentTarget.querySelector('img')) }, shotImg(i.id, id, 'Screenshot ' + (n + 1) + ' for ' + i.title)),
+    h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1) + ' for ' + i.title, onclick: e => showShot(e.currentTarget.querySelector('img')) }, shotImg('/api/ideas/' + i.id + '/images/' + id, 'Screenshot ' + (n + 1) + ' for ' + i.title)),
     remove && h('button', { type: 'button', class: 'btn ghost small', onclick: () => remove(id) }, 'Remove'))));
   function ideaCard(i, isPt) {
     if (state.ideaEditing === i.id) return ideaEditor(i, isPt);
@@ -1977,14 +2031,14 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', {}, h('label', {}, 'Screenshots'), h('p', { class: 'meta', style: 'margin-bottom:8px' }, 'Adding or removing a screenshot saves right away.'),
         shotList(i, id => keepEditing('/' + i.id + '/images/' + id, { method: 'DELETE' })),
         i.images.length < MAX_SHOTS && h('div', { style: 'margin-top:8px' }, shotPicker('ie-shots', MAX_SHOTS - i.images.length, files =>
-          addShots(files, MAX_SHOTS - i.images.length, async blob => { state.ideas = (await uploadShot(i.id, blob)).ideas; render(); })))),
+          addShots(files, MAX_SHOTS - i.images.length, async blob => { state.ideas = (await uploadShot('/api/ideas/' + i.id + '/images', blob)).ideas; render(); })))),
       isPt && h('div', {}, h('label', { for: 'ie-note' }, 'Reply to ' + i.client_name + ' (they see this)'), note),
       h('div', { class: 'row' }, h('button', { class: 'btn', type: 'submit' }, 'Save'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.ideaEditing = null; render(); } }, 'Cancel')));
     form.addEventListener('paste', e => {
       const files = pastedImages(e);
       if (!files.length) return;
       e.preventDefault();
-      addShots(files, MAX_SHOTS - i.images.length, async blob => { state.ideas = (await uploadShot(i.id, blob)).ideas; render(); });
+      addShots(files, MAX_SHOTS - i.images.length, async blob => { state.ideas = (await uploadShot('/api/ideas/' + i.id + '/images', blob)).ideas; render(); });
     });
     return form;
   }
