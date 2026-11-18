@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql', '0026_change_estimates.sql', '0027_donated_changes.sql', '0028_estimate_lines.sql', '0029_agreement_ref.sql', '0031_item_proposal.sql', '0033_timeline.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql', '0026_change_estimates.sql', '0027_donated_changes.sql', '0028_estimate_lines.sql', '0029_agreement_ref.sql', '0031_item_proposal.sql', '0033_timeline.sql', '0037_item_images.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -450,4 +450,45 @@ test('only Positive Tribes tags an item with a phase, and only one on the item\'
   await call('eric@positivetribes.org', `/api/c/uep/items/${id}`, 'PATCH', { project_id: 1, release_id: 1 });
   await call('eric@positivetribes.org', `/api/c/uep/items/${id}`, 'PATCH', { release_id: null });
   assert.equal(sqlite.prepare('SELECT release_id FROM items WHERE id = ?').get(id).release_id, null);
+});
+
+test('item screenshots: real images only, scoped to the client, removable by whoever added them or Positive Tribes', async () => {
+  const { call, env, sqlite } = setup();
+  sqlite.exec("INSERT INTO users (email, name, role, client_id) VALUES ('tammie@uep.org', 'Tammie', 'staff', 1)");
+  const send = (who, path, bytes, method = 'POST') => worker.fetch(new Request('http://localhost' + path, { method, headers: { 'x-dev-email': who, 'content-type': 'image/png', origin: 'http://localhost' }, body: bytes }), env);
+  const created = await (await call('molly@uep.org', '/api/c/uep/items', 'POST', { kind: 'problem', project_id: 1, title: 'Button does nothing', tier: 'must' })).json();
+  assert.ok(created.id);
+  const path = '/api/c/uep/items/' + created.id + '/images';
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const r = await send('molly@uep.org', path, png);
+  assert.equal(r.status, 201);
+  const item = (await r.json()).items.find(i => i.id === created.id);
+  assert.deepEqual(item.images, [{ id: 1, mine: true }]);
+  // Not an image, even if it says it is; too large is refused.
+  assert.equal((await send('molly@uep.org', path, new TextEncoder().encode('<svg onload=alert(1)>'))).status, 400);
+  assert.equal((await send('molly@uep.org', path, new Uint8Array(1500001))).status, 413);
+  // Served with its checked type to this client and Positive Tribes; another client gets nothing.
+  const got = await call('molly@uep.org', path + '/1');
+  assert.equal(got.headers.get('content-type'), 'image/png');
+  assert.equal(got.headers.get('x-content-type-options'), 'nosniff');
+  assert.deepEqual(new Uint8Array(await got.arrayBuffer()), png);
+  assert.equal((await call('eric@positivetribes.org', path + '/1')).status, 200);
+  assert.equal((await call('dana@safe.org', path + '/1')).status, 404);
+  assert.equal((await send('dana@safe.org', path, png)).status, 404);
+  assert.equal((await call('dana@safe.org', '/api/c/safe/items/' + created.id + '/images/1')).status, 404);
+  // Someone else at the client sees it but cannot remove it; the person who added it can.
+  const seen = (await (await call('tammie@uep.org', '/api/c/uep/items')).json()).items.find(i => i.id === created.id);
+  assert.deepEqual(seen.images, [{ id: 1, mine: false }]);
+  assert.equal((await call('tammie@uep.org', path + '/1', 'DELETE')).status, 403);
+  assert.equal((await call('molly@uep.org', path + '/1', 'DELETE')).status, 200);
+  // At most four, and none on a closed item.
+  for (let n = 0; n < 4; n++) assert.equal((await send('tammie@uep.org', path, png)).status, 201);
+  assert.equal((await send('tammie@uep.org', path, png)).status, 400);
+  assert.equal((await call('eric@positivetribes.org', path + '/2', 'DELETE')).status, 200);
+  sqlite.exec('UPDATE items SET done = 1 WHERE id = ' + created.id);
+  assert.equal((await send('molly@uep.org', path, png)).status, 409);
+  // Deleting the item deletes its screenshots.
+  sqlite.exec('UPDATE items SET done = 0 WHERE id = ' + created.id);
+  assert.equal((await call('eric@positivetribes.org', '/api/c/uep/items/' + created.id, 'DELETE')).status, 200);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM item_images').get().n, 0);
 });

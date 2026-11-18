@@ -95,16 +95,19 @@ async function listItems(db, clientId, user) {
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
             i.status, i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id,
             i.release_id, r.number AS release_number, r.name AS release_name, i.agreement_ref,
-            i.proposal_state, i.proposal_document_id, d.title AS proposal_doc_title, d.url AS proposal_doc_url, d.visible AS proposal_doc_visible
+            i.proposal_state, i.proposal_document_id, d.title AS proposal_doc_title, d.url AS proposal_doc_url, d.visible AS proposal_doc_visible,
+            (SELECT group_concat(id || ':' || (lower(added_email) = lower(?2))) FROM (SELECT id, added_email FROM item_images WHERE client_id = i.client_id AND item_id = i.id ORDER BY id)) AS image_ids
      FROM items i JOIN projects p ON p.id = i.project_id
      LEFT JOIN documents d ON d.id = i.proposal_document_id AND d.client_id = i.client_id
      LEFT JOIN releases r ON r.id = i.release_id AND r.client_id = i.client_id
-     WHERE i.client_id = ?
+     WHERE i.client_id = ?1
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
-  ).bind(clientId).all();
+  ).bind(clientId, String(user?.email || '')).all();
   const [estimates, donated, answers] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user), answersFor(db, clientId, user)]);
-  return results.map(({ proposal_doc_title, proposal_doc_url, proposal_doc_visible, ...item }) => ({
-    ...item, done: Boolean(item.done), estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [],
+  return results.map(({ proposal_doc_title, proposal_doc_url, proposal_doc_visible, image_ids, ...item }) => ({
+    ...item, done: Boolean(item.done),
+    // Screenshots: ids only, plus whether this viewer added each one (so they may remove it). Never who else did.
+    images: image_ids ? String(image_ids).split(',').map(x => { const [id, mine] = x.split(':'); return { id: Number(id), mine: mine === '1' }; }) : [], estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [],
     answered_at: answers.get(item.id)?.at || null, answered_mine: Boolean(answers.get(item.id)?.mine),
     // The proposal's link is the document's own visibility: clients never get the title or URL of a hidden document.
     proposal_doc: item.proposal_document_id && proposal_doc_title && (user.role === 'pt' || proposal_doc_visible) ? { title: proposal_doc_title, url: proposal_doc_url } : null
@@ -506,6 +509,46 @@ export default {
         return json({ error: 'Not found.' }, 404);
       }
 
+      // Screenshots on an item (test problem, change, request, question): same checks as hub idea screenshots.
+      // Anyone who can see the client may add one while the item is open; the person who added it, or Positive
+      // Tribes, may remove it. The image is served only to people who can see the client.
+      const shots = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/items\/(\d+)\/images(?:\/(\d+))?$/);
+      if (shots) {
+        const [, slug, itemId, imageId] = shots;
+        const client = await scope(db, user, slug);
+        const item = await requireItem(db, client.id, itemId);
+        if (!imageId && method === 'POST') {
+          if (item.done) throw new InputError('This item is closed. Reopen it to add a screenshot.', 409);
+          const bytes = new Uint8Array(await request.arrayBuffer());
+          if (!bytes.length) throw new InputError('Choose a screenshot to add.');
+          if (bytes.length > MAX_IMAGE_BYTES) throw new InputError('That screenshot is too large. Try a smaller one.', 413);
+          const type = imageType(bytes);
+          if (!type) throw new InputError('Screenshots must be PNG, JPEG or WebP images.');
+          const count = await db.prepare('SELECT COUNT(*) AS n FROM item_images WHERE client_id = ? AND item_id = ?').bind(client.id, item.id).first();
+          if (count.n >= MAX_IMAGES) throw new InputError(`An item can have at most ${MAX_IMAGES} screenshots.`);
+          await db.prepare('INSERT INTO item_images (client_id, item_id, type, data, added_by, added_email) VALUES (?, ?, ?, ?, ?, ?)')
+            .bind(client.id, item.id, type, bytes.buffer, user.name || user.email, user.email).run();
+          return json({ ok: true, items: await listItems(db, client.id, user) }, 201);
+        }
+        const image = imageId && await db.prepare('SELECT * FROM item_images WHERE id = ? AND item_id = ? AND client_id = ?')
+          .bind(Number(imageId), item.id, client.id).first();
+        if (!image) throw new InputError('Screenshot not found.', 404);
+        if (method === 'GET') {
+          return new Response(new Uint8Array(image.data), { headers: {
+            'content-type': image.type, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff',
+            'content-security-policy': "default-src 'none'", 'content-disposition': 'inline'
+          } });
+        }
+        if (method === 'DELETE') {
+          if (user.role !== 'pt' && String(image.added_email).toLowerCase() !== String(user.email).toLowerCase()) {
+            throw new InputError('Only the person who added this screenshot, or Positive Tribes, can remove it.', 403);
+          }
+          await db.prepare('DELETE FROM item_images WHERE id = ? AND client_id = ?').bind(image.id, client.id).run();
+          return json({ ok: true, items: await listItems(db, client.id, user) });
+        }
+        return json({ error: 'Not found.' }, 404);
+      }
+
       // The client's decision on an estimate: only the director or the named contact, JSON only, same-origin only.
       const decide = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/items\/(\d+)\/estimate\/decide$/);
       if (decide) {
@@ -625,7 +668,7 @@ export default {
           if (!isJson(request)) throw new InputError('Send JSON.', 415);
           const plan = await planFor(db, client.id);
           if (!isLive(project, plan)) throw new InputError('Requests open once this tool is live and the care plan has started.', 409);
-          await db.batch([
+          const [added] = await db.batch([
             db.prepare(
               `INSERT INTO items (client_id, project_id, kind, title, details, owner, tier, phase, position, added_by)
                VALUES (?, ?, 'request', ?, ?, '', 'nice', 'review', (SELECT COALESCE(MAX(position), 0) + 1 FROM items WHERE client_id = ? AND project_id = ? AND kind = 'request' AND tier = 'nice'), ?)`
@@ -634,16 +677,17 @@ export default {
             db.prepare('INSERT INTO care_requests (item_id, client_id, care_plan_id) VALUES (last_insert_rowid(), ?, ?)').bind(client.id, plan.id),
             logEvent(db, client.id, null, 'added', { title, kind: 'request' }, clip(details), user)
           ]);
-          return json({ ok: true, items: await listItems(db, client.id, user), care: await careView(db, client, user) }, 201);
+          return json({ ok: true, id: added.meta.last_row_id, items: await listItems(db, client.id, user), care: await careView(db, client, user) }, 201);
         }
-        await db.batch([
+        const [added] = await db.batch([
           db.prepare(
             `INSERT INTO items (client_id, project_id, kind, title, details, owner, tier, phase, position, added_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM items WHERE client_id = ? AND project_id = ? AND kind = ? AND tier = ?), ?)`
           ).bind(client.id, project.id, kind, title, details, owner, tier, phase, client.id, project.id, kind, tier, user.name || user.email),
           logEvent(db, client.id, null, 'added', { title, kind }, clip(details), user)
         ]);
-        return json({ ok: true, items: await listItems(db, client.id, user) }, 201);
+        // The id lets the page attach screenshots to the item it just added.
+        return json({ ok: true, id: added.meta.last_row_id, items: await listItems(db, client.id, user) }, 201);
       }
 
       if (rawId && action === 'move' && method === 'POST') {
@@ -776,6 +820,7 @@ export default {
         await db.batch([
           db.prepare('DELETE FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
           db.prepare('DELETE FROM change_estimates WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
+          db.prepare('DELETE FROM item_images WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
           db.prepare('DELETE FROM items WHERE id = ? AND client_id = ?').bind(item.id, client.id),
           logEvent(db, client.id, item.id, 'deleted', item, '', user)
         ]);
