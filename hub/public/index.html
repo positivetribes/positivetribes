@@ -1576,7 +1576,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   // for one, most strongly on test problems and help requests. ----
   const SHOT_WHY = {
     problem: 'A screenshot helps a great deal. It shows us exactly what you saw, so we can find and fix the problem much faster, often without a back-and-forth.',
-    request: 'A screenshot helps a great deal. It shows us exactly what you are looking at, so we can help much faster.',
+    request: 'A screenshot helps a great deal. It shows us exactly the screen you mean, so we can understand and act on your request much faster.',
     change: 'A screenshot of the screen you mean helps us understand the change quickly.',
     question: 'If it is about something on screen, a screenshot helps us answer faster.'
   };
@@ -1596,6 +1596,32 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       item.images.length < MAX_SHOTS && !state.preview && h('div', { style: 'margin-top:8px' }, shotPicker('e-shots', MAX_SHOTS - item.images.length, files => addItemShots(item, files))));
   }
 
+  // Screenshots chosen on an add form wait in the browser until the item is saved; only this part redraws, so typed
+  // text is kept. upload() sends them to the new item; one that fails is reported and can be added again from Edit.
+  function pendingShots(kind, id) {
+    state.itemFiles = state.itemFiles || [];
+    const files = state.itemFiles;
+    const asked = kind === 'problem' || kind === 'request';
+    const el = h('div', {});
+    const take = list => addShots(list, MAX_SHOTS - files.length, async blob => { files.push({ blob, url: URL.createObjectURL(blob) }); draw(); });
+    const draw = () => el.replaceChildren(...[
+      h('label', {}, asked ? 'Screenshots (recommended)' : 'Screenshots (optional)'),
+      h('p', { class: asked ? 'shot-why' : 'meta', style: 'margin-bottom:8px' }, SHOT_WHY[kind] + ' ' + SHOT_HOW),
+      files.length > 0 && h('div', { class: 'shots', style: 'margin-bottom:8px' }, files.map((f, n) => h('div', { class: 'shot' },
+        h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1), onclick: e => showShot(e.currentTarget.querySelector('img')) }, h('img', { src: f.url, alt: 'Screenshot ' + (n + 1) })),
+        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { URL.revokeObjectURL(f.url); files.splice(n, 1); draw(); } }, 'Remove')))),
+      files.length < MAX_SHOTS && shotPicker(id, MAX_SHOTS - files.length, take)].filter(Boolean));
+    draw();
+    const clear = () => { files.forEach(f => URL.revokeObjectURL(f.url)); state.itemFiles = []; };
+    const upload = async itemId => {
+      try { for (const f of files) state.items = (await uploadShot(itemShotPath({ id: itemId }), f.blob)).items; }
+      catch (err) { showError('Your ' + ({ question: 'question', change: 'suggestion', problem: 'problem', request: 'request' }[kind]) + ' was added, but a screenshot was not: ' + err.message + ' Open it and choose Edit to try again.'); }
+      finally { clear(); }
+    };
+    const listen = form => form.addEventListener('paste', e => { const pasted = pastedImages(e); if (pasted.length) { e.preventDefault(); take(pasted); } });
+    return { el, upload, clear, listen };
+  }
+
   function addForm() {
     const { kind } = state;
     const verb = { question: ['Ask a question', 'What do we need to know?', 'Add question'], change: ['Suggest a change', 'What should change?', 'Add suggestion'], problem: ['Report a problem', 'What went wrong?', 'Add problem'], request: ['Ask for help', 'What do you need?', 'Send request'] }[kind];
@@ -1608,21 +1634,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('option', { value: '', disabled: true, selected: true }, 'Choose one'),
       TIER_NAMES[kind].map(([k, l]) => h('option', { value: k }, l)));
     const owner = h('input', { type: 'text', maxlength: 60, id: 'f-owner', placeholder: kind === 'problem' ? 'Test 3, step 5' : 'Who can answer?', ...(kind === 'question' ? { list: 'f-owner-list', autocomplete: 'off' } : {}) });
-    // Screenshots wait in the browser until the item is added; only this part redraws, so typed text is kept.
-    state.itemFiles = state.itemFiles || [];
-    const files = state.itemFiles;
-    const asked = kind === 'problem' || kind === 'request';
-    const pending = h('div', {});
-    const take = list => addShots(list, MAX_SHOTS - files.length, async blob => { files.push({ blob, url: URL.createObjectURL(blob) }); drawPending(); });
-    const drawPending = () => pending.replaceChildren(...[
-      h('label', {}, asked ? 'Screenshots (recommended)' : 'Screenshots (optional)'),
-      h('p', { class: asked ? 'shot-why' : 'meta', style: 'margin-bottom:8px' }, SHOT_WHY[kind] + ' ' + SHOT_HOW),
-      files.length > 0 && h('div', { class: 'shots', style: 'margin-bottom:8px' }, files.map((f, n) => h('div', { class: 'shot' },
-        h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1), onclick: e => showShot(e.currentTarget.querySelector('img')) }, h('img', { src: f.url, alt: 'Screenshot ' + (n + 1) })),
-        h('button', { type: 'button', class: 'btn ghost small', onclick: () => { URL.revokeObjectURL(f.url); files.splice(n, 1); drawPending(); } }, 'Remove')))),
-      files.length < MAX_SHOTS && shotPicker('f-shots', MAX_SHOTS - files.length, take)].filter(Boolean));
-    drawPending();
-    const clearFiles = () => { files.forEach(f => URL.revokeObjectURL(f.url)); state.itemFiles = []; };
+    const shots = pendingShots(kind, 'f-shots');
     const form = h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
       const button = form.querySelector('button[type=submit]');
@@ -1632,21 +1644,19 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         if (kind === 'question' || kind === 'problem') payload.owner = owner.value;
         const created = await api(base() + '/items', post(payload));
         state.items = created.items;
-        // The item is saved; a screenshot that fails is reported, and can be added again from Edit.
-        try { for (const f of files) state.items = (await uploadShot(itemShotPath({ id: created.id }), f.blob)).items; }
-        catch (err) { showError('Your ' + ({ question: 'question', change: 'suggestion', problem: 'problem', request: 'request' }[kind]) + ' was added, but a screenshot was not: ' + err.message + ' Open it and choose Edit to try again.'); }
-        finally { clearFiles(); state.adding = false; render(); }
+        await shots.upload(created.id);
+        state.adding = false; render();
       } catch (err) { showError(err.message); button.disabled = false; }
     } },
       h('h2', {}, verb[0]),
       h('div', {}, h('label', { for: 'f-title' }, verb[1]), title),
       h('div', {}, h('label', { for: 'f-details' }, 'More detail (optional)'), details),
-      pending,
+      shots.el,
       h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier, meaning),
         (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, kind === 'question' && ownerList('f-owner-list'))),
       kind === 'change' && h('p', { class: 'meta' }, 'We’ll reply and tell you whether this is already in your agreement or needs an estimate. Nothing is added or charged until you approve it.'),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { clearFiles(); state.adding = false; render(); } }, 'Cancel')));
-    form.addEventListener('paste', e => { const pasted = pastedImages(e); if (pasted.length) { e.preventDefault(); take(pasted); } });
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { shots.clear(); state.adding = false; render(); } }, 'Cancel')));
+    shots.listen(form);
     return form;
   }
 
@@ -1664,17 +1674,23 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         for (const b of e.currentTarget.parentNode.children) { const on = b === e.currentTarget; b.classList.toggle('ghost', !on); b.setAttribute('aria-pressed', String(on)); }
       } }, p.name))) : null;
     const b = c.balance;
-    return h('form', { class: 'card stack', onsubmit: async e => {
+    const shots = pendingShots('request', 'c-shots');
+    const form = h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
+      const button = form.querySelector('button[type=submit]');
+      button.disabled = true;
       try {
         const data = await api(base() + '/items', post({ care: true, kind: 'request', project_id: tool, title: title.value, details: why.value }));
-        state.items = data.items; state.care = data.care; state.project = tool; state.adding = false; render();
-      } catch (err) { showError(err.message); }
+        state.items = data.items; state.care = data.care; state.project = tool;
+        await shots.upload(data.id);
+        state.adding = false; render();
+      } catch (err) { showError(err.message); button.disabled = false; }
     } },
       h('h2', {}, 'Request an improvement'),
       chips && h('div', {}, h('div', { class: 'label' }, 'Which tool?'), chips),
       h('div', {}, h('label', { for: 'c-title' }, 'What would you like?'), title),
       h('div', {}, h('label', { for: 'c-why' }, 'Why does it help?'), why),
+      shots.el,
       h('div', { class: 'care-note' },
         h('b', {}, 'What happens next'),
         h('ol', { class: 'care-steps' },
@@ -1684,7 +1700,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         b ? h('p', { class: 'meta' }, 'This month: ' + plural(b.available, 'credit') + ' left') : null),
       h('p', { class: 'muted' }, h('b', {}, 'Something broken? '), 'Report it as a problem instead. Fixes are always free. ',
         h('button', { type: 'button', class: 'btn ghost small', onclick: () => { state.kind = 'problem'; state.filter = 'all'; state.adding = true; render(); } }, 'Report a problem')),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Send request'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.adding = false; render(); } }, 'Cancel')));
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Send request'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { shots.clear(); state.adding = false; render(); } }, 'Cancel')));
+    shots.listen(form);
+    return form;
   }
 
   function card(item, group, isPt) {

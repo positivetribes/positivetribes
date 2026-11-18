@@ -84,7 +84,10 @@ function setup({ live = true, active = true } = {}) {
   const request = async (who = 'sam@uep.org', title = 'Add a waitlist') => {
     const r = await call(who, 'c/uep/items', 'POST', { title, project_id: 1, care: true });
     assert.equal(r.status, 201, JSON.stringify(r.body));
-    return sqlite.prepare('SELECT item_id FROM care_requests ORDER BY item_id DESC LIMIT 1').get().item_id;
+    const id = sqlite.prepare('SELECT item_id FROM care_requests ORDER BY item_id DESC LIMIT 1').get().item_id;
+    // The browser sends the request's screenshots to this id.
+    assert.equal(r.body.id, id);
+    return id;
   };
   const triage = (id, payload) => call('eric@positivetribes.org', `c/uep/care/${id}/triage`, 'POST', payload);
   const ledger = () => sqlite.prepare('SELECT kind, credits, item_id FROM credit_ledger WHERE client_id = 1 ORDER BY id').all().map(r => ({ ...r }));
