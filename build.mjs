@@ -58,7 +58,7 @@ if (measurementId) {
 // Up ENDing Parkinson's scheduling prototype, copied as-is with the same GA4 tag as Coyote.
 await cp('uep', 'public/uep', { recursive: true });
 if (measurementId) {
-  for (const page of ['uep/index.html', 'uep/v3/index.html']) {
+  for (const page of ['uep/index.html', 'uep/v3/index.html', 'uep/v4/index.html']) {
     const uep = await readFile('public/' + page, 'utf8');
     if (!uep.includes('</head>')) throw new Error(page + ' is missing </head>.');
     await writeFile('public/' + page, uep.replace('</head>', analytics + '</head>'));
