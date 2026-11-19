@@ -398,7 +398,7 @@ const state={
 };
 /* ---------- Volunteer sample data (v4) ---------- */
 // Roles and how many each session needs are set per gym (hub #157). Shifts are the climb sessions themselves.
-const VROLE_DEF=[['belay','Belayer','belayers'],['greet','Greeter','greeters'],['setup','Setup and gear','setup helpers'],['spot','Spotter','spotters']];
+const VROLE_DEF=[['lead','Lead','leads'],['colead','Co-lead','co-leads'],['belay','Belayer','belayers']];
 const vroleName=k=>(VROLE_DEF.find(r=>r[0]===k)||[k,k])[1];
 const vrolePlural=k=>(VROLE_DEF.find(r=>r[0]===k)||[k,k,k])[2];
 // Volunteers without a sample account. bg: background check done, by gym (only done or not done is kept).
@@ -413,15 +413,15 @@ const VPOOL=[
 const VS=(n,sid,role,k)=>({n,sid,role,standing:true,missed:[],k});
 state.vol={
   set:{approve:false}, site:'gol', bgSites:['alx'], wait:{}, added:{},
-  roles:{gol:{belay:2,greet:1},tim:{belay:3,greet:1},col:{belay:1},bou:{belay:2},pdx:{belay:2,greet:1},chi:{belay:1},aus:{belay:2},ral:{belay:1},alx:{belay:2,greet:1}},
+  roles:{gol:{belay:2,colead:1},tim:{belay:3,colead:1},col:{belay:1},bou:{belay:2},pdx:{belay:2,colead:1},chi:{belay:1},aus:{belay:2},ral:{belay:1},alx:{belay:2,colead:1}},
   shifts:[
-    VS('Jo Kim','s1','belay'),VS('Tess Morgan','s1','greet'),
+    VS('Jo Kim','s1','belay'),VS('Tess Morgan','s1','colead'),
     VS('Ray Ortiz','s2','belay'),VS('Wendy Hall','s2','belay'),
-    VS('Jo Kim','s3','belay'),VS('Ray Ortiz','s3','belay'),VS('Tess Morgan','s3','greet'),
-    VS('Jamie Ortiz','s4','belay','jamie@example.org'),VS('Lena Brooks','s4','belay'),VS('Owen Price','s4','belay'),VS('Kara Mills','s4','greet'),
+    VS('Jo Kim','s3','belay'),VS('Ray Ortiz','s3','belay'),VS('Tess Morgan','s3','colead'),
+    VS('Jamie Ortiz','s4','belay','jamie@example.org'),VS('Lena Brooks','s4','belay'),VS('Owen Price','s4','belay'),VS('Kara Mills','s4','colead'),
     VS('Owen Price','s5','belay'),VS('Lena Brooks','s5','belay'),VS('Kara Mills','s5','belay'),
     VS('Dana Lee','s6','belay'),VS('Chris Ng','s7','belay'),VS('Hank Ruiz','s7','belay'),
-    VS('Robin Hale','s8','belay'),VS('Leo Grant','s8','belay'),VS('Mia Ford','s8','greet'),
+    VS('Robin Hale','s8','belay'),VS('Leo Grant','s8','belay'),VS('Mia Ford','s8','colead'),
     VS('Gina Shaw','s9','belay')
   ],
   msg:{to:'all',ch:'text',body:'',sent:[],today:0},
@@ -460,7 +460,7 @@ function signIn(){
     <div class="stack" style="gap:6px"><h2>Sign in</h2><p class="muted">One sign-in for everyone. No password to remember.</p></div>
     <label class="f" for="email">Email or mobile number<input type="email" id="email" data-bind="email" value="${esc(L.email)}" autocomplete="email" placeholder="you@example.org"></label>
     <button class="btn full" data-act="sendcode" ${L.email.trim()?'':'disabled'}>Send me a code</button>
-    <div class="card"><h3>Want to volunteer?</h3><p class="small">Belay, greet or help set up at a climb near you. Already climb with UEP? Use the same email and it joins your account.</p><button class="btn ghost full" data-act="vjgo">Sign up to volunteer</button></div>
+    <div class="card"><h3>Want to volunteer?</h3><p class="small">Belay or co-lead at a climb near you. Already climb with UEP? Use the same email and it joins your account.</p><button class="btn ghost full" data-act="vjgo">Sign up to volunteer</button></div>
     <div class="card"><h3>Fundraising for the April 3 climb?</h3><p class="small">Volunteers, family and friends can make a fundraising page without signing up to climb. No waiver needed.</p><button class="btn ghost full" data-act="givego">Start my fundraising page</button></div>
     <div class="card"><h3>Try a sample account</h3><p class="muted small">The app works out who you are from your account. There is no climber or manager choice. New here? Follow the five-minute tour beside or below this screen.</p>
       <div class="stack" style="gap:8px">${ACCOUNTS.map(([e,l])=>`<button class="btn quiet sm full" data-act="fill" data-v="${e}" style="text-align:left">${esc(l)}<br><span class="muted small">${e}</span></button>`).join('')}</div></div>`;
@@ -529,7 +529,7 @@ function climberHome(){
   const pg=pageOf(state.user);
   if(pg)html+=`<div class="card"><div class="row"><h3>Your fundraising page</h3><span class="pill sun">${daysTo()} days to go</span></div>${goalBar(pg)}<button class="btn quiet sm" data-act="tab" data-v="fund">Open fundraising</button></div>`;
   else html+=`<div class="card"><span class="req">${esc(fmtLong(fromIso(CAMPAIGN.date)))}, 2027</span><h3>Climb and raise money for UEP</h3><p class="small">Make your own page with a goal, and share it with family and friends. It takes a minute.</p><button class="btn sm" data-act="fstart">Start my fundraising page</button></div>`;
-  if(!p.vol)html+=`<div class="card"><h3>Volunteer at your gym too?</h3><p class="small">Belay, greet or help set up. It joins this account, so there's nothing new to sign in to.</p><button class="btn ghost sm" data-act="vjgo" style="align-self:flex-start">Sign up to volunteer</button></div>`;
+  if(!p.vol)html+=`<div class="card"><h3>Volunteer at your gym too?</h3><p class="small">Belay or co-lead at your climb. It joins this account, so there's nothing new to sign in to.</p><button class="btn ghost sm" data-act="vjgo" style="align-self:flex-start">Sign up to volunteer</button></div>`;
   if(nx){
     html+=`<div class="hero">
       <span class="small" style="opacity:.85">${missing?'You said you can\'t make it':'Your next climb'}</span>
@@ -766,17 +766,18 @@ function volJoin(){
   const J=state.vj,signed=!!state.user;
   const ready=J.name.trim()&&J.email.trim()&&J.home;
   if(J.step===1)return `
-    <div class="hero"><span class="small">Volunteer with UEP</span><div class="big">Help people with Parkinson's climb</div><p>Belay, greet or help set up at a climb near you. Pick a regular spot or a single date, and release a date in one tap.</p></div>
+    <div class="hero"><span class="small">Volunteer with UEP</span><div class="big">Help people with Parkinson's climb</div><p>Belay or co-lead at a climb near you. Pick a regular spot or a single date, and release a date in one tap.</p></div>
     ${signed?`<div class="notice info"><b>Joining as ${esc(J.name)}</b>Volunteering is added to your account, ${esc(state.user)}. No second sign-in.</div>`:`
     <label class="f" for="vjname">Your name<input type="text" id="vjname" data-bind="vj.name" value="${esc(J.name)}" autocomplete="name"></label>
     <label class="f" for="vjemail">Email or mobile number<input type="email" id="vjemail" data-bind="vj.email" value="${esc(J.email)}" autocomplete="email" placeholder="you@example.org"></label>
     <p class="muted small">Already climb with UEP? Use the same email or mobile and it joins your account.</p>`}
     <label class="f" for="vjhome">Gym where you'll volunteer most<select id="vjhome" data-bind="vj.home"><option value="">Choose a gym</option>${SITES.map(s=>`<option value="${s.id}" ${J.home===s.id?'selected':''}>${esc(s.city)} · ${esc(s.gym)}</option>`).join('')}</select></label>
     <label class="check"><input type="checkbox" data-bind="vj.belay" ${J.belay?'checked':''}><span>I'm belay certified<br><span class="muted small">Needed for belayer spots. The lead checks it at your first shift.</span></span></label>
+    <label class="check"><input type="checkbox" data-bind="vj.guide" ${J.guide?'checked':''}><span>I've read the volunteer guide and watched the videos<br><span class="muted small">Sample: <a href="#" onclick="return false">Volunteer guide</a> · <a href="#" onclick="return false">Videos</a>. UEP supplies the real ones.</span></span></label>
     <label class="check"><input type="checkbox" data-bind="vj.texts" ${J.texts?'checked':''}><span>Text me shift reminders and messages from my lead<br><span class="muted small">Otherwise they come by email. Reply STOP any time.</span></span></label>
     ${J.home&&state.vol.bgSites.includes(J.home)?`<div class="notice"><b>${esc(site(J.home).gym)} needs a background check</b>You can sign up now. You can pick shifts there once UEP marks your check done.</div>`:''}
     <p class="muted small">Step 1 of 2. Next, a short volunteer waiver.</p>
-    <button class="btn full" data-act="vjnext" ${(signed?J.home:ready)?'':'disabled'}>Next: volunteer waiver</button>
+    <button class="btn full" data-act="vjnext" ${(signed?J.home:ready)&&J.guide?'':'disabled'}>Next: volunteer waiver</button>
     <button class="linkbtn" data-act="vjback">${signed?'Back':'Back to sign-in'}</button>`;
   const k=J.email.trim().toLowerCase(),match=!signed&&state.people[k];
   return `<div class="stack" style="gap:6px"><h2>Step 2 of 2: volunteer waiver</h2>${signed?'':`<p class="muted">We sent a 6-digit code to <b>${esc(J.email)}</b> to confirm it's you. In this prototype it's filled in.</p>`}</div>
@@ -798,7 +799,7 @@ function vjCreate(){
 }
 
 function volPending(){return `<div class="hero"><div class="big">Thanks for signing up</div><p>UEP checks new volunteers before they pick shifts. You'll get a text or email when you're approved.</p></div>
-  ${QREF(159,'Whether new volunteers are approved before picking shifts. Molly can turn this on or off on her Volunteers tab.')}`}
+  ${QREF(159,'Answered Nov 19: volunteers confirm belay certification and read the volunteer guide; Sportrock sites need a background check. Approval stays optional on Molly\'s Volunteers tab.')}`}
 function volHome(){
   const p=me(),V=p.vol;
   if(V.status==='pending')return volPending();
@@ -808,16 +809,16 @@ function volHome(){
   if(nx){
     h+=`<div class="hero"><span class="small" style="opacity:.85">${gone(nx)?'You released this shift':'Your next shift'}</span><div class="big">${esc(fmtLong(nx.d))}</div>
       <div>${esc(vroleName(nx.v.role))} · ${esc(nx.s.name)} · ${t12(nx.s.from)} · ${esc(site(nx.s.site).city)}</div>
-      ${gone(nx)?`<button class="btn" data-act="vundo" data-v="${nx.i}|${iso(nx.d)}">I can come after all</button>`:`<button class="btn ghost" data-act="vrelease" data-v="${nx.i}|${iso(nx.d)}">I can't make it this time</button>`}</div>`;
+      ${gone(nx)?`<button class="btn" data-act="vundo" data-v="${nx.i}|${iso(nx.d)}">I can come after all</button>`:`<div class="row" style="gap:8px"><button class="btn ghost" data-act="vrelease" data-v="${nx.i}|${iso(nx.d)}">I can't make it this time</button><button class="btn ghost" data-act="vcal">Add my shifts to my calendar</button></div>`}</div>`;
   }else h+=`<div class="hero"><div class="big">No shifts yet</div><p>Pick a regular spot and you're on every time, or help on a single date.</p><button class="btn" data-act="${role()==='volunteer'?'tab':'vtab'}" data-v="vfind">Find a shift</button></div>`;
   const reg=myShifts().filter(x=>x.v.standing);
   if(reg.length)h+=`<div class="card"><h3>Your regular spots</h3><p class="muted small">You stay on every time until you stop. Release a single date from the shift itself.</p>
     ${reg.map(({v,i})=>{const s=sess(v.sid);return `<div class="row" style="border-top:1px solid var(--line);padding-top:10px"><div><b>${esc(vroleName(v.role))}, ${esc(s.name)}</b><div class="muted small">${esc(ruleText(s.rule))} · ${esc(site(s.site).city)}</div></div><button class="btn quiet sm" data-act="vstop" data-v="${i}">Stop</button></div>`}).join('')}</div>`;
   if(ups.length>1)h+=`<div class="card"><h3>Coming up</h3>${ups.slice(1,5).map(x=>`<div class="row small"><span>${esc(fmt(x.d))} · ${esc(vroleName(x.v.role))}, ${esc(x.s.name)}</span>${gone(x)?'<span class="pill plain">Released</span>':`<button class="btn quiet sm" data-act="vrelease" data-v="${x.i}|${iso(x.d)}">Release</button>`}</div>`).join('')}</div>`;
   h+=`<div class="card"><h3>Reminders</h3>${nx&&!gone(nx)?`<p class="small bubble">UEP: You're ${esc(vroleName(nx.v.role).toLowerCase())} at ${esc(site(nx.s.site).gym)}, ${esc(fmt(nx.d))} at ${t12(nx.s.from)}. Can't make it? Tap to release: uep.link/v/2317</p>`:''}
-    <div class="chips" role="group" aria-label="Reminders by"><button class="chip" data-act="vtexts" data-v="1" aria-pressed="${V.texts}">Text</button><button class="chip" data-act="vtexts" data-v="0" aria-pressed="${!V.texts}">Email</button></div>
-    <p class="muted small">Sample: a reminder 2 days before each shift, with a one-tap link to release it. Your lead's messages come the same way.</p>
-    ${QREF(161,'Which reminders volunteers get and when. Tell us which VOMO reminders you would miss.')}</div>`;
+    <div class="chips" role="group" aria-label="Reminders by"><button class="chip" data-act="vtexts" data-v="1" aria-pressed="${V.texts}">Text</button><button class="chip" data-act="vtexts" data-v="0" aria-pressed="${!V.texts}">Email</button><button class="chip" data-act="vremoff" aria-pressed="${!!V.remOff}">Reminders off</button></div>
+    <p class="muted small">${V.remOff?'Reminders are off. You still get one confirmation when you pick shifts, and your lead\'s messages.':'One confirmation when you pick shifts, however many, then one reminder 2 days before each shift with a one-tap link to release it. Your lead\'s messages come the same way.'}</p>
+    ${QREF(161,'Answered Nov 19: one confirmation for many shifts, add to calendar, and one reminder a volunteer can turn off.')}</div>`;
   return h;
 }
 function volFind(){
@@ -839,8 +840,8 @@ function volFind(){
           :`<span class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn sm" data-act="vtake" data-v="${wk}|stand">Every time</button><button class="btn ghost sm" data-act="vtake" data-v="${wk}|once">Just ${esc(fmt(nx).replace(/^\w+, /,''))}</button></span>`;
         return `<div class="row" style="border-top:1px solid var(--line);padding-top:8px"><span><b>${esc(vroleName(k))}</b> <span class="pill ${full?'ok':'warn'}">${have} of ${need}</span>${waiting.length?` <span class="muted small">${waiting.length} waiting</span>`:''}</span>${right}</div>`}).join('')}</div>`}).join('')
     :`<div class="notice info"><b>No sessions posted yet</b>This gym hasn't set up its schedule in the prototype.</div>`}
-    ${QREF(160,'Regular spots or week by week, and what happens when a volunteer cancels or doesn\'t show. This shows regular spots, one-tap release and a waitlist per role.')}
-    ${QREF(157,'Which roles each gym needs, and how many per session. These are sample roles.')}`;
+    ${QREF(160,'Answered Nov 19: week by week today, and a regular spot is wanted. A released shift reopens for others, and the waitlist gets a text.')}
+    ${QREF(157,'Answered Nov 19: Lead, Co-lead and Belayer. Not every session needs a lead, and belayer numbers vary, so leads change them.')}`;
 }
 function volHours(){
   const p=me(),V=p.vol,tot=V.hours.reduce((t,x)=>t+x.h,0);
@@ -864,6 +865,8 @@ function leadVols(x){
   return `<div class="card"><div class="row"><h3>Volunteers</h3><button class="btn sm" data-act="vmsg">Message my volunteers</button></div>
     ${rows.length?rows.map(v=>`<div class="row small" style="border-top:1px solid var(--line);padding-top:8px"><span><b>${esc(v.n)}</b> <span class="pill plain">${esc(vroleName(v.role))}</span></span>${v.missed.includes(di)?'<span class="pill bad">Can\'t make it</span>':v.standing?'<span class="pill">Regular</span>':'<span class="pill sun">One time</span>'}</div>`).join(''):'<p class="muted small">No volunteers signed up yet.</p>'}
     ${vRoles(x.s.site).map(([k])=>{const n=vOn(x.s,k,di).length,need=vNeed(x.s.site,k);return `<span class="pill ${n>=need?'ok':'warn'}" style="align-self:flex-start">${esc(vroleName(k))}s: ${n} of ${need}</span>`}).join(' ')}
+    <div class="small" style="font-weight:700;margin-top:6px">How many this gym's sessions need</div>
+    ${VROLE_DEF.map(([k,l])=>{const n=vNeed(x.s.site,k);return `<div class="row small"><span>${esc(l)}</span><span class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn quiet sm" data-act="vrole" data-v="${x.s.site}|${k}|-1" aria-label="Fewer ${esc(vrolePlural(k))}" ${n?'':'disabled'}>−</button><b style="min-width:20px;text-align:center">${n}</b><button class="btn quiet sm" data-act="vrole" data-v="${x.s.site}|${k}|1" aria-label="More ${esc(vrolePlural(k))}">+</button></span></div>`}).join('')}
   </div>${state.vol.msg.open?leadMsg(x):''}`;
 }
 function leadMsg(x){
@@ -880,7 +883,7 @@ function leadMsg(x){
       <p class="muted small">Texts go only to the ${txt} who said yes to texts. The other ${to.length-txt} get it by email. Text replies are forwarded to your email.</p>`
     :`<div class="small bubble"><div class="muted">From: ${esc(p.name)} via UEP Climb<br>Reply-to: ${esc(state.user)}</div><p style="margin-top:6px">${esc(body)}</p></div>
       <p class="muted small">Goes to all ${to.length}. Replies come to your email, not UEP's inbox. Volunteers never see each other's addresses.</p>`}
-    ${QREF(163,'Who a lead\'s message reaches, and where replies go.')}
+    ${QREF(163,'Answered Nov 19: the lead\'s volunteers, all at once or one session\'s, by email or text. Replies go to the lead\'s own email.')}
     <div class="row"><button class="btn sm" style="flex:1" data-act="vmsend">Send to ${to.length}</button><button class="btn quiet sm" data-act="vmsg">Close</button></div></div>`;
 }
 
@@ -910,12 +913,12 @@ function adminVolunteers(){
     <div class="card"><div class="row"><h3>Approve new volunteers first</h3><button class="chip" data-act="vapprove" aria-pressed="${V.set.approve}">${V.set.approve?'On':'Off'}</button></div>
       <p class="small">${V.set.approve?'New volunteers wait for UEP to approve them before picking shifts. They get a text or email when you do.':'New volunteers pick shifts as soon as they sign up and sign the waiver.'}</p>
       ${pend.length?pend.map(([k,p])=>`<div class="row" style="border-top:1px solid var(--line);padding-top:8px"><span><b>${esc(p.name)}</b><div class="muted small">${esc(site(p.vol.home).city)} · ${p.vol.belay?'Belay certified':'Not belay certified'}</div></span><button class="btn sm" data-act="vok" data-v="${esc(k)}">Approve</button></div>`).join(''):V.set.approve?'<p class="muted small">No one waiting. Sign up a new volunteer to see it.</p>':''}
-      ${QREF(159,'Whether anyone approves new volunteers before they pick shifts. Try it on and off.')}</div>
+      ${QREF(159,'Answered Nov 19: belay certification, the volunteer guide and, at Sportrock, a background check. Approval stays optional; try it on and off.')}</div>
     <div class="card"><h3>Roles each session needs</h3>
       <label class="f" for="vasite">Gym<select id="vasite" data-bind="vasite">${SITES.map(s=>`<option value="${s.id}" ${s.id===asite?'selected':''}>${esc(s.city)} · ${esc(s.gym)}</option>`).join('')}</select></label>
       ${VROLE_DEF.map(([k,l])=>{const n=(V.roles[asite]||{})[k]||0;return `<div class="row" style="border-top:1px solid var(--line);padding-top:8px"><b>${esc(l)}</b><span class="row" style="flex-wrap:nowrap;gap:6px"><button class="btn quiet sm" data-act="vrole" data-v="${asite}|${k}|-1" aria-label="Fewer ${esc(vrolePlural(k))}" ${n?'':'disabled'}>−</button><span style="min-width:24px;text-align:center"><b>${n}</b></span><button class="btn quiet sm" data-act="vrole" data-v="${asite}|${k}|1" aria-label="More ${esc(vrolePlural(k))}">+</button></span></div>`}).join('')}
       <p class="muted small">Per session at this gym. Leads see a warning when a session is short. Belayer spots need belay certification.</p>
-      ${QREF(157,'Which roles there are, and how many of each a session needs.')}</div>
+      ${QREF(157,'Answered Nov 19: Lead, Co-lead and Belayer. You set each gym\'s starting numbers; leads change them.')}</div>
   </div>
   <div class="split">
     <div class="card"><h3>Background checks</h3><p class="small">${V.bgSites.map(s=>esc(site(s).gym)).join(', ')} ${V.bgSites.length===1?'asks':'ask'} for a background check before a volunteer's first shift. Booking there stays blocked until you mark it done.</p>
@@ -1095,8 +1098,8 @@ function adminFundraising(){
 
 /* ---------- Notes beside the app ---------- */
 const TOUR=[
-  {k:'jamie@example.org',who:'Jamie, a volunteer',do:['On My shifts, tap "I can\'t make it" on the next Sunday shift. The lead is told, and anyone waiting gets a text.','Open Find a shift. At Timonium, Wednesday climb\'s belayer spots are full, so it offers a waitlist. Take the greeter spot just once instead.','Pick Alexandria: Sportrock needs a background check first. Then open My hours.']},
-  {k:'ruth@example.org',who:'Ruth, a climber who wants to volunteer',do:['On Home, tap "Sign up to volunteer." It joins her climber account: no second email or sign-in.','Sign the volunteer waiver, then take the greeter spot on Saturday climb at Golden. Morning climb isn\'t offered, since she climbs in it.']},
+  {k:'jamie@example.org',who:'Jamie, a volunteer',do:['On My shifts, tap "I can\'t make it" on the next Sunday shift. The lead is told, and anyone waiting gets a text.','Open Find a shift. At Timonium, Wednesday climb\'s belayer spots are full, so it offers a waitlist. Take the co-lead spot just once instead.','Pick Alexandria: Sportrock needs a background check first. Then open My hours.']},
+  {k:'ruth@example.org',who:'Ruth, a climber who wants to volunteer',do:['On Home, tap "Sign up to volunteer." It joins her climber account: no second email or sign-in.','Tick the volunteer guide, sign the volunteer waiver, then take the co-lead spot on Saturday climb at Golden. Morning climb isn\'t offered, since she climbs in it.']},
   {k:'pat@example.org',who:'Pat, a lead volunteer',do:['Check-in now lists volunteers next to climbers, with a warning when a session is short of help.','Tap "Message my volunteers." Switch between text and email to see who gets what and where replies go.']},
   {k:'molly@example.org',who:'Molly, the admin',do:['Open the Volunteers tab. Change how many belayers Golden needs, and turn on "Approve new volunteers first."','Mark a Sportrock background check done, add hours by hand, and download hours by gym and month.']}
 ];
@@ -1108,8 +1111,8 @@ const NOTES={
     b:['What someone sees comes from what they are. A page makes someone a fundraiser; a signed waiver makes someone a climber. There is still no role picker.','In the full build the server checks this too: a fundraising-only account cannot open booking or waiver pages, and never gets climbing reminders or waiver texts.','Donors don\'t need an account. They give from the public page.','Every gift goes to Virtuous with the donor\'s name.'],
     t:'Open Share, then "See my page as a donor," and give $50.',r:'Volunteers'},
   volunteer:{h:'Volunteers in the same app',p:'Volunteers sign in like everyone else and pick shifts on the same climb sessions climbers book. This replaces volunteer scheduling in VOMO.',
-    b:['A shift is a role on a climb session, such as belayer or greeter. Each gym sets how many it needs.','Take a regular spot once and stay on, or help on a single date. One tap releases a date, and the lead is told.','When a role is full, join its waitlist. The first person waiting gets a text when a spot opens.','Hours add up from attendance, plus any UEP adds by hand, for the Expert Voice discount.','Someone who climbs and volunteers has one account with both.'],
-    t:'Release your next shift, then take a one-time greeter spot.',r:'Volunteers'},
+    b:['A shift is a role on a climb session, such as belayer or co-lead. Each gym sets how many it needs.','Take a regular spot once and stay on, or help on a single date. One tap releases a date, and the lead is told.','When a role is full, join its waitlist. The first person waiting gets a text when a spot opens.','Hours add up from attendance, plus any UEP adds by hand, for the Expert Voice discount.','Someone who climbs and volunteers has one account with both.'],
+    t:'Release your next shift, then take a one-time co-lead spot.',r:'Volunteers'},
   vjoin:{h:'One sign-up for volunteers',p:'A short form from the sign-in screen or a link on the UEP website. No climbing questions.',
     b:['Name, email or mobile, home gym, belay certification, and whether texts are OK.','If the email or mobile already has an account, volunteering joins it. A code confirms it\'s really them.','A short volunteer waiver, signed once, covers every gym.','UEP can choose to approve new volunteers before they pick shifts.'],
     t:'Fill in the form, sign the waiver, and pick a shift.',r:'Volunteer sign-up'},
@@ -1254,7 +1257,7 @@ document.addEventListener('click',e=>{
   else if(a==='fsend')say(v==='qr'?'Your QR card opens as a page to print.':v==='text'?'Opens your phone\'s messages with this text filled in.':'Opens your email with this message filled in.');
   else if(a==='finvite')say('Sign-up link copied. Paste it into the Virtuous email to volunteers.');
   else if(a==='fexport')say('Gifts downloaded as a spreadsheet, with donor names and the fundraiser each gift was for.');
-  else if(a==='vjgo'){const p=state.user?me():null;state.give=null;state.vj={step:1,name:p?p.name:'',email:p?state.user:'',home:p?(p.home||p.lead||''):'',belay:false,texts:true,ack:false,sig:''}}
+  else if(a==='vjgo'){const p=state.user?me():null;state.give=null;state.vj={step:1,name:p?p.name:'',email:p?state.user:'',home:p?(p.home||p.lead||''):'',belay:false,guide:false,texts:true,ack:false,sig:''}}
   else if(a==='vjback')state.vj=null;
   else if(a==='vjnext')state.vj.step=2;
   else if(a==='vjstep1')state.vj.step=1;
@@ -1262,11 +1265,13 @@ document.addEventListener('click',e=>{
   else if(a==='vtab')state.vol.tab=v;
   else if(a==='vtake'){const [sid,rl,m]=v.split('|'),p=me(),s=sess(sid),wk=sid+'|'+rl;state.vol.shifts.push({n:p.name,sid,role:rl,standing:m==='stand',date:m==='once'?iso(nextOf(s)):null,missed:[],k:state.user});
     if(state.vol.wait[wk])state.vol.wait[wk]=state.vol.wait[wk].filter(x=>x!==state.user);
-    say(m==='stand'?`You're the ${vroleName(rl).toLowerCase()} ${ruleText(s.rule).replace(/^\w/,c=>c.toLowerCase())}. ${leadFirst(s.site)}, the lead, can see you on the list.`:`You're the ${vroleName(rl).toLowerCase()} on ${fmt(nextOf(s))}. ${leadFirst(s.site)}, the lead, can see you on the list.`)}
+    say(m==='stand'?`You're the ${vroleName(rl).toLowerCase()} ${ruleText(s.rule).replace(/^\w/,c=>c.toLowerCase())}. ${leadFirst(s.site)}, the lead, can see you on the list. One confirmation email covers all your shifts, with an add-to-calendar link.`:`You're the ${vroleName(rl).toLowerCase()} on ${fmt(nextOf(s))}. ${leadFirst(s.site)}, the lead, can see you on the list. One confirmation email covers all your shifts, with an add-to-calendar link.`)}
   else if(a==='vwait'){const W=state.vol.wait;(W[v]=W[v]||[]).push(state.user);say('You\'re on the waitlist. If a spot opens, you get a text first.')}
   else if(a==='vrelease'){const [i,d]=v.split('|'),sh=state.vol.shifts[+i],s=sess(sh.sid),w=(state.vol.wait[sh.sid+'|'+sh.role]||[]).length;sh.missed.push(d);say(`Released for ${fmt(fromIso(d))}. ${leadFirst(s.site)}, the lead, has been told${w?`, and ${w} waiting got a text`:''}. Your regular spot stays.`)}
   else if(a==='vundo'){const [i,d]=v.split('|'),sh=state.vol.shifts[+i];sh.missed=sh.missed.filter(x=>x!==d);say('Great, you\'re back on.')}
   else if(a==='vstop'){const sh=state.vol.shifts.splice(+v,1)[0];say(`Regular spot stopped. ${leadFirst(sess(sh.sid).site)}, the lead, has been told.`)}
+  else if(a==='vcal')say('Your shifts are added to your calendar. Regular spots update when the lead changes a time.');
+  else if(a==='vremoff'){const V=me().vol;V.remOff=!V.remOff;say(V.remOff?'Shift reminders are off. You still get your confirmation and messages from your lead.':'Shift reminders are back on.')}
   else if(a==='vtexts'){me().vol.texts=v==='1';say(v==='1'?'Reminders and lead messages now come by text.':'Reminders and lead messages now come by email.')}
   else if(a==='vbgask'){me().vol.askBg=v;say('Request sent. UEP will email you the background check link.')}
   else if(a==='vmine')say('Your hours downloaded as a spreadsheet.');
@@ -1343,7 +1348,7 @@ document.addEventListener('input',e=>{
   if(k.startsWith('g.')){const f=k.slice(2);state.give[f]=val;if(e.target.tagName==='SELECT')render();else{const b=$('[data-act="gsend"]');if(b)b.disabled=!giveReady()}return}
   if(k.startsWith('gv.')){const D=state.fund.give,f=k.slice(3);D[f]=val;if(f==='anon')return;const amt=D.other?+D.other||0:D.a;const b=$('[data-act="gstep"][data-v="2"]');if(b)b.disabled=!(amt>=5&&D.name.trim());
     if(f==='other')document.querySelectorAll('[data-act="gamt"]').forEach(c=>c.setAttribute('aria-pressed',String(!D.other&&D.a===+c.dataset.v)));return}
-  if(k.startsWith('vj.')){state.vj[k.slice(3)]=val;if(e.target.type==='checkbox'||e.target.tagName==='SELECT')render();else{const J=state.vj,b=$('[data-act="vjnext"]');if(b)b.disabled=!(J.name.trim()&&J.email.trim()&&J.home);const c=$('[data-act="vjcreate"]');if(c)c.disabled=!(J.ack&&J.sig.trim())}return}
+  if(k.startsWith('vj.')){state.vj[k.slice(3)]=val;if(e.target.type==='checkbox'||e.target.tagName==='SELECT')render();else{const J=state.vj,b=$('[data-act="vjnext"]');if(b)b.disabled=!(J.name.trim()&&J.email.trim()&&J.home&&J.guide);const c=$('[data-act="vjcreate"]');if(c)c.disabled=!(J.ack&&J.sig.trim())}return}
   if(k==='vsite'){state.vol.site=val;render();return}
   if(k==='vasite'){state.vol.asite=val;render();return}
   if(k==='vm.body'){state.vol.msg.body=val;return}
@@ -1368,7 +1373,7 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('change',e=>{const k=e.target.dataset&&e.target.dataset.bind;if(k==='vm.body')render();if(k==='d.date'||k==='d.cap'||k==='d.from'||k==='d.to')render()});
 // The plain sign-up links: /uep/v4/?give for fundraising, /uep/v4/?volunteer to volunteer.
-if(/[?&]volunteer\b/.test(location.search))state.vj={step:1,name:'',email:'',home:'',belay:false,texts:true,ack:false,sig:''};
+if(/[?&]volunteer\b/.test(location.search))state.vj={step:1,name:'',email:'',home:'',belay:false,guide:false,texts:true,ack:false,sig:''};
 // /uep/v4/?give opens the fundraising sign-up.
 if(/[?&]give\b/.test(location.search))state.give={step:1,name:'',email:'',aff:'',team:'',goal:CAMPAIGN.defGoal,story:''};
 // Walkthrough links: ?as=ruth signs in as a sample account; tab, mode (climber or lead) and f (page, donors or share)
