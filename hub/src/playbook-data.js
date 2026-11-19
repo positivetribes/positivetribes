@@ -7,6 +7,11 @@ export const PLAYBOOK = {
       "description": "Build and send a Positive Tribes intro packet (personal cover + one-pager + showcase cases, one PDF) for a new prospect. Use when Eric says /intro-package <client>, asks for an intro package or packet, or is about to send a first or follow-up email introducing Positive Tribes to a prospect."
     },
     {
+      "name": "log-meeting",
+      "args": "<client> [transcript link or file]",
+      "description": "Log a client or prospect meeting. Files the transcript in the client's private Drive Meetings folder, writes the summary and decisions on the Salesforce meeting Task with a link to the transcript, adds dated follow-up Tasks for every promise, updates the Opportunity and the client's notes. Use when Eric says /log-meet…"
+    },
+    {
       "name": "log-sent",
       "args": "<client>",
       "description": "Log an email Eric just sent to a client or prospect. Checks the Task Gmail logged in Salesforce is on the right record and moves it if not, closes the Task the email completes, adds a dated follow-up, records attachments in the hub and Drive, and updates the client's notes. Use when Eric says /log-sent, \"sent\", \"email…"
