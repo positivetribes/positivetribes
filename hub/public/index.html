@@ -2163,7 +2163,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       };
       const reminders = pt ? [] : data.reminders.map(r => h('li', { class: 'bp-pin' },
         h('a', { class: 'bp-row', href: r.url, onclick: () => open(false) }, h('span', { class: 'bp-dot', 'aria-hidden': 'true' }), h('span', { class: 'bp-body' }, h('span', { class: 'bp-text' }, reminderText(r))))));
-      const action = pt || preview || !data.items.length ? null : h('div', { class: 'bp-acts' },
+      const action = pt ? (data.items.length ? h('div', { class: 'bp-acts' }, h('button', { class: 'bp-link', type: 'button', onclick: () => {
+          if (confirm(`Clear all ${data.items.length} notifications? They won’t come back.`)) clearInbox(data.items);
+        } }, 'Clear all')) : null)
+        : preview || !data.items.length ? null : h('div', { class: 'bp-acts' },
         data.unread ? h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all') }, 'Mark all read') : null,
         h('button', { class: 'bp-link', type: 'button', onclick: () => markRead('all', true) }, 'Clear all'));
       const empty = pt ? 'Nothing new from clients.' : 'You’re all caught up.';
@@ -2194,7 +2197,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     }
     async function clearInbox(rows) {
       try {
-        await api('/admin/inbox/clear', { method: 'POST', body: JSON.stringify({ items: rows.map(i => ({ backlog: i.backlog, eventIds: i.eventIds })) }) });
+        // The server takes 200 rows a call, so Clear all goes in chunks.
+        for (let n = 0; n < rows.length; n += 200) {
+          await api('/admin/inbox/clear', { method: 'POST', body: JSON.stringify({ items: rows.slice(n, n + 200).map(i => ({ backlog: i.backlog, eventIds: i.eventIds })) }) });
+        }
         await load();
         // The Inbox tab shows the same list, so it follows.
         const badge = $('cc-inbox-count');
