@@ -15,6 +15,7 @@ import { webAdmin, latestWebDigest } from './web.js';
 import { timelineAdmin } from './timeline.js';
 import { feedbackOverview } from './feedback.js';
 import { emailFilingOverview } from './emailfix.js';
+import { pocUsage } from './pocusage.js';
 import { PLAYBOOK } from './playbook-data.js';
 
 const OWN_ACCOUNT = 'Positive Tribes';
@@ -805,7 +806,9 @@ export async function handleAdmin(request, env, url, who) {
       const feedback = env.DB ? await feedbackOverview(env.DB).catch(error => { console.error('admin_feedback_failed', error.message); return null; }) : null;
       // Email filing check (src/emailfix.js): the latest nightly run and what it moved this week. A broken read never hides Today.
       const emailFiling = await emailFilingOverview(db).catch(error => { console.error('admin_email_filing_failed', error.message); return null; });
-      return json({ ...view, testing, needsReply, estimates, donated, web, answers, feedback, emailFiling, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
+      // PoC use (src/pocusage.js): live from each PoC Worker over a service binding. A broken read never hides Today.
+      const pocs = await pocUsage(env).catch(error => { console.error('admin_poc_usage_failed', error.message); return []; });
+      return json({ ...view, testing, needsReply, estimates, donated, web, answers, feedback, emailFiling, pocs, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });
