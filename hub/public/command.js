@@ -244,6 +244,25 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <span class="meta">${esc(parts.join(' · '))}</span></summary><ul class="reply-list">${f.moves.slice(0, 30).map(row).join('')}</ul>
       <p class="muted small">Each night the hub moves Gmail-logged emails filed on another client's record to the contact's own Opportunity (or Account). Last 7 days.</p></details>` };
   };
+  // PoC use (src/pocusage.js): one folded line per prospect PoC, last 7 days, opening to each person. Quiet edge; never rust.
+  const pocPart = data => {
+    const list = data.pocs || [];
+    if (!list.length) return { body: '' };
+    const when = d => d ? new Date(String(d).replace(' ', 'T') + 'Z').toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+    const one = p => {
+      if (!p.ok) return `<details class="est-group"><summary><span class="who">${esc(p.client)} PoC</span><span class="meta">could not be read just now</span></summary></details>`;
+      const screens = p.people.reduce((n, x) => n + x.screens, 0);
+      const line = p.people.length ? [plural(p.people.length, 'person'), plural(screens, 'screen')].join(' · ')
+        : 'no visits in 7 days' + (p.lastEver ? ' · last ' + when(p.lastEver) : ' · none logged yet');
+      const row = x => `<li><span class="who">${esc(x.email)}</span> <span class="what">${esc(plural(x.days, 'day'))}, ${esc(plural(x.screens, 'screen'))}</span>
+        <span class="meta">${esc(Object.entries(x.sites).map(([k, v]) => k + ' ' + v).join(' · '))} · last ${esc(when(x.last))}</span></li>`;
+      return `<details class="est-group"><summary><span class="who">${esc(p.client)} PoC</span><span class="meta">${esc(line)}</span></summary>
+        ${p.people.length ? `<ul class="reply-list">${p.people.map(row).join('')}</ul>` : ''}
+        <p class="muted small"><a href="#/${esc(p.workspace)}/home">${esc(p.name)}</a>. Screens opened on the PoC sites while signed in, last 7 days; our own visits are left out.</p></details>`;
+    };
+    return { body: list.map(one).join('') };
+  };
   // Client phases in testing, one row each. Late only once the window has passed.
   const countdownRows = data => {
     const rows = (data.testing || []).map(r => {
@@ -323,7 +342,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   function renderToday(box, data) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
-    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data), fb = feedbackPart(data), ef = emailFilingPart(data);
+    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data), fb = feedbackPart(data), ef = emailFilingPart(data), poc = pocPart(data);
     const now = nowList(data), inNow = now[0]?.type === 'reply' ? now[0].id : '';
     const group = label => `<h3 class="group-label">${esc(label)}</h3>`;
     const hour = new Date().getHours();
@@ -336,7 +355,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${shortList(data.recent)}</section>
     </div>
     ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late || fb.late || ef.late ? ' late' : ''}" aria-label="This week">
-      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}${fb.body}${ef.body}</section>`;
+      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}${poc.body}${fb.body}${ef.body}</section>`;
     wireNow(box);
     box.onclick = async e => {
       const t = e.target.closest('[data-today-done]');

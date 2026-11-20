@@ -33,6 +33,8 @@
   },
   // Patch's morning check: 12:00 UTC, 8am Eastern (7am in winter). The website digest: Mondays 14:00 UTC.
   "triggers": { "crons": ["0 12 * * *", "0 14 * * 1"] },
+  // Prospect PoCs (src/pocusage.js): each PoC Worker's `Usage` RPC entrypoint, for Today's "PoC use" line.
+  "services": [{ "binding": "POC_WFA", "service": "wfa-commissions", "entrypoint": "Usage" }],
   "d1_databases": [
     { "binding": "DB", "database_name": "hub-db", "database_id": "bfa66ad3-605c-4b6c-923e-2329f17e89bf", "migrations_dir": "migrations" },
     // The command center's own notes, next steps, synced activity and sync history (tables created at runtime).
