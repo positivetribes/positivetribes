@@ -64,11 +64,19 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   const doneControl = i => i.type === 'step' && i.id ? `<button type="button" class="tick" data-today-done="${esc(i.id)}" title="Mark done" aria-label="Mark done: ${esc(i.title)}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : '';
   // Long lists show the newest few, with the rest one click away.
   const RECENT_SHOWN = 10;
-  function shortList(items, opts) {
-    if (items.length <= RECENT_SHOWN + 2) return byDay(items, opts);
-    const rest = items.slice(RECENT_SHOWN);
-    return byDay(items.slice(0, RECENT_SHOWN), opts) + `<details class="more"><summary>Show ${rest.length} more</summary>${byDay(rest, opts)}</details>`;
+  function shortList(items, opts, shown = RECENT_SHOWN) {
+    if (items.length <= shown + 2) return byDay(items, opts);
+    const rest = items.slice(shown);
+    return byDay(items.slice(0, shown), opts) + `<details class="more"><summary>Show ${rest.length} more</summary>${byDay(rest, opts)}</details>`;
   }
+  // Today's Coming up and Recent panels fold to their heading; the choice is kept per browser.
+  const foldKey = name => 'cc-fold-' + name;
+  const foldOpen = name => { try { return localStorage.getItem(foldKey(name)) !== 'closed'; } catch { return true; } };
+  const foldPanel = (name, title, span, items, body) =>
+    `<details class="panel fold" data-fold="${esc(name)}"${foldOpen(name) ? ' open' : ''}><summary><h2>${esc(title)}<span class="count">${esc(span)} · ${items.length}</span></h2></summary>${body}</details>`;
+  const wireFolds = box => box.querySelectorAll('details.fold[data-fold]').forEach(d => d.addEventListener('toggle', () => {
+    try { localStorage.setItem(foldKey(d.dataset.fold), d.open ? 'open' : 'closed'); } catch {}
+  }));
   function byDay(items, opts) {
     if (!items.length) return '<p class="empty">Nothing here.</p>';
     let html = '', last = null;
@@ -351,12 +359,12 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     ${attention.length ? `<section class="panel needs-reply attention" aria-label="Needs attention"><p class="label"><strong>Needs attention</strong> <span class="muted small">${attention.length}</span></p><ul class="items">${attention.map(i => item(i, { showDay: !!i.day && i.type !== 'stale' && i.type !== 'lead', showClient: i.type !== 'stale', tick: doneControl })).join('')}</ul></section>` : ''}
     ${cd.html || est.waiting ? `${group('Waiting on clients')}<section class="panel calm${cd.late || est.late ? ' late' : ''}" aria-label="Waiting on clients">${cd.html}${est.waiting}</section>` : ''}
     <div class="cols two">
-      <section class="panel"><h2>Coming up<span class="count">next 14 days</span></h2>${byDay(data.upcoming, { tick: doneControl })}</section>
-      <section class="panel"><h2>Recent<span class="count">last 14 days</span></h2>${shortList(data.recent)}</section>
+      ${foldPanel('upcoming', 'Coming up', 'next 14 days', data.upcoming, shortList(data.upcoming, { tick: doneControl }, 5))}
+      ${foldPanel('recent', 'Recent', 'last 14 days', data.recent, shortList(data.recent, undefined, 5))}
     </div>
     ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late || fb.late || ef.late ? ' late' : ''}" aria-label="This week">
       ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}${poc.body}${fb.body}${ef.body}</section>`;
-    wireNow(box);
+    wireNow(box); wireFolds(box);
     box.onclick = async e => {
       const t = e.target.closest('[data-today-done]');
       if (!t) return;
