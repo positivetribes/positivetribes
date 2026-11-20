@@ -59,7 +59,25 @@ export async function handle(request, env, now = Date.now()) {
   return new Response(JSON.stringify(body), { status: ok ? 200 : 503, headers: HEADERS });
 }
 
+// Healthchecks.io dead-man switch (check "Tribe backup"): ping on a full success, /fail if any database failed.
+// A missed run sends nothing, which Healthchecks also alerts on. The URL is the secret HC_PING_URL; without it
+// this does nothing. The body names only failed database ids, never data. A ping error never fails the backup.
+export async function heartbeat(env, results, fetchFn = fetch) {
+  const url = env.HC_PING_URL;
+  if (!url || !/^https:\/\//.test(url)) return;
+  const failed = Object.keys(results).filter((id) => !results[id].ok);
+  try {
+    await fetchFn(failed.length ? `${url.replace(/\/$/, "")}/fail` : url, {
+      method: "POST",
+      body: failed.length ? `failed: ${failed.join(", ")}` : `ok: ${Object.keys(results).length} databases`,
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (e) {
+    console.error(`healthchecks ping failed: ${e && e.name}`);
+  }
+}
+
 export default {
   fetch: (request, env) => handle(request, env),
-  async scheduled(_event, env, ctx) { ctx.waitUntil(runBackups(env)); },
+  async scheduled(_event, env, ctx) { ctx.waitUntil(runBackups(env).then((r) => heartbeat(env, r))); },
 };

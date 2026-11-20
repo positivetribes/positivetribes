@@ -11,6 +11,7 @@
   "triggers": { "crons": ["0 8 * * *"] },
   // Bindings are named in src/config.js. The code only ever runs SELECT on them.
   // Secret: BACKUP_KEY (base64, 32 random bytes), set with `wrangler secret put BACKUP_KEY`; keep a copy on paper.
+  // Secret: HC_PING_URL, the Healthchecks.io ping URL for the "Tribe backup" check (optional; no ping without it).
   "d1_databases": [
     { "binding": "HUB_DB", "database_name": "hub-db", "database_id": "bfa66ad3-605c-4b6c-923e-2329f17e89bf" },
     { "binding": "ADMIN_DB", "database_name": "positivetribes-admin-db", "database_id": "c74ab999-3171-432b-9234-da16795e7e50" },
