@@ -9,6 +9,7 @@ Rules when using it:
 - Never define a credit in minutes or hours for a client. Credits are sized by scope. Time appears in one place only: the transition note for a client whose signed plan says "up to N hours" (N hours becomes 2N credits).
 - Turnaround times are targets in business days, never guarantees.
 - Every plan gets a monthly note from its first month: what shipped, plus two suggested improvements. Create a recurring Salesforce Task for it when the plan is switched on.
+- The help desk is for the client's staff. The people who use a tool (volunteers, members, participants) get a Help page in the tool instead (vision Decision 7, Nov 20, 2026): common questions, questions emailed to the client's own people (never to Positive Tribes) and problem reports to the hub. It is not a hub feature, so promise it only in a build's scope when that build includes it. Don't promise AI answers to users' questions; that step isn't decided.
 - Always include "Included / Not included". It is what keeps this a software team and not an IT department.
 - Never name the AI vendor or model (Anthropic, Claude) to clients. Say "an AI service", "AI" or "our AI helper".
 - Use made-up or the client's own examples. Never name another client's tools or people.
@@ -74,7 +75,7 @@ Growth also includes a quarterly Salesforce health review by a Salesforce Certif
 | The tools Positive Tribes built, with hosting, backups and monitoring | Laptops, phones, printers and Wi-Fi |
 | Their connections (your CRM, texting, email) | Email accounts, passwords, Microsoft 365 or Google Workspace admin |
 | The data inside those tools, kept separate for {client name} | Security for systems Positive Tribes doesn't run |
-| A help desk for questions about those tools | Salesforce licenses and Salesforce's own support; other vendors' software |
+| A help desk for your staff's questions about those tools | Salesforce licenses and Salesforce's own support; other vendors' software |
 | Fixes, courtesy edits and monthly improvements | |
 | Salesforce Nonprofit Cloud setup and improvements for clients on Salesforce, sized and paid in credits (Eric is a Salesforce Certified Platform Administrator I and II, Platform App Builder, and Agentforce Sales and Service Consultant) | |
 
