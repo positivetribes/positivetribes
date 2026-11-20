@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { dumpDatabase, sqlLiteral, gzip, gunzip, encrypt, decrypt } from "../src/dump.js";
-import { runBackups, handle } from "../src/index.js";
+import { runBackups, handle, heartbeat } from "../src/index.js";
 
 const KEY = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
 
@@ -131,4 +131,19 @@ test("a client's row is stale if any one of its databases is missing a fresh bac
   await runBackups(env, NOW);
   const res = await get(env, "/health/uep", NOW + 3600000);
   assert.equal(res.status, 503);
+});
+
+test("heartbeat: pings on success, /fail with only failed ids, nothing without a URL, never throws", async () => {
+  const calls = [];
+  const f = async (url, opts) => { calls.push({ url, body: opts.body }); };
+  const env = { HC_PING_URL: "https://hc-ping.com/abc" };
+  await heartbeat(env, { hub: { ok: true, rows: 5 }, admin: { ok: true } }, f);
+  await heartbeat(env, { hub: { ok: true }, admin: { ok: false } }, f);
+  await heartbeat({}, { hub: { ok: true } }, f);
+  await heartbeat({ HC_PING_URL: "http://hc-ping.com/abc" }, { hub: { ok: true } }, f);
+  assert.deepEqual(calls, [
+    { url: "https://hc-ping.com/abc", body: "ok: 2 databases" },
+    { url: "https://hc-ping.com/abc/fail", body: "failed: admin" },
+  ]);
+  await heartbeat(env, { hub: { ok: true } }, async () => { throw new TypeError("network"); });
 });
