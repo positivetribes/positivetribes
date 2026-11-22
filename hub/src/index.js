@@ -1,6 +1,7 @@
 // Tribe Hub API: one Worker for every client. Sign-in is Cloudflare Access (emailed one-time PIN); the email is
 // mapped to a users row, which decides which client the person may see. Tenant checks happen in one place (scope).
 import { clientTimeline } from './timeline.js';
+import { pushRequirements, requirementTokens } from './requirements.js';
 import { accessIdentity } from './access.js';
 import { handleAdmin, localDay } from './admin.js';
 import { runWebDigest } from './web.js';
@@ -373,6 +374,21 @@ export default {
       if (!who) return json({ error: 'Please sign in.' }, 401);
       const db = env.DB;
       const commandCenter = url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/');
+      // A client repo's CI pushes its requirements file (src/requirements.js pushRequirements). Only a service token listed
+      // in REQUIREMENTS_SYNC_TOKENS, only for its own client, and only this route; people and other tokens are refused.
+      if (url.pathname === '/api/sync/requirements') {
+        const client = who.service ? requirementTokens(env.REQUIREMENTS_SYNC_TOKENS).get(who.service) : null;
+        if (!client || request.method !== 'POST') return json({ error: 'Not allowed.' }, 403);
+        if (Number(request.headers.get('content-length') || 0) > 600 * 1024) return json({ error: 'Too large.' }, 413);
+        const raw = await request.text();
+        if (raw.length > 600 * 1024) return json({ error: 'Too large.' }, 413);
+        let input;
+        try { input = JSON.parse(raw); } catch { return json({ error: 'Send JSON.' }, 400); }
+        try { return json({ ok: true, ...(await pushRequirements(db, client, input, InputError)) }); } catch (error) {
+          if (error instanceof InputError) return json({ error: error.message }, 400);
+          throw error;
+        }
+      }
       if (who.service) {
         // Only the command center's sync token, listed in SYNC_SERVICE_TOKENS, and only on the command center's sync routes.
         const allowed = String(env.SYNC_SERVICE_TOKENS || '').split(/[\s,]+/).filter(Boolean);

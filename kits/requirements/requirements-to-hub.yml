@@ -1,0 +1,25 @@
+# Copy to <client repo>/.github/workflows/requirements-to-hub.yml with scripts/requirements-push.mjs (kit).
+# On every push to the branch named in docs/requirements-sync.json, the hub's copy of the requirements is replaced.
+# Repo secrets: HUB_SYNC_CLIENT_ID, HUB_SYNC_CLIENT_SECRET (an Access service token listed for this client only in the
+# hub's REQUIREMENTS_SYNC_TOKENS). A failed run emails the repo owner.
+name: Requirements to hub
+on:
+  push:
+    branches: [main, 'phase-*']
+permissions:
+  contents: read
+concurrency:
+  group: requirements-to-hub
+  cancel-in-progress: false
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: node scripts/requirements-push.mjs
+        env:
+          HUB_SYNC_CLIENT_ID: ${{ secrets.HUB_SYNC_CLIENT_ID }}
+          HUB_SYNC_CLIENT_SECRET: ${{ secrets.HUB_SYNC_CLIENT_SECRET }}
