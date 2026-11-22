@@ -892,6 +892,55 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     } catch (error) { out.innerHTML = `<p class="err">${esc(error.message)}</p>`; }
   }
 
+  // ---- Map: every client's projects on one page (#/command/map). Only Positive Tribes sees it. ----
+  // One card per hub project: where it is, requirements progress for the current phase, what it waits on, open and recent
+  // decisions, and risk flags (rules in src/map.js). "Needs a look" on top gathers every high and medium flag.
+  const MAP_STAGE = { planned: 'Planned', building: 'Building', waiting: 'Waiting to test', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
+  const mapDay = day => day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
+  const mapRisk = r => `<li class="map-risk r-${esc(r.level)}">${esc(r.text)}</li>`;
+  function mapCard(c, p) {
+    const ph = p.phase ? `<p class="small"><strong>Phase ${esc(p.phase.number)}</strong>${p.phase.name ? ' · ' + esc(p.phase.name) : ''} · ${esc(MAP_STAGE[p.phase.stage] || p.phase.stage)}${p.phase.window_end && p.phase.stage === 'uat' ? ' to ' + esc(mapDay(p.phase.window_end)) : ''}</p>` : '';
+    const when = [p.now ? `<li><span class="muted">Now</span> ${esc(p.now.label)}${p.now.end_date ? ' · to ' + esc(mapDay(p.now.end_date)) : ''}</li>` : '',
+      p.next ? `<li><span class="muted">Next</span> ${esc(p.next.label)} · ${esc(mapDay(p.next.start_date))}</li>` : ''].join('');
+    const r = p.requirements;
+    let req = '';
+    if (r) {
+      const cur = r.current;
+      const pct = cur && cur.total ? Math.round(100 * cur.built / cur.total) : 0;
+      const counts = ['accepted', 'built', 'planned'].filter(k => r.counts[k]).map(k => `${r.counts[k]} ${k}`).join(', ');
+      req = `<div class="map-req">${cur ? `<p class="small">Phase ${esc(cur.phase)} requirements: <strong>${cur.built} of ${cur.total} built</strong>${cur.in_uat ? ` · ${cur.in_uat} in a test script` : ''}</p><div class="map-bar" role="img" aria-label="${pct}% built"><i style="width:${pct}%"></i></div>` : ''}
+        <p class="small muted">All: ${esc(counts)}${r.proposed.length ? ` · ${r.proposed.length} proposed, not decided (${esc(r.proposed.map(x => x.ref).join(', '))})` : ''}</p></div>`;
+    }
+    const waits = [...p.waiting.map(d => `<li class="${d.late ? 'late' : ''}"><span class="tag">${d.late ? 'Late' : d.blocker.done === null ? 'Check' : 'Waiting'}</span> ${esc(d.blocker.name)}${d.needed_by ? ' · ' + esc(mapDay(d.needed_by)) : ''} <span class="muted">→ ${esc(d.blocked.name)}</span></li>`),
+      ...p.questions.slice(0, 4).map(q => `<li class="${q.due_date && q.due_date < tlToday() ? 'late' : ''}"><span class="tag">Question</span> #${esc(q.number)} ${esc(q.title)}${q.owner ? ' · ' + esc(q.owner) : ''}${q.due_date ? ' · due ' + esc(mapDay(q.due_date)) : ` · ${q.age} days`}</li>`)];
+    const more = p.questions.length > 4 ? `<li class="muted small">and ${p.questions.length - 4} more questions</li>` : '';
+    const decided = p.decisions.map(d => `<li><span class="muted">${esc(mapDay(d.decided_on))}</span> ${esc(d.summary)}${d.decided_by ? ` <span class="muted">(${esc(d.decided_by)})</span>` : ''}</li>`).join('');
+    return `<article class="card map-card"><div class="row"><h3 class="grow">${esc(p.name)}</h3></div>
+      ${p.risks.length ? `<ul class="map-risks">${p.risks.map(mapRisk).join('')}</ul>` : ''}${ph}${when ? `<ul class="map-when small">${when}</ul>` : ''}${req}
+      ${waits.length ? `<h4>Waiting on</h4><ul class="tl-deps map-waits">${waits.join('')}${more}</ul>` : ''}
+      ${p.undecided ? `<p class="small">${p.undecided} change${p.undecided > 1 ? 's' : ''} not decided yet · <a href="#/${esc(c.slug)}/home">open</a></p>` : ''}
+      ${decided ? `<h4>Last decisions</h4><ul class="map-decided small">${decided}</ul>` : ''}</article>`;
+  }
+  function renderMap(box, data) {
+    const flags = data.clients.flatMap(c => [...c.risks.map(r => ({ ...r, where: c.name })), ...c.projects.flatMap(p => p.risks.map(r => ({ ...r, where: `${c.name} · ${p.name}` })))])
+      .filter(r => r.level !== 'low').sort((a, b) => (a.level === 'high' ? 0 : 1) - (b.level === 'high' ? 0 : 1));
+    const top = flags.length ? `<section class="panel"><h2>Needs a look</h2><ul class="map-risks">${flags.map(r => `<li class="map-risk r-${esc(r.level)}"><strong>${esc(r.where)}</strong> · ${esc(r.text)}</li>`).join('')}</ul></section>`
+      : '<section class="panel"><p class="muted">Nothing late or waiting too long.</p></section>';
+    const client = c => {
+      const t = c.tasks;
+      const tasks = t ? `<p class="small">Salesforce: ${t.open} open Tasks${t.overdue.length ? `, <strong class="map-late">${t.overdue.length} overdue</strong>` : ''}${t.week.length ? `, ${t.week.length} due this week` : ''}</p>
+        ${t.overdue.length || t.week.length ? `<details class="small"><summary>Overdue and this week</summary><ul class="map-tasks">${[...t.overdue.map(x => `<li class="late">${esc(mapDay(x.due))} · ${esc(x.subject)}</li>`), ...t.week.map(x => `<li>${esc(mapDay(x.due))} · ${esc(x.subject)}</li>`)].join('')}</ul></details>` : ''}` : '';
+      const dates = c.dates.length ? `<p class="small">Key dates: ${c.dates.map(d => `${esc(mapDay(d.date))} ${esc(d.label)}`).join(' · ')}</p>` : '';
+      const across = c.across.length ? `<p class="small">Key dates wait on: ${c.across.map(d => `<span class="${d.late ? 'map-late' : ''}">${esc(d.blocker.name)}${d.needed_by ? ' (' + esc(mapDay(d.needed_by)) + ')' : ''} → ${esc(d.blocked.name)}</span>`).join('; ')}</p>` : '';
+      const decided = c.decisions.length ? `<p class="small muted">Decided: ${c.decisions.map(d => `${esc(mapDay(d.decided_on))} ${esc(d.summary)}`).join(' · ')}</p>` : '';
+      return `<section class="panel map-client"><div class="row"><h2 class="grow">${esc(c.name)}</h2><a class="client-link small" href="#/command/timeline">Timeline</a> <a class="client-link small" href="#/${esc(c.slug)}/home">Open workspace</a></div>
+        ${c.risks.length ? `<ul class="map-risks">${c.risks.map(mapRisk).join('')}</ul>` : ''}${tasks}${dates}${across}${decided}
+        <div class="grid map-grid">${c.projects.map(p => mapCard(c, p)).join('')}</div></section>`;
+    };
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Map</h2><p class="muted small">Every project on one page: where it is, what its current phase still needs, what it waits on and what was decided. Built live from the hub, its requirements copy and Salesforce Tasks; nothing here is typed by hand. Clients don't see this page.</p></div></div>
+      ${data.salesforceError ? `<div class="banner">${esc(data.salesforceError)}</div>` : ''}${top}${data.clients.map(client).join('') || '<p class="empty">No hub projects yet.</p>'}`;
+  }
+
   // ---- Timeline: every client's schedule on one month axis (#/command/timeline). Only Positive Tribes sees it. ----
   // Bars sit in their project's row, or in a named row for work with no hub project yet (a proposed build). A bar linked
   // to a client phase follows that phase live: a tick once signed off, the testing window's end while in UAT.
@@ -1032,13 +1081,13 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     }, 60000);
   }
 
-  // sub is what follows #/command: '', 'inbox', 'clients', 'care', 'care/triage', 'documents', 'playbook', 'timeline', 'ideas' or
+  // sub is what follows #/command: '', 'inbox', 'clients', 'care', 'care/triage', 'documents', 'playbook', 'timeline', 'map', 'ideas' or
   // 'client/<Salesforce account id>'. The old 'triage' address still opens Triage.
   const viewOf = sub => {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
     if (client) return { view: 'client', id: client[1] };
     if (sub === 'care/triage' || sub === 'triage') return { view: 'triage' };
-    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas', 'playbook', 'timeline'].includes(sub) ? sub : 'today' };
+    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas', 'playbook', 'timeline', 'map'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
@@ -1071,6 +1120,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         document.title = 'Timeline | Command center';
         renderTimeline(box, data);
         tlWatch(box);
+      } else if (view === 'map') {
+        const data = await api('/map');
+        if (current.box !== box) return;
+        document.title = 'Map | Command center';
+        renderMap(box, data);
       } else if (view === 'playbook') {
         const data = await api('/playbook');
         if (current.box !== box) return;
