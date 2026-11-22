@@ -14,7 +14,7 @@ import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
 import { webAdmin, latestWebDigest } from './web.js';
 import { timelineAdmin } from './timeline.js';
 import { requirementsAdmin } from './requirements.js';
-import { decisionsAdmin } from './decisions.js';
+import { decisionsAdmin, taskKey } from './decisions.js';
 import { loadMap } from './map.js';
 import { feedbackOverview } from './feedback.js';
 import { emailFilingOverview } from './emailfix.js';
@@ -125,6 +125,32 @@ async function salesforce(env) {
 const sfLink = (env, object, id) => env.SF_DOMAIN.replace(/\/$/, '') + '/lightning/r/' + object + '/' + id + '/view';
 const taskLink = (env, step) => env?.SF_DOMAIN && /^00T/.test(step.sf_task_id || '') ? sfLink(env, 'Task', step.sf_task_id) : undefined;
 const records = async (auth, q) => (await soql(auth, q)).records;
+
+// Status of the Salesforce Tasks that dependencies point at, so a closed Task clears its blocker (Map step 2).
+// Reads only those Ids (checked against the Task Id shape when stored), cached for a minute. null when Salesforce is
+// not set up or fails: those blockers then show Check, as before, and nothing else breaks.
+let taskStatusCache = { at: 0, key: '', data: null };
+async function taskStatus(env) {
+  if (!salesforceReady(env) || !env.DB) return null;
+  const ids = (await env.DB.prepare(`SELECT blocker_ref AS id FROM dependencies WHERE blocker_kind = 'sf_task'
+    UNION SELECT blocked_ref FROM dependencies WHERE blocked_kind = 'sf_task'`).all()).results.map(r => r.id).filter(id => /^00T[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?$/.test(id));
+  if (!ids.length) return new Map();
+  const key = ids.join(',');
+  if (taskStatusCache.key === key && Date.now() - taskStatusCache.at < 60e3) return taskStatusCache.data;
+  try {
+    const auth = await salesforce(env), out = new Map();
+    for (let i = 0; i < ids.length; i += 100) {
+      for (const t of await records(auth, 'SELECT Id, IsClosed, ActivityDate FROM Task WHERE Id IN (' + ids.slice(i, i + 100).map(quote).join(',') + ')')) {
+        out.set(taskKey(t.Id), { closed: Boolean(t.IsClosed), due: t.ActivityDate || null });
+      }
+    }
+    taskStatusCache = { at: Date.now(), key, data: out };
+    return out;
+  } catch (error) {
+    console.error('task status: salesforce', error.message);
+    return null;
+  }
+}
 
 let overviewCache = { at: 0, data: null };
 // Inviting another Salesforce user to an event adds a child copy owned by them (IsChild), so only originals are read.
@@ -934,11 +960,11 @@ export async function handleAdmin(request, env, url, who) {
     if (estimate) return estimate;
     const web = await webAdmin({ env, url, route, json }, today);
     if (web) return web;
-    const timeline = await timelineAdmin({ request, env, route, path, method, json, body, text });
+    const timeline = await timelineAdmin({ request, env, route, path, method, json, body, text, taskStatus: () => taskStatus(env) });
     if (timeline) return timeline;
     const requirements = await requirementsAdmin({ env, url, route, json });
     if (requirements) return requirements;
-    const decided = await decisionsAdmin({ request, env, url, route, path, method, json, body, text });
+    const decided = await decisionsAdmin({ request, env, url, route, path, method, json, body, text, taskStatus: () => taskStatus(env) });
     if (decided) return decided;
 
     if (route === 'GET /api/admin/map') {
@@ -948,7 +974,7 @@ export async function handleAdmin(request, env, url, who) {
         try { tasks = (await salesforceOverview(env, false)).tasks; } catch (error) { salesforceError = 'Salesforce did not answer, so Tasks are left out.'; console.error('map: salesforce', error.message); }
       }
       if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
-      return json({ clients: await loadMap(env.DB, { tasks }), salesforceError });
+      return json({ clients: await loadMap(env.DB, { tasks, taskStatus: await taskStatus(env) }), salesforceError });
     }
 
     if (route === 'GET /api/admin/match') {

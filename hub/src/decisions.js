@@ -85,9 +85,12 @@ export async function dependencyInput(db, input, text, clientId) {
 }
 
 // Every dependency (one client, or all) with both ends resolved: { name, due, done (true/false, null = not known here:
-// a Salesforce Task, or a timeline bar that follows no phase; remove the dependency once that work is done) }.
+// a timeline bar that follows no phase, or a Salesforce Task Salesforce did not report on; remove the dependency once
+// that work is done) }. tasks: optional Map of Salesforce Task status by the Id's first 15 characters
+// ({ closed, due }), from taskStatus() in admin.js; a closed Task counts as done.
 // waiting: the blocker is not known to be done. late: still waiting and its date (needed_by, else the blocker's due) has passed.
-export async function loadDependencies(db, clientId = null, today = hubToday()) {
+export const taskKey = id => String(id || '').slice(0, 15);
+export async function loadDependencies(db, clientId = null, today = hubToday(), tasks = null) {
   const w = clientId ? ' WHERE client_id = ?' : '';
   const q = s => clientId ? db.prepare(s).bind(clientId) : db.prepare(s);
   const [deps, entries, releases, items, projects] = await Promise.all([
@@ -100,7 +103,10 @@ export async function loadDependencies(db, clientId = null, today = hubToday()) 
   const projectName = id => projects.results.find(p => p.id === id)?.name || '';
   const release = id => releases.results.find(r => r.id === id);
   const resolve = (kind, ref, dep) => {
-    if (kind === 'sf_task') return { kind, ref, name: dep.label || 'Salesforce Task', due: dep.needed_by || null, done: null };
+    if (kind === 'sf_task') {
+      const t = tasks?.get(taskKey(ref));
+      return { kind, ref, name: dep.label || 'Salesforce Task', due: dep.needed_by || t?.due || null, done: t ? t.closed : null };
+    }
     const id = Number(ref);
     if (kind === 'timeline') {
       const e = entries.results.find(x => x.id === id);
@@ -127,7 +133,7 @@ export async function loadDependencies(db, clientId = null, today = hubToday()) 
   });
 }
 
-export async function decisionsAdmin({ request, env, url, route, path, method, json, body, text }) {
+export async function decisionsAdmin({ request, env, url, route, path, method, json, body, text, taskStatus }) {
   const oneDecision = /^\/api\/admin\/decisions\/(\d+)$/.exec(path), oneDep = /^\/api\/admin\/dependencies\/(\d+)$/.exec(path);
   if (!oneDecision && !oneDep && path !== '/api/admin/decisions' && path !== '/api/admin/dependencies') return null;
   if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
@@ -171,7 +177,7 @@ export async function decisionsAdmin({ request, env, url, route, path, method, j
     return json({ ok: true });
   }
 
-  if (route === 'GET /api/admin/dependencies') return json({ dependencies: await loadDependencies(db, filter()) });
+  if (route === 'GET /api/admin/dependencies') return json({ dependencies: await loadDependencies(db, filter(), hubToday(), taskStatus ? await taskStatus() : null) });
   if (route === 'POST /api/admin/dependencies') {
     const input = await body(request);
     const clientId = await clientOf(db, input.client_id);
