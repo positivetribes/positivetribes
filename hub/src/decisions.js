@@ -84,7 +84,8 @@ export async function dependencyInput(db, input, text, clientId) {
   return { blockerKind, blocker, blockedKind, blocked, kind, label, needed };
 }
 
-// Every dependency (one client, or all) with both ends resolved: { name, due, done (true/false, null = not known here) }.
+// Every dependency (one client, or all) with both ends resolved: { name, due, done (true/false, null = not known here:
+// a Salesforce Task, or a timeline bar that follows no phase; remove the dependency once that work is done) }.
 // waiting: the blocker is not known to be done. late: still waiting and its date (needed_by, else the blocker's due) has passed.
 export async function loadDependencies(db, clientId = null, today = hubToday()) {
   const w = clientId ? ' WHERE client_id = ?' : '';
@@ -105,7 +106,7 @@ export async function loadDependencies(db, clientId = null, today = hubToday()) 
       const e = entries.results.find(x => x.id === id);
       if (!e) return { kind, ref, name: '(removed timeline entry)', due: null, done: null, missing: true };
       const r = e.release_id ? release(e.release_id) : null;
-      return { kind, ref, name: e.label, project: projectName(e.project_id), due: e.end_date || e.start_date, start: e.start_date, done: r ? DONE_STAGES.includes(r.stage) : false };
+      return { kind, ref, name: e.label, project: projectName(e.project_id), due: e.end_date || e.start_date, start: e.start_date, done: r ? DONE_STAGES.includes(r.stage) : null };
     }
     if (kind === 'release') {
       const r = release(id);
