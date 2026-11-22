@@ -14,6 +14,8 @@
     // The daily command center sync routine's Access service token (its client ID, a public identifier). Only this
     // token may call the command center's two sync routes. Salesforce credentials are secrets (wrangler secret put).
     "SYNC_SERVICE_TOKENS": "1832d7e5e79b6740c6a00a00ee1facd6.access",
+    // Client repos' CI tokens for POST /api/sync/requirements, "<client id>.access=<client slug>" (src/requirements.js).
+    "REQUIREMENTS_SYNC_TOKENS": "",
     // Next steps sync with Salesforce Tasks: new Tasks are owned by this Salesforce user (Eric), and only this host
     // writes them, so pull request previews (own database, same Salesforce) never touch real Tasks.
     "SF_TASK_OWNER_ID": "005Hu00000QcVdBIAV",

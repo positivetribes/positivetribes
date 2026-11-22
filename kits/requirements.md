@@ -35,3 +35,12 @@ Copy UEP's `scheduler/docs/requirements.md` structure. Start from the signed pro
 ## Hub copy
 
 The hub keeps a read-only copy of each project's requirements for the Map and Timeline. After any change, run `node ~/Projects/PositiveTribes/hub/scripts/requirements-sync.mjs --apply` from the client repo root. It needs `docs/requirements-sync.json` (client slug, and per hub project slug its file and ID prefix); see `hub/CLAUDE.md` (Requirements).
+
+To make it automatic (do this once per client repo on GitHub):
+
+1. Add `"branch": "<latest phase branch>"` to `docs/requirements-sync.json`, and move it on when a later phase branch (or `main`) becomes the latest.
+2. Copy `kits/requirements/requirements-push.mjs` to `scripts/` and `kits/requirements/requirements-to-hub.yml` to `.github/workflows/`.
+3. Eric: in Zero Trust, create an Access service token named `<client> requirements to hub` and add it to the hub app's service-auth policy (the one the daily sync token uses). Put its Client ID and Secret in the repo's secrets `HUB_SYNC_CLIENT_ID` and `HUB_SYNC_CLIENT_SECRET` (`gh secret set`, typed by Eric, never pasted into a chat).
+4. Add `<client id>.access=<client slug>` to `REQUIREMENTS_SYNC_TOKENS` in `hub/wrangler.jsonc` and deploy the hub. The token can then replace only that client's requirement rows, through one route, and read nothing.
+
+Every push to that branch then replaces the hub copy; a failed run emails the repo owner. The manual script above still works (and is the way to force a cut of more than half the rows).

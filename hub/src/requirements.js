@@ -112,3 +112,58 @@ export async function requirementsAdmin({ env, url, route, json }) {
   if (raw != null && !/^[1-9]\d{0,8}$/.test(raw)) return json({ error: 'Client is not valid.' }, 400);
   return json({ projects: await loadRequirements(env.DB, raw ? Number(raw) : null) });
 }
+
+// POST /api/sync/requirements: a client repo's CI pushes its requirements file here on every push to its sync branch
+// (kits/requirements/requirements-push.mjs). The caller is an Access service token listed in REQUIREMENTS_SYNC_TOKENS
+// as "<client id>.access=<client slug>", so each token can replace only its own client's requirement rows, through this
+// one route, and can read nothing. The hub parses the markdown itself (the same parser as the local script); the repo
+// sends only the file, its prefix, and which IDs its code and UAT scripts cite. Everything is checked and bound as a
+// parameter, and the replace runs as one transaction. An empty parse, or one that drops more than half the rows, is
+// refused so a broken file cannot wipe the copy (run scripts/requirements-sync.mjs by hand to force a real cut).
+export const PUSH_LIMITS = { markdown: 512 * 1024, refs: 3000, rows: 1000 };
+const PUSH_REF = /^(?:P[A-Z]?|[A-Z]{1,3})\d{1,4}$/;
+
+export function requirementTokens(value) {
+  const out = new Map();
+  for (const pair of String(value || '').split(/[\s,]+/).filter(Boolean)) {
+    const m = /^([0-9a-f]{32}\.access)=([a-z0-9-]{1,60})$/.exec(pair);
+    if (m) out.set(m[1], m[2]);
+  }
+  return out;
+}
+
+export async function pushRequirements(db, clientSlug, input, InputError) {
+  const bad = message => { throw new InputError(message); };
+  if (!input || typeof input !== 'object' || Array.isArray(input)) bad('Send a JSON object.');
+  const { project, prefix, file, branch, commit, markdown, cited, in_uat } = input;
+  if (typeof project !== 'string' || !/^[a-z0-9-]{1,60}$/.test(project)) bad('project: the hub project slug.');
+  if (typeof prefix !== 'string' || !/^[A-Z]{1,3}$/.test(prefix)) bad('prefix: 1 to 3 capital letters.');
+  if (typeof file !== 'string' || !/^[\w./-]{1,200}\.md$/.test(file) || file.includes('..')) bad('file: a .md path inside the repo.');
+  if (typeof branch !== 'string' || !/^[\w./-]{1,100}$/.test(branch)) bad('branch: the branch name.');
+  if (typeof commit !== 'string' || !/^[0-9a-f]{7,40}$/.test(commit)) bad('commit: the commit SHA.');
+  if (typeof markdown !== 'string' || !markdown.trim() || markdown.length > PUSH_LIMITS.markdown) bad('markdown: the file text, up to 512 KB.');
+  const refSet = (list, name) => {
+    if (!Array.isArray(list) || list.length > PUSH_LIMITS.refs || list.some(r => typeof r !== 'string' || !PUSH_REF.test(r))) bad(`${name}: a list of requirement IDs.`);
+    return new Set(list);
+  };
+  const citedSet = refSet(cited, 'cited'), uatSet = refSet(in_uat, 'in_uat');
+  const ids = await db.prepare('SELECT p.id AS project_id, p.client_id FROM projects p JOIN clients c ON c.id = p.client_id WHERE c.slug = ? AND p.slug = ?').bind(clientSlug, project).first();
+  if (!ids) bad(`No project "${project}" for this client.`);
+  let rows;
+  try { rows = parseRequirements(markdown, { prefix }); } catch (error) { bad(error.message); }
+  if (!rows.length) bad('No requirement rows found in the file; nothing was changed.');
+  if (rows.length > PUSH_LIMITS.rows) bad('Too many rows.');
+  const before = (await db.prepare('SELECT COUNT(*) AS n FROM requirements WHERE project_id = ?').bind(ids.project_id).first()).n;
+  if (before > 10 && rows.length < before / 2) bad(`The file has ${rows.length} rows; the hub has ${before}. Refusing to drop more than half. Run the sync script by hand if that is right.`);
+  const INSERT = `INSERT INTO requirements (client_id, project_id, ref, text, section, source, phase, hub_refs, state, cited, in_uat, position, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`;
+  await db.batch([
+    db.prepare('DELETE FROM requirements WHERE project_id = ?').bind(ids.project_id),
+    ...rows.map(r => db.prepare(INSERT).bind(ids.client_id, ids.project_id, r.ref, r.text, r.section, r.source, r.phase, r.hub_refs, r.state,
+      citedSet.has(r.ref) ? 1 : 0, uatSet.has(r.ref) ? 1 : 0, r.position)),
+    db.prepare('INSERT INTO requirement_syncs (client_id, project_id, file, branch, commit_sha, rows) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(ids.client_id, ids.project_id, file, branch, commit, rows.length)
+  ]);
+  const by = rows.reduce((n, r) => { n[r.state] = (n[r.state] || 0) + 1; return n; }, {});
+  return { project, rows: rows.length, states: by, cited: rows.filter(r => citedSet.has(r.ref)).length, in_uat: rows.filter(r => uatSet.has(r.ref)).length };
+}
