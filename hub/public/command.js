@@ -901,7 +901,35 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   let tl = null, tlEditing = null, tlNew = false, tlTimer = null, tlSeen = '';
   const tlToday = () => overview?.today || new Date().toLocaleDateString('en-CA');
   // The command center's chart: every bar opens the edit form, and bars the client also sees say so.
-  const tlChart = (c, today, room) => window.HubTimeline.chart(c, today, room, { editing: tlEditing, flagShown: true });
+  // Dependencies (Positive Tribes only): a bar that waits on an unfinished blocker says so in its tooltip, and turns amber
+  // (dashed outline) once that blocker is late. A wait on a phase marks every bar that follows the phase.
+  const tlWaits = c => {
+    const waits = {};
+    for (const d of c.dependencies || []) {
+      if (!d.waiting) continue;
+      const ids = d.blocked.kind === 'timeline' ? [Number(d.blocked.ref)]
+        : d.blocked.kind === 'release' ? c.entries.filter(e => e.release_id === Number(d.blocked.ref)).map(e => e.id) : [];
+      for (const id of ids) {
+        const w = waits[id] ||= { late: false, on: [] };
+        w.late ||= d.late; w.on.push(d.blocker.name + (d.late ? ' (late)' : ''));
+      }
+    }
+    return waits;
+  };
+  const tlDue = d => d.needed_by || d.blocker.due;
+  const tlDeps = c => {
+    const deps = (c.dependencies || []).slice().sort((a, b) => (b.late - a.late) || (b.waiting - a.waiting) || String(tlDue(a) || '9').localeCompare(String(tlDue(b) || '9')));
+    if (!deps.length) return '';
+    const row = d => {
+      const state = d.late ? 'late' : d.waiting ? 'waiting' : 'done';
+      const tag = d.late ? 'Late' : d.waiting ? (d.blocker.done === null ? 'Check' : 'Waiting') : 'Done';
+      const due = tlDue(d) ? ` · ${esc(tlLongDay(tlDue(d)))}` : '';
+      return `<li class="${state}"><span class="tag">${tag}</span><span><strong>${esc(d.blocker.name)}</strong>${due} → ${esc(d.blocked.name)}${d.label && d.blocker.kind !== 'sf_task' ? ` <span class="muted">(${esc(d.label)})</span>` : ''}</span></li>`;
+    };
+    return `<details class="tl-depbox"${deps.some(d => d.late) ? ' open' : ''}><summary class="small">Depends on: ${deps.filter(d => d.waiting).length} waiting${deps.some(d => d.late) ? `, ${deps.filter(d => d.late).length} late` : ''}</summary><ul class="tl-deps">${deps.map(row).join('')}</ul></details>`;
+  };
+  const tlLongDay = day => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const tlChart = (c, today, room) => window.HubTimeline.chart(c, today, room, { editing: tlEditing, flagShown: true, waits: tlWaits(c) }) + tlDeps(c);
 
   function tlForm(e) {
     const clients = tl.map(c => `<option value="${c.id}"${c.id === e.client_id ? ' selected' : ''}>${esc(c.name)}</option>`).join('');

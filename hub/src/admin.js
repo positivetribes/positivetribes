@@ -13,6 +13,8 @@ import { replyAdmin } from './reply.js';
 import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
 import { webAdmin, latestWebDigest } from './web.js';
 import { timelineAdmin } from './timeline.js';
+import { requirementsAdmin } from './requirements.js';
+import { decisionsAdmin } from './decisions.js';
 import { feedbackOverview } from './feedback.js';
 import { emailFilingOverview } from './emailfix.js';
 import { pocUsage } from './pocusage.js';
@@ -933,6 +935,10 @@ export async function handleAdmin(request, env, url, who) {
     if (web) return web;
     const timeline = await timelineAdmin({ request, env, route, path, method, json, body, text });
     if (timeline) return timeline;
+    const requirements = await requirementsAdmin({ env, url, route, json });
+    if (requirements) return requirements;
+    const decided = await decisionsAdmin({ request, env, url, route, path, method, json, body, text });
+    if (decided) return decided;
 
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);

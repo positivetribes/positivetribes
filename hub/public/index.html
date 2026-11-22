@@ -409,6 +409,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .tl-bar.shown span::before{content:'';display:inline-block;width:12px;height:12px;margin-right:5px;vertical-align:-1px;background:currentColor;-webkit-mask:var(--tl-eye) center/contain no-repeat;mask:var(--tl-eye) center/contain no-repeat}
 .tl{--tl-eye:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2'%3E%3Cpath d='M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E")}
 .tl .tl-bar.editing{outline:2px solid var(--rust);outline-offset:1px}
+.tl .tl-bar.blocked{outline:2px dashed var(--nice);outline-offset:1px}
+.tl-deps{list-style:none;margin:10px 0 0;padding:0;font-size:13px;display:grid;gap:4px}
+.tl-deps li{display:flex;gap:8px;align-items:baseline}
+.tl-deps .tag{font-size:12px;padding:0 6px;border-radius:8px;background:var(--soft);color:var(--muted)}
+.tl-deps .late .tag{background:var(--nice-bg);color:var(--nice);font-weight:600}
+.tl-deps .done .tag{background:var(--ok-bg);color:var(--ok)}
 .tl-keys{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px}
 .tl-keys button{border:0;background:none;padding:0;min-height:0;font-size:13px;text-align:left}
 .tl-keys i{display:inline-block;width:3px;height:12px;margin-right:7px;vertical-align:-1px;background:var(--muted)}

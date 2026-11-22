@@ -4,6 +4,7 @@
 // The admin routes sit behind handleAdmin's door (Positive Tribes only). A client sees only the entries Positive Tribes
 // marked client_visible, in its own workspace's Timeline tab (clientTimeline, read through the projects route).
 
+import { loadDependencies } from './decisions.js';
 import { InputError } from './triage.js';
 import { windowEnd } from './dates.js';
 
@@ -90,7 +91,11 @@ export async function timelineAdmin({ request, env, route, path, method, json, b
   if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
   const db = env.DB;
 
-  if (route === 'GET /api/admin/timeline') return json({ clients: await loadTimeline(db) });
+  if (route === 'GET /api/admin/timeline') {
+    // Positive Tribes only: each client's dependencies ride along so the chart can mark bars that wait on a late blocker.
+    const [clients, deps] = await Promise.all([loadTimeline(db), loadDependencies(db)]);
+    return json({ clients: clients.map(c => ({ ...c, dependencies: deps.filter(d => d.client_id === c.id) })) });
+  }
 
   if (route === 'POST /api/admin/timeline') {
     const input = await body(request);
