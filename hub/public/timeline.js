@@ -14,7 +14,8 @@ window.HubTimeline = (() => {
 
   // Placed in pixels across the space the panel has (at least 640), so a short bar's label can run past its coloured
   // span without hiding the next bar: bars stack on a new line inside their row when their labels would touch.
-  function chart(c, today, room, { editing = null, readOnly = false, flagShown = false } = {}) {
+  // waits (command center only): { entryId: { late, on: ['what it waits on', ...] } } from the client's dependencies.
+  function chart(c, today, room, { editing = null, readOnly = false, flagShown = false, waits = {} } = {}) {
     const bars = c.entries.filter(e => !TL_MARK.includes(e.kind)), marks = c.entries.filter(e => TL_MARK.includes(e.kind));
     const days = c.entries.flatMap(e => [e.start_date, e.end_date || e.start_date]).concat(today).sort();
     const first = new Date(days[0].slice(0, 8) + '01T00:00:00Z'), last = new Date(days[days.length - 1] + 'T00:00:00Z');
@@ -59,8 +60,10 @@ window.HubTimeline = (() => {
     };
     const bar = (b, tone) => {
       const shown = flagShown && b.e.client_visible;
-      const tip = [b.e.label, tlRange(b.e), b.status, b.e.kind === 'proposed' ? 'Proposed, not signed' : '', shown ? 'The client sees this' : ''].filter(Boolean).join(' · ');
-      const cls = `tl-bar t${tone} k-${b.e.kind}${b.done ? ' done' : ''}${editing === b.e.id ? ' editing' : ''}${shown ? ' shown' : ''}`;
+      const wait = !b.done && waits[b.e.id];
+      const tip = [b.e.label, tlRange(b.e), b.status, b.e.kind === 'proposed' ? 'Proposed, not signed' : '', shown ? 'The client sees this' : '',
+        wait ? `${wait.late ? 'Late blocker' : 'Waits on'}: ${wait.on.join(', ')}` : ''].filter(Boolean).join(' · ');
+      const cls = `tl-bar t${tone} k-${b.e.kind}${b.done ? ' done' : ''}${editing === b.e.id ? ' editing' : ''}${shown ? ' shown' : ''}${wait?.late ? ' blocked' : ''}`;
       const inner = `<i class="tl-fill" style="width:${px(b.span)}"></i><span>${esc(b.title)}</span><small>${esc(b.sub)}</small>`;
       const style = `left:${px(b.left)};width:${px(b.extent)}`;
       return readOnly ? `<div class="${cls}" style="${style}" title="${esc(tip)}" role="listitem" aria-label="${esc(tip)}">${inner}</div>`

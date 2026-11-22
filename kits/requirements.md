@@ -31,3 +31,7 @@ When a client or Eric adds, changes or drops something, work through this list i
 
 ## Seeding a new project
 Copy UEP's `scheduler/docs/requirements.md` structure. Start from the signed proposal and the hub's accepted items (one row each), keeping the client's own wording.
+
+## Hub copy
+
+The hub keeps a read-only copy of each project's requirements for the Map and Timeline. After any change, run `node ~/Projects/PositiveTribes/hub/scripts/requirements-sync.mjs --apply` from the client repo root. It needs `docs/requirements-sync.json` (client slug, and per hub project slug its file and ID prefix); see `hub/CLAUDE.md` (Requirements).
