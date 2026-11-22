@@ -12,6 +12,11 @@ export const PLAYBOOK = {
       "description": "Log a client or prospect meeting. Files the transcript in the client's private Drive Meetings folder, writes the summary and decisions on the Salesforce meeting Task with a link to the transcript, adds dated follow-up Tasks for every promise, updates the Opportunity and the client's notes. Use when Eric says /log-meet…"
     },
     {
+      "name": "log-received",
+      "args": "<client> [what arrived, or where]",
+      "description": "Log information or documents a client just sent (answers, data exports, files, decisions) so they get applied when the project schedule needs them. Reviews and files the documents (restricted Drive folder for personal data, hub documents), posts answers, folds changes into the requirements, writes build notes, adds Sa…"
+    },
+    {
       "name": "log-sent",
       "args": "<client>",
       "description": "Log an email Eric just sent to a client or prospect. Checks the Task Gmail logged in Salesforce is on the right record and moves it if not, closes the Task the email completes, adds a dated follow-up, records attachments in the hub and Drive, and updates the client's notes. Use when Eric says /log-sent, \"sent\", \"email…"
