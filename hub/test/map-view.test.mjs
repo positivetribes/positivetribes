@@ -108,3 +108,22 @@ test('only Positive Tribes can open the map', async () => {
   assert.deepEqual(r.body.clients.map(c => c.slug), ['uep', 'safe']);
   assert.equal(r.body.salesforceError, null);
 });
+
+test('a closed Salesforce Task clears its blocker; an open one waits; one Salesforce did not report stays Check', async () => {
+  const { db } = setup();
+  const { loadDependencies } = await import('../src/decisions.js');
+  const jack = deps => deps.find(d => d.blocker.kind === 'sf_task');
+  const unknown = jack(await loadDependencies(db, 1, '2026-12-10'));
+  assert.equal(unknown.blocker.done, null);
+  assert.equal(unknown.late, true, 'past needed_by with no status: late, as before');
+  // Salesforce returns 18-character Ids; the stored one may be 15 or 18.
+  const open = jack(await loadDependencies(db, 1, '2026-12-10', new Map([['00TAAAAAAAAAAAA', { closed: false, due: '2026-12-01' }]])));
+  assert.equal(open.blocker.done, false);
+  assert.equal(open.waiting, true);
+  const closed = jack(await loadDependencies(db, 1, '2026-12-10', new Map([['00TAAAAAAAAAAAA', { closed: true, due: '2026-12-01' }]])));
+  assert.equal(closed.blocker.done, true);
+  assert.equal(closed.waiting, false);
+  assert.equal(closed.late, false);
+  const map = await loadMap(db, { today: '2026-12-10', taskStatus: new Map([['00TAAAAAAAAAAAA', { closed: true, due: null }]]) });
+  assert.ok(!map[0].projects[0].waiting.some(d => d.blocker.kind === 'sf_task'));
+});

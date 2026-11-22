@@ -85,7 +85,7 @@ export async function loadTimeline(db) {
   }));
 }
 
-export async function timelineAdmin({ request, env, route, path, method, json, body, text }) {
+export async function timelineAdmin({ request, env, route, path, method, json, body, text, taskStatus }) {
   const one = /^\/api\/admin\/timeline\/(\d+)$/.exec(path);
   if (!one && path !== '/api/admin/timeline') return null;
   if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
@@ -93,7 +93,7 @@ export async function timelineAdmin({ request, env, route, path, method, json, b
 
   if (route === 'GET /api/admin/timeline') {
     // Positive Tribes only: each client's dependencies ride along so the chart can mark bars that wait on a late blocker.
-    const [clients, deps] = await Promise.all([loadTimeline(db), loadDependencies(db)]);
+    const [clients, deps] = await Promise.all([loadTimeline(db), (async () => loadDependencies(db, null, undefined, taskStatus ? await taskStatus() : null))()]);
     return json({ clients: clients.map(c => ({ ...c, dependencies: deps.filter(d => d.client_id === c.id) })) });
   }
 

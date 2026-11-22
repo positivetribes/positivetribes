@@ -34,7 +34,7 @@ export function risksFor(p, today) {
   return out;
 }
 
-export async function loadMap(db, { today = hubToday(), tasks = null } = {}) {
+export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus = null } = {}) {
   const [clients, projects, releases, entries, items, decisions, requirements, deps] = await Promise.all([
     db.prepare('SELECT id, slug, name, salesforce_account_id FROM clients ORDER BY id').all(),
     db.prepare('SELECT id, client_id, slug, name, phase, position FROM projects ORDER BY client_id, position, id').all(),
@@ -44,7 +44,7 @@ export async function loadMap(db, { today = hubToday(), tasks = null } = {}) {
       FROM items WHERE done = 0 AND ((kind = 'question' AND answer = '') OR phase = 'review')`).all(),
     db.prepare('SELECT id, client_id, project_id, decided_on, decided_by, summary, affects, price_change FROM decisions ORDER BY decided_on DESC, id DESC').all(),
     loadRequirements(db, null),
-    loadDependencies(db, null, today)
+    loadDependencies(db, null, today, taskStatus)
   ]);
   const entryProject = new Map(entries.results.map(e => [String(e.id), e.project_id]));
   const releaseProject = new Map(releases.results.map(r => [String(r.id), r.project_id]));
