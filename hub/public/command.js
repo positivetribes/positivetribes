@@ -223,6 +223,23 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       ${d.pages ? `<p class="label"><strong>Pages that show interest</strong></p><ul class="reply-list">${d.pages.map(p => vsRow(p.path, p)).join('')}</ul>` : ''}
       ${trend}<p class="muted small">Leads and gifts from Salesforce; visits from Cloudflare Web Analytics (sampled, so round numbers are estimates; our own visits are included). Saved ${esc(new Date(w.ranAt).toLocaleString())}. ${run}</p></details>` };
   };
+  // The Monday project digest (src/mapdigest.js): what changed on the Map since last week, plus drift. Rust when drift or a failed run.
+  const mapPart = data => {
+    const m = data.mapDigest;
+    const run = '<button type="button" class="link" id="map-run">Run now</button>';
+    if (!m) return { body: `<p class="muted small"><strong>Projects:</strong> no weekly snapshot yet; the first is saved Monday morning. ${run}</p>`, late: false };
+    const changes = m.changes || [], drift = m.drift || [];
+    const parts = [m.changes === null ? 'first snapshot, changes from next week' : changes.length ? changes.length + (changes.length === 1 ? ' change' : ' changes') + ' since last week' : 'no changes since last week',
+      drift.length ? drift.length + ' to tidy' : '', m.salesforceOk === false ? 'Salesforce did not answer' : ''].filter(Boolean);
+    const late = Boolean(m.error || drift.length);
+    const row = r => `<li><span class="who">${esc(r.client)}</span> <span class="what">${r.project ? esc(r.project) + ': ' : ''}${esc(r.text)}</span></li>`;
+    return { late, body: `<details class="est-group${late ? ' late' : ''}"><summary><span class="who">Projects</span>
+      <span class="meta">${esc(parts.join(' · '))}</span></summary>
+      ${m.error ? `<p class="small"><strong>The latest run failed:</strong> ${esc(m.error)}</p>` : ''}
+      ${drift.length ? `<p class="label"><strong>To tidy</strong></p><ul class="reply-list">${drift.map(row).join('')}</ul>` : ''}
+      ${changes.length ? `<p class="label"><strong>Since last week</strong></p><ul class="reply-list">${changes.map(row).join('')}</ul>` : ''}
+      <p class="muted small">A snapshot of the <a href="#/command/map">Map</a> (${esc(m.projects)} projects), saved Mondays. Saved ${esc(new Date(m.ranAt).toLocaleString())}. ${run}</p></details>` };
+  };
   // Client feedback (src/feedback.js): one folded line, opening to the latest answers. Rust while a low score is in the last 30 days.
   const feedbackPart = data => {
     const f = data.feedback;
@@ -333,6 +350,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       try { const r = await send('/web/run', 'POST', {}); if (r.web) overview.web = r.web; if (!r.ran) alert(r.reason || 'The website digest did not run.'); } catch (error) { alert(error.message); }
       renderToday(box, overview);
     });
+    box.querySelector('#map-run')?.addEventListener('click', async e => {
+      const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'Running…';
+      try { const r = await send('/map/run', 'POST', {}); if (r.mapDigest) overview.mapDigest = r.mapDigest; if (!r.ran) alert(r.reason || 'The project digest did not run.'); } catch (error) { alert(error.message); }
+      renderToday(box, overview);
+    });
     box.querySelectorAll('[data-answer-seen]').forEach(b => b.addEventListener('click', async e => {
       const btn = e.currentTarget, r = (overview.answers || [])[Number(btn.dataset.answerSeen)];
       if (!r) return;
@@ -350,7 +372,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
 
   function renderToday(box, data) {
     const attention = data.attention.slice().sort((a, b) => (a.day || '').localeCompare(b.day || ''));
-    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data), fb = feedbackPart(data), ef = emailFilingPart(data), poc = pocPart(data);
+    const est = estimatesLine(data), cd = countdownRows(data), web = webPart(data), donated = donatedTile(data), fb = feedbackPart(data), ef = emailFilingPart(data), poc = pocPart(data), mp = mapPart(data);
     const now = nowList(data), inNow = now[0]?.type === 'reply' ? now[0].id : '';
     const group = label => `<h3 class="group-label">${esc(label)}</h3>`;
     const hour = new Date().getHours();
@@ -362,8 +384,8 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       ${foldPanel('upcoming', 'Coming up', 'next 14 days', data.upcoming, shortList(data.upcoming, { tick: doneControl }, 5))}
       ${foldPanel('recent', 'Recent', 'last 14 days', data.recent, shortList(data.recent, undefined, 5))}
     </div>
-    ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late || fb.late || ef.late ? ' late' : ''}" aria-label="This week">
-      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}${poc.body}${fb.body}${ef.body}</section>`;
+    ${group('This week' + (web.week ? ' · ' + web.week : ''))}<section class="panel calm week${web.late || fb.late || ef.late || mp.late ? ' late' : ''}" aria-label="This week">
+      ${web.tiles || donated ? `<div class="tiles">${web.tiles}${donated}</div>` : ''}${web.body}${mp.body}${poc.body}${fb.body}${ef.body}</section>`;
     wireNow(box); wireFolds(box);
     box.onclick = async e => {
       const t = e.target.closest('[data-today-done]');
