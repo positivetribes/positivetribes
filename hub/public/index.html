@@ -415,6 +415,15 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .tl-deps .tag{font-size:12px;padding:0 6px;border-radius:8px;background:var(--soft);color:var(--muted)}
 .tl-deps .late .tag{background:var(--nice-bg);color:var(--nice);font-weight:600}
 .tl-deps .done .tag{background:var(--ok-bg);color:var(--ok)}
+/* Map (#/command/map): one card per project. */
+.map-client>.row{margin-bottom:6px}.map-grid{margin-top:12px}
+.map-card h3{margin:0}.map-card h4{margin:12px 0 4px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.map-risks{list-style:none;margin:8px 0;padding:0;display:grid;gap:4px;font-size:13px}
+.map-risk{padding:4px 8px;border-radius:8px;background:var(--soft)}
+.map-risk.r-high{background:var(--must-bg);color:var(--must)}.map-risk.r-medium{background:var(--nice-bg);color:var(--nice)}
+.map-when,.map-decided,.map-tasks{list-style:none;margin:6px 0;padding:0;display:grid;gap:3px}
+.map-bar{height:6px;border-radius:3px;background:var(--soft);overflow:hidden;margin:4px 0}.map-bar i{display:block;height:100%;background:var(--ok)}
+.map-req p{margin:4px 0}.map-late,.map-tasks .late{color:var(--nice);font-weight:600}
 .tl-keys{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px}
 .tl-keys button{border:0;background:none;padding:0;min-height:0;font-size:13px;text-align:left}
 .tl-keys i{display:inline-block;width:3px;height:12px;margin-right:7px;vertical-align:-1px;background:var(--muted)}
@@ -736,7 +745,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     // Four daily tabs, then the Playbook (commands and kits). What clients changed lives in the bell (its "See all" opens #/command/inbox) and on each client's card,
     // so Inbox has no tab of its own. Improve this hub sits apart at the right end.
     const tabs = (inboxBadge, careBadge) => [tab('today', '#/command', 'Today'), tab('clients', '#/command/clients', 'Clients', null, 'client'),
-      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents'), tab('timeline', '#/command/timeline', 'Timeline'), tab('playbook', '#/command/playbook', 'Playbook')];
+      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents'), tab('map', '#/command/map', 'Map'), tab('timeline', '#/command/timeline', 'Timeline'), tab('playbook', '#/command/playbook', 'Playbook')];
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {

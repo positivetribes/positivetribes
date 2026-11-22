@@ -15,6 +15,7 @@ import { webAdmin, latestWebDigest } from './web.js';
 import { timelineAdmin } from './timeline.js';
 import { requirementsAdmin } from './requirements.js';
 import { decisionsAdmin } from './decisions.js';
+import { loadMap } from './map.js';
 import { feedbackOverview } from './feedback.js';
 import { emailFilingOverview } from './emailfix.js';
 import { pocUsage } from './pocusage.js';
@@ -939,6 +940,16 @@ export async function handleAdmin(request, env, url, who) {
     if (requirements) return requirements;
     const decided = await decisionsAdmin({ request, env, url, route, path, method, json, body, text });
     if (decided) return decided;
+
+    if (route === 'GET /api/admin/map') {
+      // Salesforce Tasks come from the command center's 60-second cache; if Salesforce is down the Map still loads without them.
+      let tasks = null, salesforceError = null;
+      if (salesforceReady(env)) {
+        try { tasks = (await salesforceOverview(env, false)).tasks; } catch (error) { salesforceError = 'Salesforce did not answer, so Tasks are left out.'; console.error('map: salesforce', error.message); }
+      }
+      if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
+      return json({ clients: await loadMap(env.DB, { tasks }), salesforceError });
+    }
 
     if (route === 'GET /api/admin/match') {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
