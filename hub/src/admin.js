@@ -16,6 +16,7 @@ import { timelineAdmin } from './timeline.js';
 import { requirementsAdmin } from './requirements.js';
 import { decisionsAdmin, taskKey } from './decisions.js';
 import { loadMap } from './map.js';
+import { runMapDigest, latestMapDigest } from './mapdigest.js';
 import { feedbackOverview } from './feedback.js';
 import { emailFilingOverview } from './emailfix.js';
 import { pocUsage } from './pocusage.js';
@@ -130,7 +131,7 @@ const records = async (auth, q) => (await soql(auth, q)).records;
 // Reads only those Ids (checked against the Task Id shape when stored), cached for a minute. null when Salesforce is
 // not set up or fails: those blockers then show Check, as before, and nothing else breaks.
 let taskStatusCache = { at: 0, key: '', data: null };
-async function taskStatus(env) {
+export async function taskStatus(env) {
   if (!salesforceReady(env) || !env.DB) return null;
   const ids = (await env.DB.prepare(`SELECT blocker_ref AS id FROM dependencies WHERE blocker_kind = 'sf_task'
     UNION SELECT blocked_ref FROM dependencies WHERE blocked_kind = 'sf_task'`).all()).results.map(r => r.id).filter(id => /^00T[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?$/.test(id));
@@ -829,6 +830,8 @@ export async function handleAdmin(request, env, url, who) {
       const donated = env.DB ? await donatedTotals(env.DB, today.slice(0, 4) + '-01-01').catch(error => { console.error('admin_donated_failed', error.message); return []; }) : [];
       // Last week's website numbers (the Monday GA digest); a broken read never hides Today.
       const web = await latestWebDigest(db).catch(error => { console.error('admin_web_failed', error.message); return null; });
+      // The Monday project digest (src/mapdigest.js): what changed on the Map since last week, plus drift. Never hides Today.
+      const mapDigest = env.DB ? await latestMapDigest(env.DB).catch(error => { console.error('admin_map_digest_failed', error.message); return null; }) : null;
       // Answers to our questions that Eric has not cleared yet: Today lists them under Your move.
       const answers = inbox.items.filter(i => i.answered).map(i => ({ backlog: i.backlog, client: i.client, title: i.title, url: i.url, at: i.at, by: i.answered.by, text: i.answered.text, eventIds: i.eventIds }));
       // Client feedback (src/feedback.js): the last 90 days of answers and the 30-day summary. A broken read never hides Today.
@@ -837,7 +840,7 @@ export async function handleAdmin(request, env, url, who) {
       const emailFiling = await emailFilingOverview(db).catch(error => { console.error('admin_email_filing_failed', error.message); return null; });
       // PoC use (src/pocusage.js): live from each PoC Worker over a service binding. A broken read never hides Today.
       const pocs = await pocUsage(env).catch(error => { console.error('admin_poc_usage_failed', error.message); return []; });
-      return json({ ...view, testing, needsReply, estimates, donated, web, answers, feedback, emailFiling, pocs, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
+      return json({ ...view, testing, needsReply, estimates, donated, web, mapDigest, answers, feedback, emailFiling, pocs, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
     if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });
@@ -966,6 +969,13 @@ export async function handleAdmin(request, env, url, who) {
     if (requirements) return requirements;
     const decided = await decisionsAdmin({ request, env, url, route, path, method, json, body, text, taskStatus: () => taskStatus(env) });
     if (decided) return decided;
+
+    // Run the Monday project digest now (Today's Run now). Production host only, like the cron, so a preview never writes hub-db.
+    if (route === 'POST /api/admin/map/run') {
+      if (url.host !== 'hub.positivetribes.org' && !(env.HUB_DEV === '1' && url.hostname === 'localhost')) return json({ ran: false, reason: 'The project digest runs only on hub.positivetribes.org.' }, 409);
+      const result = await runMapDigest(env, today, { taskStatus: () => taskStatus(env) });
+      return json({ ...result, mapDigest: env.DB ? await latestMapDigest(env.DB) : null });
+    }
 
     if (route === 'GET /api/admin/map') {
       // Salesforce Tasks come from the command center's 60-second cache; if Salesforce is down the Map still loads without them.

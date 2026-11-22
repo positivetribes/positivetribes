@@ -3,7 +3,8 @@
 import { clientTimeline } from './timeline.js';
 import { pushRequirements, requirementTokens } from './requirements.js';
 import { accessIdentity } from './access.js';
-import { handleAdmin, localDay } from './admin.js';
+import { handleAdmin, localDay, taskStatus } from './admin.js';
+import { runMapDigest } from './mapdigest.js';
 import { runWebDigest } from './web.js';
 import { windowEnd } from './dates.js';
 import { pushPhaseTask, checkTestingWindows } from './phasetask.js';
@@ -347,11 +348,14 @@ const WEB_CRON = '0 14 * * 1';
 
 export default {
   // Patch's morning check (cron in wrangler.jsonc). runPatch refuses to run off the production host or without the key.
-  // The website digest (Mondays) pulls last week's Google Analytics numbers for Today.
+  // The website digest (Mondays) pulls last week's Google Analytics numbers for Today; the project digest snapshots the Map.
   async scheduled(event, env, ctx) {
     if (event.cron === WEB_CRON) {
       ctx.waitUntil(runWebDigest(env, localDay(Date.now())).then(r => console.log('web_digest', r.ran ? 'saved ' + r.week : r.reason))
         .catch(error => console.error('web_digest_failed', error.message)));
+      // The project digest (Map step 4): a snapshot of the Map so Today can show what changed since last week.
+      ctx.waitUntil(runMapDigest(env, localDay(Date.now()), { taskStatus: () => taskStatus(env) }).then(r => console.log('map_digest', r.ran ? `saved ${r.week}, ${r.projects} projects, ${r.drift} drift` : r.reason))
+        .catch(error => console.error('map_digest_failed', error.message)));
       return;
     }
     // Phases whose testing window ended with no problems get a Salesforce Task to confirm and invoice (src/phasetask.js).
