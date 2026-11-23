@@ -27,6 +27,8 @@ function setup() {
       (1, 1, 'question', 'Answered in full', 'must', 'full', 4, '', '2026-11-01 10:00:00'),
       (2, 3, 'question', 'Other client secret', 'must', 'full', 1, '', '2026-11-01 10:00:00');
     UPDATE items SET answer = 'Yes', updated_at = '2026-11-20 09:00:00' WHERE title LIKE 'Answered%';
+    INSERT INTO items (client_id, project_id, kind, title, tier, phase, position, answer, asks_back, created_at) VALUES
+      (1, 1, 'question', 'Asked back', 'must', 'review', 5, 'Yes to 1; for 2, (a) or (b)?', 1, '2026-11-20 10:00:00');
     INSERT INTO requirements (client_id, project_id, ref, text, phase, state, cited, position) VALUES
       (1, 1, 'R1', 'Sign in', '2', 'agreed', 1, 1), (1, 1, 'R2', 'Roster email', '3', 'agreed', 1, 2), (1, 1, 'R3', 'Report', '3', 'agreed', 0, 3),
       (1, 1, 'P5', 'Text reminders', '4', 'proposed', 0, 4);
@@ -64,7 +66,8 @@ test('a card shows phase, now and next, current-phase requirements, waits, quest
   assert.deepEqual(s.waiting.map(d => d.blocker.name), ['Jack approves terms']);
   assert.equal(s.waiting[0].late, false);
   // Answered questions (any phase) leave the waiting list and show as ready to close; they never count as undecided.
-  assert.deepEqual(s.questions.map(q => q.title), ['Gym list']);
+  // An answer that asks something back stays waiting on the client, not ready to close.
+  assert.deepEqual(s.questions.map(q => q.title), ['Gym list', 'Asked back']);
   assert.deepEqual(s.to_close.map(q => q.title).sort(), ['Answered in full', 'Answered in review']);
   assert.equal(s.to_close[0].age, 2, 'age counts from the answer (updated_at)');
   assert.ok(s.risks.some(r => r.kind === 'answered_open' && /2 questions answered, ready to close/.test(r.text)));

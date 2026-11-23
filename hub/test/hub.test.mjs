@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql', '0026_change_estimates.sql', '0027_donated_changes.sql', '0028_estimate_lines.sql', '0029_agreement_ref.sql', '0031_item_proposal.sql', '0033_timeline.sql', '0037_item_images.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql', '0026_change_estimates.sql', '0027_donated_changes.sql', '0028_estimate_lines.sql', '0029_agreement_ref.sql', '0031_item_proposal.sql', '0033_timeline.sql', '0037_item_images.sql', '0041_item_asks_back.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -491,4 +491,28 @@ test('item screenshots: real images only, scoped to the client, removable by who
   sqlite.exec('UPDATE items SET done = 0 WHERE id = ' + created.id);
   assert.equal((await call('eric@positivetribes.org', '/api/c/uep/items/' + created.id, 'DELETE')).status, 200);
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM item_images').get().n, 0);
+});
+
+test('an answer that asks something back keeps the question waiting until the client answers', async () => {
+  const { call, sqlite } = setup();
+  sqlite.exec("INSERT INTO items (client_id, project_id, kind, title, owner, tier, phase, position) VALUES (1, 1, 'question', 'Role names', 'Molly', 'must', 'review', 1), (1, 1, 'change', 'Bigger logo', '', 'must', 'review', 2)");
+  const pt = (body, id = 1) => call('eric@positivetribes.org', '/api/c/uep/items/' + id, 'PATCH', body);
+  const flag = () => sqlite.prepare('SELECT asks_back FROM items WHERE id = 1').get().asks_back;
+  assert.equal((await pt({ asks_back: true })).status, 400, 'needs an answer first');
+  assert.equal((await pt({ answer: 'Yes to 1 and 3. For 2: (a) or (b)?', asks_back: true })).status, 200);
+  assert.equal(flag(), 1);
+  const items = await (await call('molly@uep.org', '/api/c/uep/items')).json();
+  assert.equal(items.items.find(i => i.id === 1).asks_back, true);
+  assert.equal((await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { asks_back: false })).status, 403, 'only Positive Tribes sets it');
+  assert.equal((await pt({ asks_back: true }, 2)).status, 400, 'questions only');
+  assert.equal((await pt({ asks_back: 'yes' })).status, 400);
+  // Positive Tribes editing the answer keeps it; the client's answer clears it.
+  await pt({ answer: 'Yes to 1 and 3. For 2: (a) one Lead, or (b) all Co-lead?' });
+  assert.equal(flag(), 1);
+  await call('molly@uep.org', '/api/c/uep/items/1', 'PATCH', { answer: 'Yes to 1 and 3. For 2: (a) one Lead.' });
+  assert.equal(flag(), 0);
+  // Closing the question clears it too.
+  await pt({ asks_back: true });
+  await pt({ done: true });
+  assert.equal(flag(), 0);
 });

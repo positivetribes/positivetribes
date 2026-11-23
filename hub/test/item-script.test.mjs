@@ -40,3 +40,12 @@ test('arguments are checked before anything runs', () => {
   assert.throws(() => parseArgs(['uep', '1']));
   assert.throws(() => parseArgs(['uep', '1', '--answer']));
 });
+
+test('--asks-back marks an answered question, and closing it clears the mark', () => {
+  const q = { ...item, kind: 'question', answer: 'Yes. For 2: (a) or (b)?', asks_back: 0 };
+  assert.deepEqual(parseArgs(['uep', '194', '--asks-back']).changes, { asks_back: 1 });
+  assert.match(buildSql(q, { asks_back: 1 }), /asks_back = 1/);
+  assert.match(buildSql({ ...q, asks_back: 1 }, { done: 1 }), /asks_back = 0/);
+  assert.throws(() => buildSql({ ...q, answer: '' }, { asks_back: 1 }), /needs an answer/);
+  assert.throws(() => buildSql({ ...q, kind: 'change' }, { asks_back: 1 }), /questions only/);
+});

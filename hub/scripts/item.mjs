@@ -6,6 +6,7 @@
 //
 // Changes: --done | --reopen   --answer "text"   --phase review|prototype|full|later   --tier must|nice|idea
 //          --due YYYY-MM-DD|none   --title "text"   --details "text"
+//          --asks-back | --no-asks-back   (a question: our answer asks the client something back)
 // Without --apply it only looks the item up and prints the SQL it would run.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -44,6 +45,8 @@ export function parseArgs(argv) {
     else if (flag === '--reopen') changes.done = 0;
     else if (flag === '--answer') changes.answer = value();
     else if (flag === '--title') changes.title = value();
+    else if (flag === '--asks-back') changes.asks_back = 1;
+    else if (flag === '--no-asks-back') changes.asks_back = 0;
     else if (flag === '--details') changes.details = value();
     else if (flag === '--phase') {
       changes.phase = value();
@@ -61,7 +64,7 @@ export function parseArgs(argv) {
     if (changes[key] !== undefined && changes[key].length > max) throw new Error(`--${key} is longer than ${max} characters.`);
   }
   if (changes.title !== undefined && !changes.title.trim()) throw new Error('--title cannot be empty.');
-  if (!Object.keys(changes).length) throw new Error('Nothing to change. Add --done, --answer, --phase, --tier, --due, --title or --details.');
+  if (!Object.keys(changes).length) throw new Error('Nothing to change. Add --done, --answer, --phase, --tier, --due, --title, --details or --asks-back.');
   return { slug, id: Number(rawId), changes, apply };
 }
 
@@ -96,6 +99,11 @@ export function buildSql(item, changes, actor = ACTOR) {
     event('phase', `${PHASE_NAMES[item.phase] || item.phase} → ${PHASE_NAMES[changes.phase]}`);
   }
   if (changes.due_date !== undefined && changes.due_date !== item.due_date) sets.push(`due_date = ${sq(changes.due_date)}`);
+  // Same rules as the app: questions only, needs an answer, and closing the question clears it.
+  const asksBack = next.done ? 0 : changes.asks_back ?? item.asks_back ?? 0;
+  if (changes.asks_back && item.kind !== 'question') throw new Error('--asks-back is for questions only.');
+  if (changes.asks_back && !next.done && !String(next.answer || '').trim()) throw new Error('--asks-back needs an answer on the question.');
+  if (asksBack !== (item.asks_back ?? 0)) sets.push(`asks_back = ${asksBack}`);
   if (edited.length) event('edited', 'Changed ' + edited.join(', '));
   if (!sets.length) return '';
   return [`UPDATE items SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ${item.id} AND client_id = ${item.client_id};`, ...events].join('\n');
@@ -108,7 +116,7 @@ const wrangler = args => execFileSync('npx', ['wrangler', '-c', 'wrangler.jsonc'
 async function main() {
   const { slug, id, changes, apply } = parseArgs(process.argv.slice(2));
   const out = JSON.parse(wrangler(['--json', '--command',
-    `SELECT i.id, i.client_id, i.project_id, i.kind, i.title, i.details, i.answer, i.tier, i.phase, i.done, i.due_date
+    `SELECT i.id, i.client_id, i.project_id, i.kind, i.title, i.details, i.answer, i.tier, i.phase, i.done, i.due_date, i.asks_back
      FROM items i JOIN clients c ON c.id = i.client_id WHERE c.slug = ${sq(slug)} AND i.id = ${id}`]));
   const item = out[0].results[0];
   if (!item) throw new Error(`No item ${id} for client ${slug}.`);

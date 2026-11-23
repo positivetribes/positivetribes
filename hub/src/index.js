@@ -96,7 +96,7 @@ async function listItems(db, clientId, user) {
   const { results } = await db.prepare(
     `SELECT i.id, i.project_id, p.slug AS project, i.kind, i.title, i.details, i.owner, i.answer, i.tier, i.phase,
             i.status, i.position, i.done, i.due_date, i.added_by, i.created_at, i.updated_at, i.legacy_id,
-            i.release_id, r.number AS release_number, r.name AS release_name, i.agreement_ref,
+            i.release_id, r.number AS release_number, r.name AS release_name, i.agreement_ref, i.asks_back,
             i.proposal_state, i.proposal_document_id, d.title AS proposal_doc_title, d.url AS proposal_doc_url, d.visible AS proposal_doc_visible,
             (SELECT group_concat(id || ':' || (lower(added_email) = lower(?2))) FROM (SELECT id, added_email FROM item_images WHERE client_id = i.client_id AND item_id = i.id ORDER BY id)) AS image_ids
      FROM items i JOIN projects p ON p.id = i.project_id
@@ -107,7 +107,7 @@ async function listItems(db, clientId, user) {
   ).bind(clientId, String(user?.email || '')).all();
   const [estimates, donated, answers] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user), answersFor(db, clientId, user)]);
   return results.map(({ proposal_doc_title, proposal_doc_url, proposal_doc_visible, image_ids, ...item }) => ({
-    ...item, done: Boolean(item.done),
+    ...item, done: Boolean(item.done), asks_back: Boolean(item.asks_back),
     // Screenshots: ids only, plus whether this viewer added each one (so they may remove it). Never who else did.
     images: image_ids ? String(image_ids).split(',').map(x => { const [id, mine] = x.split(':'); return { id: Number(id), mine: mine === '1' }; }) : [], estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [],
     answered_at: answers.get(item.id)?.at || null, answered_mine: Boolean(answers.get(item.id)?.mine),
@@ -807,6 +807,18 @@ export default {
           const care = await db.prepare('SELECT 1 FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id).first();
           if (care) throw new InputError('This is a care request: it closes when it ships or is cancelled, and stays on its tool.', 409);
         }
+        // Our answer asks the client something back: the question stays waiting on its owner until someone at the client
+        // answers (or anyone closes it). Positive Tribes sets it on questions only; a client's answer clears it.
+        let asksBack = item.asks_back ? 1 : 0;
+        if (b.asks_back !== undefined) {
+          if (user.role !== 'pt') throw new InputError('Only Positive Tribes marks an answer as asking something back.', 403);
+          if (item.kind !== 'question') throw new InputError('Only questions can ask something back.');
+          if (typeof b.asks_back !== 'boolean') throw new InputError('Asks back must be true or false.');
+          asksBack = Number(b.asks_back);
+          if (asksBack && !answer.trim()) throw new InputError('Write the answer first, then mark that it asks something back.');
+        }
+        if (user.role !== 'pt' && answer !== item.answer) asksBack = 0;
+        if (doneNow) asksBack = 0;
         const position = tier === item.tier && projectId === item.project_id ? item.position : await nextPosition(db, client.id, projectId, item.kind, tier);
         // A status pick logs its own event (and the open/closed change it implies is part of it); a reply sent with it logs too.
         const wish = item.kind === 'change' && tier !== 'must' && status === 'planned';
@@ -816,9 +828,9 @@ export default {
         const covered = agreementRef !== (item.agreement_ref ?? '') ? ['covered', agreementRef ? 'In the agreement: ' + agreementRef : 'No longer marked as in the agreement'] : null;
         await db.batch([
           db.prepare(
-            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, release_id = ?, agreement_ref = ?, proposal_state = ?, proposal_document_id = ?, updated_at = CURRENT_TIMESTAMP
+            `UPDATE items SET title = ?, details = ?, owner = ?, answer = ?, done = ?, tier = ?, phase = ?, project_id = ?, position = ?, status = ?, release_id = ?, agreement_ref = ?, proposal_state = ?, proposal_document_id = ?, asks_back = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ? AND client_id = ?`
-          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, releaseId, agreementRef, proposalState, proposalDoc, item.id, client.id),
+          ).bind(title, details, owner, answer, doneNow, tier, phase, projectId, position, status, releaseId, agreementRef, proposalState, proposalDoc, asksBack, item.id, client.id),
           ...[statusEvent, covered, proposal, change].filter(Boolean).map(([action, detail]) => logEvent(db, client.id, item.id, action, { title, kind: item.kind }, detail, user))
         ]);
         return json({ ok: true, items: await listItems(db, client.id, user) });
