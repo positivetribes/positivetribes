@@ -16,6 +16,10 @@ const DONE_STAGES = ['signed_off', 'live'];
 const addDays = (day, n) => { const d = new Date(day + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 export const daysBetween = (a, b) => Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 864e5);
 
+// Item numbers as the client sees them (#133), first five, so a flag says which questions to open.
+const refs = qs => qs.slice(0, 5).map(q => `#${q.number}`).join(', ') + (qs.length > 5 ? ` and ${qs.length - 5} more` : '');
+const days = n => `${n} day${n === 1 ? '' : 's'}`;
+
 // The flags for one project card. Pure, so the rules are tested on their own.
 export function risksFor(p, today) {
   const out = [];
@@ -27,12 +31,12 @@ export function risksFor(p, today) {
     out.push({ kind: 'milestone_open', level: 'medium', text: `Phase ${p.phase.number} ends ${end}: ${ph.total - ph.built} of ${ph.total} requirements not built` });
   }
   const stale = p.questions.filter(q => q.age >= RISK.questionDays);
-  if (stale.length) out.push({ kind: 'question_waiting', level: 'medium', text: `${stale.length} question${stale.length > 1 ? 's' : ''} waiting ${RISK.questionDays}+ days (oldest ${Math.max(...stale.map(q => q.age))} days)` });
+  if (stale.length) out.push({ kind: 'question_waiting', level: 'medium', text: `${stale.length} question${stale.length > 1 ? 's' : ''} waiting ${RISK.questionDays}+ days: ${refs(stale)} (oldest ${days(Math.max(...stale.map(q => q.age)))})` });
   const overdue = p.questions.filter(q => q.due_date && q.due_date < today);
-  if (overdue.length) out.push({ kind: 'question_overdue', level: 'medium', text: `${overdue.length} question${overdue.length > 1 ? 's' : ''} past due` });
+  if (overdue.length) out.push({ kind: 'question_overdue', level: 'medium', text: `${overdue.length} question${overdue.length > 1 ? 's' : ''} past due: ${refs(overdue)}` });
   // Answered but still open: the client is done, so it waits on us to act on the answer and close it (any age).
   const toClose = p.to_close || [];
-  if (toClose.length) out.push({ kind: 'answered_open', level: 'medium', text: `${toClose.length} question${toClose.length > 1 ? 's' : ''} answered, ready to close (oldest answer ${Math.max(...toClose.map(q => q.age))} days)` });
+  if (toClose.length) out.push({ kind: 'answered_open', level: 'medium', text: `${toClose.length} question${toClose.length > 1 ? 's' : ''} answered, ready to close: ${refs(toClose)} (oldest answer ${days(Math.max(...toClose.map(q => q.age)))})` });
   if (!p.scheduled) out.push({ kind: 'no_timeline', level: 'low', text: 'No timeline entries' });
   return out;
 }

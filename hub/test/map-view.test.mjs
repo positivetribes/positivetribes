@@ -103,8 +103,9 @@ test('risk rules: a late blocker is high; the rest wait for their thresholds', (
   assert.match(late[0].text, /Gym list/);
   const young = risksFor({ ...base, questions: [{ age: RISK.questionDays - 1 }] }, '2026-11-22');
   assert.deepEqual(young, []);
-  const answered = risksFor({ ...base, to_close: [{ age: 0 }] }, '2026-11-22');
+  const answered = risksFor({ ...base, to_close: [{ number: 133, age: 1 }] }, '2026-11-22');
   assert.deepEqual(answered.map(r => r.kind), ['answered_open'], 'an answered question needs closing at any age');
+  assert.match(answered[0].text, /ready to close: #133 \(oldest answer 1 day\)/, 'the flag names the question by its number');
   const far = risksFor({ ...base, phase: { number: 4, window_end: '2027-02-01' }, requirements: { current: { total: 5, built: 1 } } }, '2026-11-22');
   assert.deepEqual(far, [], 'a phase ending beyond the window is not flagged');
 });
