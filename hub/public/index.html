@@ -1792,7 +1792,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
       itemShotList(item),
-      item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : 'What we know so far'), answerText,
+      item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : item.asks_back ? 'Our answer, and a question for you' : 'What we know so far'), answerText,
         long && h('button', { type: 'button', class: 'show-all', onclick: e => { const shut = answerText.classList.toggle('clamp'); e.target.textContent = shut ? 'Show all' : 'Show less'; } }, 'Show all')),
       careBlock(item, isPt),
       estimateBlock(item),
@@ -1828,6 +1828,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const owner = h('input', { type: 'text', maxlength: 60, value: item.owner, id: 'e-owner', ...(item.kind === 'question' ? { list: 'e-owner-list', autocomplete: 'off' } : {}) });
     const answer = h('textarea', { maxlength: 2000, id: 'e-answer' }, item.answer);
     const done = h('input', { type: 'checkbox', id: 'e-done', ...(item.done ? { checked: true } : {}) });
+    // Positive Tribes' answer that also asks the client something: the question stays waiting on its owner.
+    const asksBackable = item.kind === 'question' && viewer().role === 'pt' && !state.preview;
+    const asksBack = h('input', { type: 'checkbox', id: 'e-asks-back', ...(item.asks_back ? { checked: true } : {}) });
     const list = h('select', { id: 'e-project' }, state.projects.map(p => h('option', { value: p.id, ...(p.id === item.project_id ? { selected: true } : {}) }, p.name)));
     // Positive Tribes tags a change or problem with the phase it ships in; the status then follows that phase by itself.
     const taggable = viewer().role === 'pt' && Boolean(STATUS_NAMES[item.kind]);
@@ -1864,6 +1867,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       e.preventDefault(); state.editing = null;
       const c = { title: title.value, details: details.value, project_id: Number(list.value) };
       if (asks) Object.assign(c, { owner: owner.value, answer: answer.value, done: done.checked });
+      if (asksBackable && asksBack.checked !== Boolean(item.asks_back)) c.asks_back = asksBack.checked && !done.checked;
       if (replies) c.answer = answer.value;
       if (taggable && Number(list.value) === item.project_id && String(item.release_id || '') !== shipsSel.value) c.release_id = shipsSel.value ? Number(shipsSel.value) : null;
       const used = draft, setStatus = used && statusPick.checked && STATUS_WORD[used.status] ? used.status : '';
@@ -1877,6 +1881,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       itemShotsEditor(item),
       asks && h('div', {}, h('label', { for: 'e-owner' }, item.kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, item.kind === 'question' && ownerList('e-owner-list')),
       (asks || replies) && h('div', {}, h('label', { for: 'e-answer' }, replies ? 'Our reply' : item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
+      asksBackable && h('label', { for: 'e-asks-back', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, asksBack,
+        'This asks the client something back (keeps it waiting on them until they answer)'),
       canDraft && h('div', { class: 'stack' }, draftButton, suggestion),
       state.projects.length > 1 && h('div', {}, h('label', { for: 'e-project' }, 'Project'), list),
       taggable && h('div', {}, h('label', { for: 'e-release' }, 'Ships in'), shipsSel, h('p', { class: 'muted' }, 'When this phase goes to testing, a Planned item becomes Ready to test; when it is signed off, the item is done.')),

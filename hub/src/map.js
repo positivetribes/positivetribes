@@ -48,7 +48,7 @@ export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus
     db.prepare('SELECT id, client_id, project_id, number, name, stage, uat_started, uat_days, uat_day_type FROM releases ORDER BY project_id, number').all(),
     db.prepare('SELECT id, client_id, project_id, release_id, label, start_date, end_date, kind FROM timeline_entries ORDER BY start_date, id').all(),
     db.prepare(`SELECT id, client_id, project_id, COALESCE(legacy_id, id) AS number, kind, title, owner, due_date, phase, created_at, updated_at,
-      answer <> '' AS answered FROM items WHERE done = 0 AND (kind = 'question' OR phase = 'review')`).all(),
+      answer <> '' AND asks_back = 0 AS answered FROM items WHERE done = 0 AND (kind = 'question' OR phase = 'review')`).all(),
     db.prepare('SELECT id, client_id, project_id, decided_on, decided_by, summary, affects, price_change FROM decisions ORDER BY decided_on DESC, id DESC').all(),
     loadRequirements(db, null),
     loadDependencies(db, null, today, taskStatus)
@@ -90,7 +90,8 @@ export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus
         proposed: req.rows.filter(r => r.state === 'proposed').map(r => ({ ref: r.ref, text: r.text })),
         last_sync: req.last_sync?.synced_at || null
       } : null;
-      // Open questions split in two: no answer yet (waiting on the client) and answered but not closed (waiting on us).
+      // Open questions split in two: no answer yet, or our answer asks something back (waiting on the client), and answered
+      // but not closed (waiting on us).
       const asked = own(items.results).filter(i => i.project_id === p.id && i.kind === 'question');
       const to_close = asked.filter(i => i.answered)
         .map(i => ({ number: i.number, title: i.title, owner: i.owner, age: daysBetween(String(i.updated_at || i.created_at).slice(0, 10), today) }))
