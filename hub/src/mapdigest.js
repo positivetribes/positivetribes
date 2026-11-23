@@ -50,6 +50,7 @@ export function snapshotOf(clients, today, salesforceOk) {
       req: p.requirements?.current ? { phase: p.requirements.current.phase, total: p.requirements.current.total, built: p.requirements.current.built, accepted: p.requirements.current.accepted } : null,
       waiting: p.waiting.map(d => ({ id: d.id, name: d.blocker.name, late: d.late })),
       questions: p.questions.length,
+      to_close: (p.to_close || []).length,
       risks: p.risks.map(r => r.kind)
     }))),
     decisions: clients.flatMap(c => [...c.decisions, ...c.projects.flatMap(p => p.decisions)].map(d => ({ id: d.id, client: c.name, summary: d.summary, decided_on: d.decided_on, price_change: d.price_change }))),
@@ -57,7 +58,7 @@ export function snapshotOf(clients, today, salesforceOk) {
   };
 }
 
-const RISK_NAMES = { late_blocker: 'a late blocker', milestone_open: 'a phase ending with requirements not built', question_waiting: 'a question waiting too long', question_overdue: 'a question past due', no_timeline: 'no timeline' };
+const RISK_NAMES = { late_blocker: 'a late blocker', milestone_open: 'a phase ending with requirements not built', question_waiting: 'a question waiting too long', question_overdue: 'a question past due', answered_open: 'answered questions not closed', no_timeline: 'no timeline' };
 
 // What changed between two snapshots, as one line each. Pure, so it is tested on its own.
 export function changesBetween(prev, cur) {

@@ -1,7 +1,7 @@
 // The Map (step 3, #/command/map): one card per hub project across every client, built only from what the hub and
 // Salesforce already hold. Positive Tribes only (GET /api/admin/map behind handleAdmin's door); nothing here is stored.
 // Per project: where it is (current phase, the bar running now, the next one), requirements progress for the current
-// phase, what it waits on (dependencies + open hub questions), open decisions (proposed requirements, items not decided)
+// phase, what it waits on (dependencies + unanswered hub questions), answered questions not yet closed, open decisions (proposed requirements, items not decided)
 // and the last decisions, plus risk flags worked out by the rules in RISK. Per client: overdue and due-this-week
 // Salesforce Tasks (from the command center's cached Salesforce read) and the dependencies that sit on no project.
 
@@ -30,6 +30,9 @@ export function risksFor(p, today) {
   if (stale.length) out.push({ kind: 'question_waiting', level: 'medium', text: `${stale.length} question${stale.length > 1 ? 's' : ''} waiting ${RISK.questionDays}+ days (oldest ${Math.max(...stale.map(q => q.age))} days)` });
   const overdue = p.questions.filter(q => q.due_date && q.due_date < today);
   if (overdue.length) out.push({ kind: 'question_overdue', level: 'medium', text: `${overdue.length} question${overdue.length > 1 ? 's' : ''} past due` });
+  // Answered but still open: the client is done, so it waits on us to act on the answer and close it (any age).
+  const toClose = p.to_close || [];
+  if (toClose.length) out.push({ kind: 'answered_open', level: 'medium', text: `${toClose.length} question${toClose.length > 1 ? 's' : ''} answered, ready to close (oldest answer ${Math.max(...toClose.map(q => q.age))} days)` });
   if (!p.scheduled) out.push({ kind: 'no_timeline', level: 'low', text: 'No timeline entries' });
   return out;
 }
@@ -40,8 +43,8 @@ export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus
     db.prepare('SELECT id, client_id, slug, name, phase, position FROM projects ORDER BY client_id, position, id').all(),
     db.prepare('SELECT id, client_id, project_id, number, name, stage, uat_started, uat_days, uat_day_type FROM releases ORDER BY project_id, number').all(),
     db.prepare('SELECT id, client_id, project_id, release_id, label, start_date, end_date, kind FROM timeline_entries ORDER BY start_date, id').all(),
-    db.prepare(`SELECT id, client_id, project_id, COALESCE(legacy_id, id) AS number, kind, title, owner, due_date, phase, created_at
-      FROM items WHERE done = 0 AND ((kind = 'question' AND answer = '') OR phase = 'review')`).all(),
+    db.prepare(`SELECT id, client_id, project_id, COALESCE(legacy_id, id) AS number, kind, title, owner, due_date, phase, created_at, updated_at,
+      answer <> '' AS answered FROM items WHERE done = 0 AND (kind = 'question' OR phase = 'review')`).all(),
     db.prepare('SELECT id, client_id, project_id, decided_on, decided_by, summary, affects, price_change FROM decisions ORDER BY decided_on DESC, id DESC').all(),
     loadRequirements(db, null),
     loadDependencies(db, null, today, taskStatus)
@@ -83,7 +86,12 @@ export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus
         proposed: req.rows.filter(r => r.state === 'proposed').map(r => ({ ref: r.ref, text: r.text })),
         last_sync: req.last_sync?.synced_at || null
       } : null;
-      const questions = own(items.results).filter(i => i.project_id === p.id && i.kind === 'question')
+      // Open questions split in two: no answer yet (waiting on the client) and answered but not closed (waiting on us).
+      const asked = own(items.results).filter(i => i.project_id === p.id && i.kind === 'question');
+      const to_close = asked.filter(i => i.answered)
+        .map(i => ({ number: i.number, title: i.title, owner: i.owner, age: daysBetween(String(i.updated_at || i.created_at).slice(0, 10), today) }))
+        .sort((a, b) => b.age - a.age);
+      const questions = asked.filter(i => !i.answered)
         .map(i => ({ number: i.number, title: i.title, owner: i.owner, due_date: i.due_date || null, age: daysBetween(String(i.created_at).slice(0, 10), today) }))
         .sort((a, b) => (a.due_date || '9').localeCompare(b.due_date || '9') || b.age - a.age);
       const undecided = own(items.results).filter(i => i.project_id === p.id && i.kind !== 'question' && i.phase === 'review').length;
@@ -92,7 +100,7 @@ export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus
         scheduled: entries.results.some(e => e.project_id === p.id),
         requirements: requirements_,
         waiting: cDeps.filter(d => d.waiting && projectOf(d.blocked) === p.id).map(slim),
-        questions, undecided,
+        questions, to_close, undecided,
         decisions: own(decisions.results).filter(d => d.project_id === p.id).slice(0, 3).map(d => ({ ...d, price_change: Boolean(d.price_change) }))
       };
       card.risks = risksFor(card, today);

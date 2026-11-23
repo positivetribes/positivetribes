@@ -936,10 +936,13 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const waits = [...p.waiting.map(d => `<li class="${d.late ? 'late' : ''}"><span class="tag">${d.late ? 'Late' : d.blocker.done === null ? 'Check' : 'Waiting'}</span> ${esc(d.blocker.name)}${d.needed_by ? ' · ' + esc(mapDay(d.needed_by)) : ''} <span class="muted">→ ${esc(d.blocked.name)}</span></li>`),
       ...p.questions.slice(0, 4).map(q => `<li class="${q.due_date && q.due_date < tlToday() ? 'late' : ''}"><span class="tag">Question</span> #${esc(q.number)} ${esc(q.title)}${q.owner ? ' · ' + esc(q.owner) : ''}${q.due_date ? ' · due ' + esc(mapDay(q.due_date)) : ` · ${q.age} days`}</li>`)];
     const more = p.questions.length > 4 ? `<li class="muted small">and ${p.questions.length - 4} more questions</li>` : '';
+    const toClose = p.to_close || [];
+    const closing = toClose.length ? `<h4>Answered, ready to close</h4><ul class="tl-deps map-waits">${toClose.slice(0, 4).map(q => `<li><span class="tag">Answered</span> #${esc(q.number)} ${esc(q.title)} · ${q.age} days</li>`).join('')}${toClose.length > 4 ? `<li class="muted small">and ${toClose.length - 4} more</li>` : ''}</ul><p class="small"><a href="#/${esc(c.slug)}/home">open</a> to close them</p>` : '';
     const decided = p.decisions.map(d => `<li><span class="muted">${esc(mapDay(d.decided_on))}</span> ${esc(d.summary)}${d.decided_by ? ` <span class="muted">(${esc(d.decided_by)})</span>` : ''}</li>`).join('');
     return `<article class="card map-card"><div class="row"><h3 class="grow">${esc(p.name)}</h3></div>
       ${p.risks.length ? `<ul class="map-risks">${p.risks.map(mapRisk).join('')}</ul>` : ''}${ph}${when ? `<ul class="map-when small">${when}</ul>` : ''}${req}
       ${waits.length ? `<h4>Waiting on</h4><ul class="tl-deps map-waits">${waits.join('')}${more}</ul>` : ''}
+      ${closing}
       ${p.undecided ? `<p class="small">${p.undecided} change${p.undecided > 1 ? 's' : ''} not decided yet · <a href="#/${esc(c.slug)}/home">open</a></p>` : ''}
       ${decided ? `<h4>Last decisions</h4><ul class="map-decided small">${decided}</ul>` : ''}</article>`;
   }

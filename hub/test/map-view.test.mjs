@@ -23,7 +23,10 @@ function setup() {
     INSERT INTO items (client_id, project_id, kind, title, tier, phase, position, due_date, created_at) VALUES
       (1, 1, 'question', 'Gym list', 'must', 'full', 1, '2026-11-10', '2026-11-01 10:00:00'),
       (1, 1, 'change', 'Bigger logo', 'nice', 'review', 2, '', '2026-11-20 10:00:00'),
+      (1, 1, 'question', 'Answered in review', 'must', 'review', 3, '', '2026-11-01 10:00:00'),
+      (1, 1, 'question', 'Answered in full', 'must', 'full', 4, '', '2026-11-01 10:00:00'),
       (2, 3, 'question', 'Other client secret', 'must', 'full', 1, '', '2026-11-01 10:00:00');
+    UPDATE items SET answer = 'Yes', updated_at = '2026-11-20 09:00:00' WHERE title LIKE 'Answered%';
     INSERT INTO requirements (client_id, project_id, ref, text, phase, state, cited, position) VALUES
       (1, 1, 'R1', 'Sign in', '2', 'agreed', 1, 1), (1, 1, 'R2', 'Roster email', '3', 'agreed', 1, 2), (1, 1, 'R3', 'Report', '3', 'agreed', 0, 3),
       (1, 1, 'P5', 'Text reminders', '4', 'proposed', 0, 4);
@@ -60,7 +63,11 @@ test('a card shows phase, now and next, current-phase requirements, waits, quest
   // Release 2 is signed off, so only the Jack Task (unknown done) is still waiting.
   assert.deepEqual(s.waiting.map(d => d.blocker.name), ['Jack approves terms']);
   assert.equal(s.waiting[0].late, false);
+  // Answered questions (any phase) leave the waiting list and show as ready to close; they never count as undecided.
   assert.deepEqual(s.questions.map(q => q.title), ['Gym list']);
+  assert.deepEqual(s.to_close.map(q => q.title).sort(), ['Answered in full', 'Answered in review']);
+  assert.equal(s.to_close[0].age, 2, 'age counts from the answer (updated_at)');
+  assert.ok(s.risks.some(r => r.kind === 'answered_open' && /2 questions answered, ready to close/.test(r.text)));
   assert.equal(s.undecided, 1);
   assert.deepEqual(s.decisions.map(d => d.summary), ['Lead email 6 days out']);
   assert.ok(s.risks.some(r => r.kind === 'question_overdue'));
@@ -96,6 +103,8 @@ test('risk rules: a late blocker is high; the rest wait for their thresholds', (
   assert.match(late[0].text, /Gym list/);
   const young = risksFor({ ...base, questions: [{ age: RISK.questionDays - 1 }] }, '2026-11-22');
   assert.deepEqual(young, []);
+  const answered = risksFor({ ...base, to_close: [{ age: 0 }] }, '2026-11-22');
+  assert.deepEqual(answered.map(r => r.kind), ['answered_open'], 'an answered question needs closing at any age');
   const far = risksFor({ ...base, phase: { number: 4, window_end: '2027-02-01' }, requirements: { current: { total: 5, built: 1 } } }, '2026-11-22');
   assert.deepEqual(far, [], 'a phase ending beyond the window is not flagged');
 });
