@@ -34,7 +34,7 @@
     "CF_WEB_SITE_TAG": "4b2879219eb7447ca537e8b8c0175ae9"
   },
   // Patch's morning check: 12:00 UTC, 8am Eastern (7am in winter). The website digest: Mondays 14:00 UTC.
-  "triggers": { "crons": ["0 12 * * *", "0 14 * * 1"] },
+  "triggers": { "crons": ["0 12 * * *", "0 14 * * MON"] },
   // Prospect PoCs (src/pocusage.js): each PoC Worker's `Usage` RPC entrypoint, for Today's "PoC use" line.
   "services": [{ "binding": "POC_WFA", "service": "wfa-commissions", "entrypoint": "Usage" }],
   "d1_databases": [
