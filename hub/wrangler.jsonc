@@ -9,6 +9,8 @@
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
   // Sign-in: Cloudflare Access (One-time PIN) on this Worker's hostname. Both values are public identifiers, not secrets.
   "vars": {
+    // Support watch alerts (src/supportwatch.js) go here only.
+    "ALERT_TO": "eric@positivetribes.org",
     "ACCESS_TEAM_DOMAIN": "positivetribes.cloudflareaccess.com",
     "ACCESS_AUD": "9dc04910d410b1e8c6739841b429ce28e81e7a9796758c75bbac93bf10bd634a",
     // The daily command center sync routine's Access service token (its client ID, a public identifier). Only this
@@ -34,9 +36,13 @@
     "CF_WEB_SITE_TAG": "4b2879219eb7447ca537e8b8c0175ae9"
   },
   // Patch's morning check: 12:00 UTC, 8am Eastern (7am in winter). The website digest: Mondays 14:00 UTC.
-  "triggers": { "crons": ["0 12 * * *", "0 14 * * MON"] },
+  // "30 * * * *": the support watch (src/supportwatch.js); it acts only Mon-Fri 8am-6pm Mountain.
+  "triggers": { "crons": ["0 12 * * *", "0 14 * * MON", "30 * * * *"] },
+  // Support watch emails go only to Eric; the destination must be verified in Email Routing.
+  "send_email": [{ "name": "ALERT_MAIL", "destination_address": "eric@positivetribes.org" }],
   // Prospect PoCs (src/pocusage.js): each PoC Worker's `Usage` RPC entrypoint, for Today's "PoC use" line.
-  "services": [{ "binding": "POC_WFA", "service": "wfa-commissions", "entrypoint": "Usage" }],
+  // STATUS: tribe-status's `Incidents` RPC entrypoint (closed outages and check coverage) for the support watch.
+  "services": [{ "binding": "POC_WFA", "service": "wfa-commissions", "entrypoint": "Usage" }, { "binding": "STATUS", "service": "tribe-status", "entrypoint": "Incidents" }],
   "d1_databases": [
     { "binding": "DB", "database_name": "hub-db", "database_id": "bfa66ad3-605c-4b6c-923e-2329f17e89bf", "migrations_dir": "migrations" },
     // The command center's own notes, next steps, synced activity and sync history (tables created at runtime).

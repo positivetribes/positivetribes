@@ -4,6 +4,7 @@ import { clientTimeline } from './timeline.js';
 import { pushRequirements, requirementTokens } from './requirements.js';
 import { accessIdentity } from './access.js';
 import { handleAdmin, localDay, taskStatus } from './admin.js';
+import { runSupportWatch } from './supportwatch.js';
 import { runMapDigest } from './mapdigest.js';
 import { runWebDigest } from './web.js';
 import { windowEnd } from './dates.js';
@@ -346,11 +347,18 @@ async function careRoute({ request, db, user, client, rawId, action, method }) {
 // Mondays 14:00 UTC (7am Denver in winter, 8am in summer); must match wrangler.jsonc character for character.
 // Use the weekday name: Cloudflare cron counts 1 as Sunday (1-7 = SUN-SAT), so "* * 1" ran on Sundays until 2026-11-23.
 const WEB_CRON = '0 14 * * MON';
+// Hourly at :30; the support watch itself skips anything outside Mon-Fri 8am-6pm Mountain (src/supportwatch.js).
+const SUPPORT_CRON = '30 * * * *';
 
 export default {
   // Patch's morning check (cron in wrangler.jsonc). runPatch refuses to run off the production host or without the key.
   // The website digest (Mondays) pulls last week's Google Analytics numbers for Today; the project digest snapshots the Map.
   async scheduled(event, env, ctx) {
+    if (event.cron === SUPPORT_CRON) {
+      ctx.waitUntil(runSupportWatch(env).then(r => console.log('support_watch', JSON.stringify(r)))
+        .catch(error => console.error('support_watch_failed', error.message)));
+      return;
+    }
     if (event.cron === WEB_CRON) {
       ctx.waitUntil(runWebDigest(env, localDay(Date.now())).then(r => console.log('web_digest', r.ran ? 'saved ' + r.week : r.reason))
         .catch(error => console.error('web_digest_failed', error.message)));

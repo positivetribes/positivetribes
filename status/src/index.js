@@ -39,6 +39,7 @@ export async function runChecks(env, now = Math.floor(Date.now() / 1000), fetchI
   );
   stmts.push(env.DB.prepare("DELETE FROM check_results WHERE ts < ?").bind(now - KEEP_DAYS * DAY));
   await env.DB.batch(stmts);
+  return results;
 }
 
 async function loadCheck(env, client, checkId, now) {
@@ -119,7 +120,4 @@ export async function handle(request, env, now = Math.floor(Date.now() / 1000)) 
   return new Response(renderPage(slug, cfg, data, now), { headers: HEADERS });
 }
 
-export default {
-  fetch: (request, env) => handle(request, env),
-  scheduled: (_event, env, ctx) => ctx.waitUntil(runChecks(env)),
-};
+// The deployed Worker is src/worker.js, which adds outage tracking and the hub's RPC entrypoint.

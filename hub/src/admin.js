@@ -8,6 +8,7 @@ import { windowEnd } from './dates.js';
 import { TIERS, BOOST, COURTESY_MANY, planFor, ensureGrants, ledgerOf, balanceOf, careRequests, todayUtc, monthOf, addYearsMonths } from './care.js';
 // One error class for the whole Worker, so a check that fails inside a shared helper (triage.js) answers 4xx here too.
 import { InputError } from './triage.js';
+import { addBusinessHours, formatMT, parseUtc, SUPPORT } from './businesshours.js';
 import { patchAdmin, patchInbox, aiCost } from './patch.js';
 import { replyAdmin } from './reply.js';
 import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
@@ -397,16 +398,29 @@ export function buildMatch(accounts, contacts, meta) {
 
 // Every client lives in this hub's own database (env.DB); every add, edit and delete there is logged in events.
 // The -hub keys keep hub event ids apart from the old backlogs' cleared ids. Links are in-app hash routes.
+// hubBacklogs reads the list from the clients table, so a new hub client reaches the Inbox from day one (until
+// 2026-11-24 this fixed list was the whole Inbox, and Wildlife for All, WHES and others never reached it).
+// BACKLOGS is only the fallback when the hub database can't be read.
 export const BACKLOGS = [
   { key: 'uep-hub', name: "Up ENDing Parkinson's", url: '#/uep/home', hub: 'uep', accountId: '001Pr00000yy8o9IAA' },
   { key: 'coyote-hub', name: 'Project Coyote', url: '#/coyote/home', hub: 'coyote', accountId: '001Pr00000yyAOXIA2' },
   { key: 'safe-hub', name: 'Sober AF', url: '#/safe/home', hub: 'safe', accountId: '001Pr00000yyXUuIAM' }
 ];
-const workspaceOf = accountId => BACKLOGS.find(b => b.accountId === accountId)?.hub || null;
+const workspaceOf = (backlogs, accountId) => backlogs.find(b => b.accountId === accountId)?.hub || null;
+export async function hubBacklogs(env) {
+  if (!env.DB) return BACKLOGS;
+  try {
+    const { results } = await env.DB.prepare("SELECT slug, name, salesforce_account_id FROM clients WHERE status != 'closed' ORDER BY id").all();
+    return results.map(c => ({ key: c.slug + '-hub', name: c.name, url: '#/' + c.slug + '/home', hub: c.slug, accountId: c.salesforce_account_id || BACKLOGS.find(b => b.hub === c.slug)?.accountId || null }));
+  } catch (error) {
+    console.error('admin_backlogs_failed', error.message);
+    return BACKLOGS;
+  }
+}
 const INBOX_DAYS = 60;
 // Eric's own edits are not news. Names are typed on the backlog page, so this matches the first word only.
-const ownNamesOf = env => (env.BACKLOG_OWN_NAMES || 'eric').toLowerCase().split(/[\s,]+/).filter(Boolean);
-const isOwn = (actor, own) => own.includes(String(actor || '').trim().split(/\s+/)[0].toLowerCase());
+export const ownNamesOf = env => (env.BACKLOG_OWN_NAMES || 'eric').toLowerCase().split(/[\s,]+/).filter(Boolean);
+export const isOwn = (actor, own) => own.includes(String(actor || '').trim().split(/\s+/)[0].toLowerCase());
 
 // A client whose events cannot be read just now never hides the others.
 async function backlogEvents(env, backlog, since) {
@@ -470,18 +484,32 @@ function businessDaysSince(iso, now = Date.now()) {
   for (let t = start + 864e5; t <= now; t += 864e5) { const d = new Date(t).getUTCDay(); if (d !== 0 && d !== 6) n++; }
   return n;
 }
+// Everything a client is waiting on a first reply for: changes and problems with no answer, and support requests not
+// yet sized. Shared with the hourly support watch (src/supportwatch.js), which emails Eric before a reply is late.
+export async function waitingForReply(db) {
+  const { results } = await db.prepare(
+    `SELECT i.id, i.kind, i.title, i.tier, i.created_at, i.added_by, c.slug, c.name,
+            EXISTS (SELECT 1 FROM releases r WHERE r.client_id = i.client_id AND r.stage = 'uat') AS testing
+     FROM items i JOIN clients c ON c.id = i.client_id
+     WHERE i.done = 0 AND i.answer = '' AND c.status != 'closed' AND (
+       (i.kind IN ('change', 'problem') AND i.status = 'new')
+       OR (i.kind = 'request' AND NOT EXISTS (SELECT 1 FROM care_requests q WHERE q.item_id = i.id AND q.triaged_at IS NOT NULL)))`
+  ).all();
+  return results;
+}
+// Support target: a reply within 1 business day (src/businesshours.js). `due` is when, `late` once it has passed.
+export function replyClock(createdAt, now = Date.now()) {
+  const due = addBusinessHours(parseUtc(createdAt), SUPPORT.replyHours);
+  return { due, late: now >= due, soon: now >= addBusinessHours(parseUtc(createdAt), SUPPORT.replyHours - SUPPORT.soonHours) };
+}
 async function loadNeedsReply(env, now = Date.now()) {
   if (!env.DB) return [];
   try {
-    const { results } = await env.DB.prepare(
-      `SELECT i.id, i.kind, i.title, i.tier, i.created_at, c.slug, c.name,
-              EXISTS (SELECT 1 FROM releases r WHERE r.client_id = i.client_id AND r.stage = 'uat') AS testing
-       FROM items i JOIN clients c ON c.id = i.client_id
-       WHERE i.kind IN ('change', 'problem') AND i.done = 0 AND i.status = 'new' AND i.answer = ''`
-    ).all();
+    const results = await waitingForReply(env.DB);
     return results.map(r => {
       const days = businessDaysSince(r.created_at, now);
-      return { id: r.id, workspace: r.slug, client: r.name, kind: r.kind, title: r.title, tier: r.tier, days, late: days >= 3, testing: !!(r.testing && r.kind === 'problem'), created: r.created_at };
+      const clock = replyClock(r.created_at, now);
+      return { id: r.id, workspace: r.slug, client: r.name, kind: r.kind, title: r.title, tier: r.tier, days, due: formatMT(clock.due), late: clock.late, soon: clock.soon, testing: !!(r.testing && r.kind === 'problem'), created: r.created_at };
     }).sort((x, y) => (y.testing - x.testing) || ((x.kind === 'problem' ? 0 : 1) - (y.kind === 'problem' ? 0 : 1))
       || (REPLY_TIER[x.tier] - REPLY_TIER[y.tier]) || String(x.created).localeCompare(String(y.created)) || x.id - y.id)
       .map(({ created, ...row }) => row);
@@ -530,17 +558,17 @@ export const lastSeenBy = people => people.reduce((map, p) => {
   return map;
 }, {});
 
-async function loadInbox(env, db, today) {
+async function loadInbox(env, db, today, backlogs) {
   const since = addDays(today, -INBOX_DAYS);
   const [cleared, ...results] = await Promise.all([
     db.prepare('SELECT backlog, event_id FROM backlog_cleared WHERE cleared_at >= ?').bind(since).all(),
-    ...BACKLOGS.map(b => backlogEvents(env, b, since))
+    ...backlogs.map(b => backlogEvents(env, b, since))
   ]);
-  return buildInbox(BACKLOGS, results, cleared.results, ownNamesOf(env));
+  return buildInbox(backlogs, results, cleared.results, ownNamesOf(env));
 }
 
-function clearInput(input) {
-  const keys = BACKLOGS.map(b => b.key);
+function clearInput(input, backlogs) {
+  const keys = backlogs.map(b => b.key);
   const rows = list(input.items, 200, row => {
     if (!row || !keys.includes(row.backlog)) throw new InputError('Choose a backlog.');
     return { backlog: row.backlog, eventIds: list(row.eventIds, 500, id => {
@@ -806,13 +834,14 @@ export async function handleAdmin(request, env, url, who) {
         const ids = sf.accounts.map(a => a.Id).filter(id => !hidden.has(id));
         if (ids.length) await reconcileSteps(env, db, sf.tasks, ids).catch(error => console.error('admin_step_sync_failed', error.message));
       }
+      const backlogs = await hubBacklogs(env);
       const [meta, steps, notes, activity, lastSync, inbox, testing, people, needsReply] = await Promise.all([
         db.prepare('SELECT * FROM client_meta').all(),
         db.prepare("SELECT * FROM next_steps WHERE status = 'open' OR done_at >= ?").bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM notes WHERE created_at >= ?').bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM activity WHERE occurred_at >= ? ORDER BY occurred_at').bind(addDays(today, -60)).all(),
         db.prepare('SELECT * FROM sync_runs ORDER BY id DESC LIMIT 1').first(),
-        loadInbox(env, db, today),
+        loadInbox(env, db, today, backlogs),
         loadTesting(env),
         hubPeople(env),
         loadNeedsReply(env)
@@ -821,7 +850,7 @@ export async function handleAdmin(request, env, url, who) {
       const view = buildOverview(env, sf, { meta: meta.results, steps: steps.results, notes: notes.results, activity: activity.results }, today);
       // hubNew: the client's changes in the hub not yet cleared (the bell's list), shown on their card in Clients.
       const hubNew = inbox.items.reduce((n, i) => { if (i.accountId) n[i.accountId] = (n[i.accountId] || 0) + 1; return n; }, {});
-      view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(c.id), hubSeen: seen[workspaceOf(c.id)] || null, hubNew: hubNew[c.id] || 0 }));
+      view.clients = view.clients.map(c => ({ ...c, workspace: workspaceOf(backlogs, c.id), hubSeen: seen[workspaceOf(backlogs, c.id)] || null, hubNew: hubNew[c.id] || 0 }));
       // Patch's suggestions waiting for a decision: the count on the Care plans tab.
       const carePending = env.DB ? (await env.DB.prepare("SELECT COUNT(*) AS n FROM patch_decisions WHERE status = 'pending'").first()).n : 0;
       // A broken estimate query never hides Today.
@@ -843,9 +872,9 @@ export async function handleAdmin(request, env, url, who) {
       return json({ ...view, testing, needsReply, estimates, donated, web, mapDigest, answers, feedback, emailFiling, pocs, salesforce: salesforceStatus, lastSync: lastSync || null, inboxCount: inbox.items.length, carePending, user: who.email });
     }
 
-    if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today), patch: env.DB ? await patchInbox(env.DB) : null });
+    if (route === 'GET /api/admin/inbox') return json({ ...await loadInbox(env, db, today, await hubBacklogs(env)), patch: env.DB ? await patchInbox(env.DB) : null });
     if (route === 'POST /api/admin/inbox/clear') {
-      const pairs = clearInput(await body(request));
+      const pairs = clearInput(await body(request), await hubBacklogs(env));
       if (pairs.length) await db.batch(pairs.map(([backlog, id]) => db.prepare('INSERT OR IGNORE INTO backlog_cleared (backlog, event_id) VALUES (?, ?)').bind(backlog, id)));
       return json({ ok: true, cleared: pairs.length });
     }
@@ -863,7 +892,7 @@ export async function handleAdmin(request, env, url, who) {
         db.prepare('SELECT * FROM activity WHERE account_id = ?').bind(accountId).all()
       ]);
       const view = buildClient(env, sf, { meta, steps: steps.results, notes: notes.results, activity: activity.results }, today);
-      view.client.workspace = workspaceOf(accountId);
+      view.client.workspace = workspaceOf(await hubBacklogs(env), accountId);
       view.client.hubPeople = view.client.workspace ? (await hubPeople(env, view.client.workspace)).map(({ slug, ...p }) => p) : [];
       return json(view);
     }
