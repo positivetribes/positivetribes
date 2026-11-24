@@ -2278,8 +2278,12 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
     const box = $('hub-search') || $('cc-search'); if (box) { e.preventDefault(); box.focus(); }
   });
+  // Coming back to the tab refreshes the list, but never while a form is open or holds typed text:
+  // people leave to take a screenshot, and a redraw would wipe what they typed and attached.
+  const formOpen = () => state.adding || state.editing || state.ideaEditing || state.signing || state.askStep === 'comment'
+    || [...document.querySelectorAll('#main form input[type=text], #main form textarea')].some(f => f.value.trim());
   document.addEventListener('visibilitychange', async () => {
-    if (document.hidden || !state.client || state.editing || state.mode === COMMAND) return;
+    if (document.hidden || !state.client || formOpen() || state.mode === COMMAND) return;
     try { state.items = (await api(base() + '/items')).items; render(); } catch {}
   });
   (async () => {
