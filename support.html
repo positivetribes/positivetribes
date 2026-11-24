@@ -27,7 +27,7 @@
 <aside class="support-side" aria-labelledby="next-title">
 <h2 id="next-title">What happens next</h2>
 <ol class="steps"><li><span class="n">01</span><span><b>You get a case number</b>Right away, on screen. Mention it if you write to us about this.</span></li><li><span class="n">02</span><span><b>We take a look</b>We’ll reply by email and may ask a question or two.</span></li><li><span class="n">03</span><span><b>We fix it or explain</b>Just reply to our email to add details.</span></li></ol>
-<div class="sla"><strong>Within 2 business days</strong>That’s when you’ll hear from us. Usually sooner.</div>
+<div class="sla"><strong>Within 1 business day</strong>That’s when you’ll hear from us. If you can’t work at all, we start on it within 4 business hours (Monday to Friday, 8am to 6pm Mountain).</div>
 </aside>
 </div>
 </main>
@@ -54,7 +54,7 @@ form.addEventListener('submit',async(event)=>{event.preventDefault();if(fields.d
   if(!response.ok||!result.ok)throw new Error(result.error||'We could not confirm your request was sent. Please try again or email hello@positivetribes.org.');
   const name=String(data.get('name')).trim().split(/\s+/)[0],email=String(data.get('email')).trim();
   document.querySelector('#s-case').textContent=result.caseNumber?'Case '+result.caseNumber:'';
-  document.querySelector('#s-sent-text').textContent='Thanks, '+name+'. We’ll reply to '+email+' within 2 business days.'+(result.caseNumber?' Mention case '+result.caseNumber+' if you write to us about this.':'');
+  document.querySelector('#s-sent-text').textContent='Thanks, '+name+'. We’ll reply to '+email+' within 1 business day.'+(result.caseNumber?' Mention case '+result.caseNumber+' if you write to us about this.':'');
   window.gtag?.('event','support_request',{tool:data.get('tool'),request_type:data.get('kind'),impact:data.get('impact')});
   form.reset();showFile();form.hidden=true;sent.hidden=false;document.querySelector('#s-sent-title').focus();
  }catch(error){status.textContent=error.message==='Failed to fetch'?'We could not confirm your request was sent. Please check your connection or email hello@positivetribes.org.':error.message}
