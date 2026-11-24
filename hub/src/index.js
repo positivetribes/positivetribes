@@ -343,8 +343,9 @@ async function careRoute({ request, db, user, client, rawId, action, method }) {
   return json({ error: 'Not found.' }, 404);
 }
 
-// Mondays 14:00 UTC (7am Denver in winter, 8am in summer); must match wrangler.jsonc.
-const WEB_CRON = '0 14 * * 1';
+// Mondays 14:00 UTC (7am Denver in winter, 8am in summer); must match wrangler.jsonc character for character.
+// Use the weekday name: Cloudflare cron counts 1 as Sunday (1-7 = SUN-SAT), so "* * 1" ran on Sundays until 2026-11-23.
+const WEB_CRON = '0 14 * * MON';
 
 export default {
   // Patch's morning check (cron in wrangler.jsonc). runPatch refuses to run off the production host or without the key.
