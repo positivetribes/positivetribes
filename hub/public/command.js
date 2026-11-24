@@ -148,9 +148,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const shown = replyAll ? rows : rows.slice(0, REPLY_SHOWN);
     const row = r => `<li class="${r.late ? 'late' : ''}"><a href="#/${esc(r.workspace)}/backlog/${esc(r.id)}"><span class="who">${esc(r.client)}</span>
       <span class="what">${esc(r.title)}</span></a>
-      <span class="meta">${r.testing ? '<span class="pill testing">Test problem</span> ' : '<span class="pill">' + esc(r.kind === 'problem' ? 'Problem' : 'Change') + '</span> '}${r.days === 0 ? 'today' : esc(r.days) + (r.days === 1 ? ' business day' : ' business days')}${r.late ? ' · waiting' : ''}</span>
+      <span class="meta">${r.testing ? '<span class="pill testing">Test problem</span> ' : '<span class="pill">' + esc(r.kind === 'problem' ? 'Problem' : r.kind === 'request' ? 'Support request' : 'Change') + '</span> '}${r.due ? (r.late ? 'Late: reply was due ' : 'Reply by ') + esc(r.due) : (r.days === 0 ? 'today' : esc(r.days) + (r.days === 1 ? ' business day' : ' business days'))}</span>
       <a class="btn small" href="#/${esc(r.workspace)}/backlog/${esc(r.id)}">Reply</a></li>`;
-    return `<section class="panel needs-reply" aria-label="Needs a reply"><p class="label"><strong>Needs a reply</strong> <span class="muted small">${rows.length} suggested change${rows.length === 1 ? '' : 's'} and test problem${rows.length === 1 ? '' : 's'} with no answer yet</span></p>
+    return `<section class="panel needs-reply" aria-label="Needs a reply"><p class="label"><strong>Needs a reply</strong> <span class="muted small">${rows.length} waiting on a first reply · target: 1 business day</span></p>
       <ul class="reply-list">${shown.map(row).join('')}</ul>
       ${rows.length > REPLY_SHOWN ? `<button type="button" class="link" id="reply-toggle">${replyAll ? 'Show fewer' : 'Show all ' + rows.length}</button>` : ''}</section>`;
   };
@@ -309,9 +309,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   const doneUntil = today => new Date(Date.parse(today + 'T12:00:00Z') + DONE_DAYS * 864e5).toISOString().slice(0, 10);
   const nowId = i => [i.type, i.id || i.title, i.accountId || ''].join('|');
   const replyNow = data => (data.needsReply || []).map(r => ({
-    type: 'reply', id: r.workspace + '/' + r.id, title: r.title, client: r.client, url: `#/${r.workspace}/backlog/${r.id}`, score: r.late ? 85 : 80,
-    why: r.late ? `A client has waited ${r.days} business days for your reply` : 'A client is waiting on your reply',
-    detail: r.testing ? 'Test problem' : r.kind === 'problem' ? 'Problem' : 'Suggested change'
+    type: 'reply', id: r.workspace + '/' + r.id, title: r.title, client: r.client, url: `#/${r.workspace}/backlog/${r.id}`, score: r.late ? 100 : r.soon ? 92 : 80, // late = a missed support target, ranked with missed deadlines
+    why: r.late ? `Late: the reply was due ${r.due || r.days + ' business days ago'}` : r.soon ? `Reply due soon: by ${r.due}` : 'A client is waiting on your reply',
+    detail: r.testing ? 'Test problem' : r.kind === 'problem' ? 'Problem' : r.kind === 'request' ? 'Support request' : 'Suggested change'
   }));
   const nowList = data => {
     const skip = skipped(), dones = doneMap(), isDone = i => (dones[nowId(i)] || '') > data.today;

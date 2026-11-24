@@ -437,7 +437,7 @@ test('the inbox reads each client from the hub database, keeps them apart, and c
 
   let r = await call(db, 'GET', '/api/admin/inbox', undefined, { env });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.backlogs.map(b => [b.key, b.status, b.unread]), [['uep-hub', 'ok', 1], ['coyote-hub', 'ok', 1], ['safe-hub', 'ok', 1]]);
+  assert.deepEqual(r.body.backlogs.map(b => [b.key, b.status, b.unread]), [['uep-hub', 'ok', 1], ['safe-hub', 'ok', 1], ['coyote-hub', 'ok', 1]]);
   const safe = r.body.items.find(i => i.backlog === 'safe-hub');
   assert.deepEqual([safe.title, safe.actor, safe.client, safe.accountId], ['Bigger buttons', 'Dana', 'Sober AF', SAFE]);
   assert.match(safe.url, /^#\/safe\/backlog\/\d+$/);
@@ -696,4 +696,19 @@ test('a Task finished before its due date leaves Coming up and shows on the day 
   assert.deepEqual(view.future.filter(i => i.type === 'task').map(i => i.title), ['Still to do']);
   const done = view.past.find(i => i.title === 'Send the Phase 2 invoice');
   assert.equal(done.day, '2026-11-15');
+});
+
+test('a hub client added after launch reaches the Inbox; a closed client does not', async () => {
+  const { hub: h, admin, as } = hubDb();
+  h.sqlite.exec(`INSERT INTO clients (slug, name, salesforce_account_id) VALUES ('wfa', 'Wildlife for All', '001Pr00001316M5IAI');
+    UPDATE clients SET status = 'closed' WHERE slug = 'coyote';`);
+  const wfa = h.sqlite.prepare("SELECT id FROM clients WHERE slug = 'wfa'").get().id;
+  h.sqlite.exec(`INSERT INTO projects (client_id, slug, name, position) VALUES (${wfa}, 'commission-meetings', 'Tracker', 1);
+    INSERT INTO users (email, name, role, client_id) VALUES ('mandy@wfa.test', 'Mandy', 'ed', ${wfa});`);
+  const project = h.sqlite.prepare("SELECT id FROM projects WHERE slug = 'commission-meetings'").get().id;
+  assert.equal((await as('mandy@wfa.test', 'POST', 'c/wfa/items', { title: 'Embed is blank', kind: 'problem', tier: 'must', project_id: project })).status, 201);
+  const r = await call(admin.db, 'GET', '/api/admin/inbox', undefined, { env: { DB: h.db } });
+  assert.deepEqual(r.body.backlogs.map(b => b.key), ['uep-hub', 'safe-hub', 'wfa-hub']);
+  const item = r.body.items.find(i => i.backlog === 'wfa-hub');
+  assert.equal(item.url.startsWith('#/wfa/'), true);
 });
