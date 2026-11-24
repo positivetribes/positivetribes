@@ -138,6 +138,8 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .status-line>summary::-webkit-details-marker{display:none}
 .status-line>summary:focus:not(:focus-visible){outline:none}
 .status-line>summary .ok-dot{width:10px;height:10px;border-radius:50%;background:#2e8b57;flex:none}
+.support-line{margin:4px 2px 0}
+.support-line a{color:inherit;text-underline-offset:2px}
 .status-line>summary .more{margin-left:auto;font-size:14px;color:var(--muted);text-decoration:underline;text-underline-offset:2px}
 .status-line[open]>summary .more{display:none}
 .status-line .docs{margin-top:10px}
@@ -991,7 +993,16 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production'))));
       })); }),
       systemStatus(),
-      waitingCard(focus));
+      waitingCard(focus),
+      supportLine());
+  }
+
+  // One quiet line on every client home: where to report a problem, and the public page with our support targets
+  // (4 business hours for an outage, 1 business day for everything else). The targets live on the site, not here.
+  function supportLine() {
+    return h('p', { class: 'meta support-line' }, 'Something not working? ',
+      h('a', { href: link('backlog') }, 'Report a problem'), '. ',
+      h('a', { href: 'https://positivetribes.org/care.html#support-title', target: '_blank', rel: 'noopener' }, 'How fast we respond'));
   }
 
   // The home card: the first few things waiting on the viewer, soonest due first, and a link to the full list.
