@@ -8,6 +8,7 @@ Rules when using it:
 - Offer Care and Growth only. Essentials ($300 a month, 2 credits, no help desk) is a retention fallback for a client who would otherwise leave. Never put it on a proposal without Eric's OK.
 - Never define a credit in minutes or hours for a client. Credits are sized by scope. Time appears in one place only: the transition note for a client whose signed plan says "up to N hours" (N hours becomes 2N credits).
 - Turnaround times are targets in business days, never guarantees.
+- Support and outages use the same targets for every client (policy set by Eric 2026-11-24): an outage gets work started within 4 business hours, everything else a reply within 1 business day. Business hours are Monday to Friday, 8am to 6pm Mountain. Never promise faster, 24/7 cover, an uptime percentage or service credits. The phone number goes in proposals and client emails only, not on public web pages. Keep `care.html`, `support.html` and the vision page in step with this section.
 - Every plan gets a monthly note from its first month: what shipped, plus two suggested improvements. Create a recurring Salesforce Task for it when the plan is switched on.
 - The help desk is for the client's staff. The people who use a tool (volunteers, members, participants) get a Help page in the tool instead (vision Decision 7, Nov 20, 2026): common questions, questions emailed to the client's own people (never to Positive Tribes) and problem reports to the hub. It is not a hub feature, so promise it only in a build's scope when that build includes it. Don't promise AI answers to users' questions; that step isn't decided.
 - Always include "Included / Not included". It is what keeps this a software team and not an IT department.
@@ -68,6 +69,21 @@ Growth also includes a quarterly Salesforce health review by a Salesforce Certif
 - Running out never blocks you. Extra requests wait for next month at no cost, or you can add an optional boost pack (6 credits for $300, good for 12 months).
 - Every month you hear from us: what shipped, and what we'd suggest next.
 
+**Support and outages**
+
+We watch your tools so you don't have to: uptime checks every few minutes, alerts when a scheduled job fails, and daily backups. Your hub's home page shows each tool's live status and its uptime for the last 90 days.
+
+| What's happening | How to reach us | Our target |
+|---|---|---|
+| **Outage:** the tool is down or can't be used (it won't load, nobody can sign in, or data isn't saving) | We're usually alerted first. If you notice it, call or text 720-762-0570, then report it in your hub | Work starts within 4 business hours, with updates in your hub until it's back |
+| **A scheduled job fails** (for example, a weekly check or a nightly sync) | We're alerted automatically | Fixed the same business day where we can, and always before its next run |
+| **Problem:** something isn't working as it should, but you can keep working | Report a problem in your hub | A reply within 1 business day; most fixes done within 3 business days |
+| **Question or improvement** | Ask in your hub | A reply within 1 business day, with the size and cost of any improvement |
+
+After any outage, you get a short note in your hub within 2 business days: what happened, how we fixed it, and what we changed so it doesn't happen again.
+
+Business hours are Monday to Friday, 8am to 6pm Mountain time. These are targets, not guarantees, and fixes never use credits.
+
 **Included / Not included**
 
 | Included | Not included |
@@ -95,6 +111,7 @@ Replace the older "up to N hours a month, unused hours do not carry over" wordin
 - Changes needed because another service changes (for example a CRM's API or texting rules) use credits when small or medium. Larger ones are quoted before any work starts.
 - New screens, modules, integrations and user roles, and changes to sign-in or payments, are new projects, quoted separately. Any request that touches personal or health data is reviewed by a person at Positive Tribes before it is sized.
 - Every change is tested by {client name} on a test copy with sample data. Nothing goes live until {client name} signs off and Positive Tribes reviews it. A request with no reply for 14 days is paused with its credits held. After 60 days paused it is closed and its credits are returned to {client name}'s balance.
+- Support targets: when a tool built by Positive Tribes is down or can't be used, work starts within 4 business hours; problems, questions and improvement requests get a reply within 1 business day. Business hours are Monday to Friday, 8am to 6pm Mountain time. After an outage, Positive Tribes posts a short note in the hub within 2 business days on what happened and what changed. These are targets, not guarantees: there is no uptime percentage or service credit. Fixes never use credits.
 - Turnaround times are targets in business days, not guarantees. Positive Tribes tells {client name} ahead of planned time away and when work resumes.
 - To answer faster, Positive Tribes uses an AI service to help sort requests. Only the request's own words are sent, with email addresses and phone numbers removed. Requests that mention sign-in, payments, permissions, or personal or health data are never sent. Under the service's commercial terms, this data is not used to train its models. A person at Positive Tribes reviews every decision before {client name} sees it.
 - The monthly price may be adjusted once a year with 60 days' notice. Either side can end the plan with 60 days' notice, and {client name} always gets a full export of its data. Boost pack credits can be used until the plan's last day and are not refunded after it.
