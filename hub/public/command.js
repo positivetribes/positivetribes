@@ -924,17 +924,17 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   // Each flag links to where it's acted on: overdue Tasks open in Salesforce, questions open their card in the client's
   // workspace (answer, close or nudge there), a late blocker or missing timeline opens the Timeline, an unbuilt phase the
   // workspace.
-  const ago = n => `${n} day${n === 1 ? '' : 's'}`;
+  const mapAgo = n => `${n} day${n === 1 ? '' : 's'}`;
   const mapAction = (r, slug) => ({
     late_blocker: ['Open the Timeline', '#/command/timeline'],
     milestone_open: ['Open the workspace', `#/${slug}/home`],
     no_timeline: ['Add to the Timeline', '#/command/timeline']
   })[r.kind];
   const riskBody = (r, slug) => {
-    if (r.items && r.items.length) return `${r.items.length} Salesforce Task${r.items.length > 1 ? 's' : ''} overdue<ul class="map-risk-items">${r.items.map(x => `<li>${mapTask(x)} · due ${esc(mapDay(x.due))} · ${ago(x.late)} late</li>`).join('')}</ul>`;
+    if (r.items && r.items.length) return `${r.items.length} Salesforce Task${r.items.length > 1 ? 's' : ''} overdue<ul class="map-risk-items">${r.items.map(x => `<li>${mapTask(x)} · due ${esc(mapDay(x.due))} · ${mapAgo(x.late)} late</li>`).join('')}</ul>`;
     if (r.questions && r.questions.length && slug) {
       const verb = r.kind === 'answered_open' ? 'close it' : 'answer or nudge';
-      return `${esc(r.text.replace(/:.*$/, ''))} <span class="map-risk-hint">· open one to ${verb}</span><ul class="map-risk-items">${r.questions.map(q => `<li><a href="#/${esc(slug)}/backlog/${esc(q.id)}">#${esc(q.number)} ${esc(q.title)}</a>${q.owner ? ' · ' + esc(q.owner) : ''}${q.due_date ? ' · due ' + esc(mapDay(q.due_date)) : ''} · ${ago(q.age)}</li>`).join('')}</ul>`;
+      return `${esc(r.text.replace(/:.*$/, ''))} <span class="map-risk-hint">· open one to ${verb}</span><ul class="map-risk-items">${r.questions.map(q => `<li><a href="#/${esc(slug)}/backlog/${esc(q.id)}">#${esc(q.number)} ${esc(q.title)}</a>${q.owner ? ' · ' + esc(q.owner) : ''}${q.due_date ? ' · due ' + esc(mapDay(q.due_date)) : ''} · ${mapAgo(q.age)}</li>`).join('')}</ul>`;
     }
     const act = slug && mapAction(r, slug);
     return esc(r.text) + (act ? ` · <a href="${esc(act[1])}">${esc(act[0])}</a>` : '');
