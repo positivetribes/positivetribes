@@ -41,7 +41,9 @@ export function risksFor(p, today) {
   return out;
 }
 
-export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus = null } = {}) {
+export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus = null, sfDomain = '' } = {}) {
+  // Link each Task to its Salesforce record when the org's https domain is known.
+  const sfBase = /^https:\/\/[^/]+$/.test(String(sfDomain).replace(/\/$/, '')) ? String(sfDomain).replace(/\/$/, '') : '';
   const [clients, projects, releases, entries, items, decisions, requirements, deps] = await Promise.all([
     db.prepare('SELECT id, slug, name, salesforce_account_id FROM clients ORDER BY id').all(),
     db.prepare('SELECT id, client_id, slug, name, phase, position FROM projects ORDER BY client_id, position, id').all(),
@@ -112,10 +114,16 @@ export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus
       return card;
     });
     const open = tasksBy.get(c.salesforce_account_id) || [];
-    const task = t => ({ id: t.Id, subject: t.Subject, due: t.ActivityDate });
+    const task = t => ({ id: t.Id, subject: t.Subject, due: t.ActivityDate, url: sfBase && /^00T/.test(t.Id || '') ? `${sfBase}/lightning/r/Task/${t.Id}/view` : null });
     const clientRisks = [];
     const overdue = open.filter(t => t.ActivityDate < today).sort((a, b) => a.ActivityDate.localeCompare(b.ActivityDate));
-    if (overdue.length) clientRisks.push({ kind: 'task_overdue', level: 'medium', text: `${overdue.length} Salesforce Task${overdue.length > 1 ? 's' : ''} overdue` });
+    if (overdue.length) {
+      // Name each overdue Task (subject, due date, days late) so the flag says what to do, not just how many.
+      const items = overdue.map(t => ({ ...task(t), late: daysBetween(t.ActivityDate, today) }));
+      const named = items.slice(0, 3).map(t => `"${t.subject || 'Task'}" (${t.late} day${t.late === 1 ? '' : 's'} late)`).join(', ');
+      clientRisks.push({ kind: 'task_overdue', level: 'medium', items,
+        text: `${overdue.length} Salesforce Task${overdue.length > 1 ? 's' : ''} overdue: ${named}${overdue.length > 3 ? ` and ${overdue.length - 3} more` : ''}` });
+    }
     const across = cDeps.filter(d => d.waiting && projectOf(d.blocked) == null);
     if (across.some(d => d.late)) clientRisks.push({ kind: 'late_blocker', level: 'high', text: `${across.filter(d => d.late).length} late blocker${across.filter(d => d.late).length > 1 ? 's' : ''} on a key date` });
     return {

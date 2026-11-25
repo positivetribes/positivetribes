@@ -87,7 +87,12 @@ test('a card shows phase, now and next, current-phase requirements, waits, quest
   // A wait on a key date with no project sits at client level, and it is late.
   assert.deepEqual(uep.across.map(d => [d.blocker.name, d.blocked.name, d.late]), [['Scheduler Phase 3', 'Pages open', true]]);
   assert.ok(uep.risks.some(r => r.kind === 'late_blocker' && r.level === 'high'));
-  assert.ok(uep.risks.some(r => r.kind === 'task_overdue'));
+  const overdueRisk = uep.risks.find(r => r.kind === 'task_overdue');
+  assert.ok(overdueRisk, 'overdue Task flagged');
+  // The flag names the Task and how late it is, not just a count.
+  assert.deepEqual(overdueRisk.items.map(t => t.id), ['00T1']);
+  assert.ok(overdueRisk.items[0].late > 0);
+  assert.match(overdueRisk.text, /overdue: ".+" \(\d+ days? late\)/);
   // Nothing from the other client leaks into UEP's cards.
   assert.ok(!JSON.stringify(uep).includes('Other client'));
 });

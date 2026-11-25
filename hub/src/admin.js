@@ -1013,7 +1013,7 @@ export async function handleAdmin(request, env, url, who) {
         try { tasks = (await salesforceOverview(env, false)).tasks; } catch (error) { salesforceError = 'Salesforce did not answer, so Tasks are left out.'; console.error('map: salesforce', error.message); }
       }
       if (!env.DB) return json({ error: 'The hub database is not connected.' }, 503);
-      return json({ clients: await loadMap(env.DB, { tasks, taskStatus: await taskStatus(env) }), salesforceError });
+      return json({ clients: await loadMap(env.DB, { tasks, taskStatus: await taskStatus(env), sfDomain: env.SF_DOMAIN || '' }), salesforceError });
     }
 
     if (route === 'GET /api/admin/match') {

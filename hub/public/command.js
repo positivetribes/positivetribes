@@ -919,7 +919,13 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   // decisions, and risk flags (rules in src/map.js). "Needs a look" on top gathers every high and medium flag.
   const MAP_STAGE = { planned: 'Planned', building: 'Building', waiting: 'Waiting to test', uat: 'Testing', signed_off: 'Signed off', live: 'Live' };
   const mapDay = day => day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
-  const mapRisk = r => `<li class="map-risk r-${esc(r.level)}">${esc(r.text)}</li>`;
+  // A Salesforce link only when the server built one on the org's https domain.
+  const mapTask = x => /^https:\/\//.test(x.url || '') ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.subject || 'Task')}</a>` : esc(x.subject || 'Task');
+  // Overdue Tasks are listed by name, due date and days late, each opening in Salesforce; other flags are one line.
+  const riskBody = r => r.items && r.items.length
+    ? `${r.items.length} Salesforce Task${r.items.length > 1 ? 's' : ''} overdue<ul class="map-risk-items">${r.items.map(x => `<li>${mapTask(x)} · due ${esc(mapDay(x.due))} · ${x.late} day${x.late === 1 ? '' : 's'} late</li>`).join('')}</ul>`
+    : esc(r.text);
+  const mapRisk = r => `<li class="map-risk r-${esc(r.level)}">${riskBody(r)}</li>`;
   function mapCard(c, p) {
     const ph = p.phase ? `<p class="small"><strong>Phase ${esc(p.phase.number)}</strong>${p.phase.name ? ' · ' + esc(p.phase.name) : ''} · ${esc(MAP_STAGE[p.phase.stage] || p.phase.stage)}${p.phase.window_end && p.phase.stage === 'uat' ? ' to ' + esc(mapDay(p.phase.window_end)) : ''}</p>` : '';
     const when = [p.now ? `<li><span class="muted">Now</span> ${esc(p.now.label)}${p.now.end_date ? ' · to ' + esc(mapDay(p.now.end_date)) : ''}</li>` : '',
@@ -949,12 +955,12 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   function renderMap(box, data) {
     const flags = data.clients.flatMap(c => [...c.risks.map(r => ({ ...r, where: c.name })), ...c.projects.flatMap(p => p.risks.map(r => ({ ...r, where: `${c.name} · ${p.name}` })))])
       .filter(r => r.level !== 'low').sort((a, b) => (a.level === 'high' ? 0 : 1) - (b.level === 'high' ? 0 : 1));
-    const top = flags.length ? `<section class="panel"><h2>Needs a look</h2><ul class="map-risks">${flags.map(r => `<li class="map-risk r-${esc(r.level)}"><strong>${esc(r.where)}</strong> · ${esc(r.text)}</li>`).join('')}</ul></section>`
+    const top = flags.length ? `<section class="panel"><h2>Needs a look</h2><ul class="map-risks">${flags.map(r => `<li class="map-risk r-${esc(r.level)}"><strong>${esc(r.where)}</strong> · ${riskBody(r)}</li>`).join('')}</ul></section>`
       : '<section class="panel"><p class="muted">Nothing late or waiting too long.</p></section>';
     const client = c => {
       const t = c.tasks;
       const tasks = t ? `<p class="small">Salesforce: ${t.open} open Tasks${t.overdue.length ? `, <strong class="map-late">${t.overdue.length} overdue</strong>` : ''}${t.week.length ? `, ${t.week.length} due this week` : ''}</p>
-        ${t.overdue.length || t.week.length ? `<details class="small"><summary>Overdue and this week</summary><ul class="map-tasks">${[...t.overdue.map(x => `<li class="late">${esc(mapDay(x.due))} · ${esc(x.subject)}</li>`), ...t.week.map(x => `<li>${esc(mapDay(x.due))} · ${esc(x.subject)}</li>`)].join('')}</ul></details>` : ''}` : '';
+        ${t.overdue.length || t.week.length ? `<details class="small"><summary>Overdue and this week</summary><ul class="map-tasks">${[...t.overdue.map(x => `<li class="late">${esc(mapDay(x.due))} · ${mapTask(x)}</li>`), ...t.week.map(x => `<li>${esc(mapDay(x.due))} · ${mapTask(x)}</li>`)].join('')}</ul></details>` : ''}` : '';
       const dates = c.dates.length ? `<p class="small">Key dates: ${c.dates.map(d => `${esc(mapDay(d.date))} ${esc(d.label)}`).join(' · ')}</p>` : '';
       const across = c.across.length ? `<p class="small">Key dates wait on: ${c.across.map(d => `<span class="${d.late ? 'map-late' : ''}">${esc(d.blocker.name)}${d.needed_by ? ' (' + esc(mapDay(d.needed_by)) + ')' : ''} → ${esc(d.blocked.name)}</span>`).join('; ')}</p>` : '';
       const decided = c.decisions.length ? `<p class="small muted">Decided: ${c.decisions.map(d => `${esc(mapDay(d.decided_on))} ${esc(d.summary)}`).join(' · ')}</p>` : '';
