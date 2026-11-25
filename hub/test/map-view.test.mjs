@@ -74,6 +74,8 @@ test('a card shows phase, now and next, current-phase requirements, waits, quest
   assert.equal(s.undecided, 1);
   assert.deepEqual(s.decisions.map(d => d.summary), ['Lead email 6 days out']);
   assert.ok(s.risks.some(r => r.kind === 'question_overdue'));
+  // Question flags carry the items themselves, so the Map links each to its card.
+  for (const r of s.risks.filter(r => /^question_|^answered_open$/.test(r.kind))) assert.ok(r.questions.length && r.questions.every(q => Number.isInteger(q.id) && q.number && q.title));
   assert.ok(s.risks.some(r => r.kind === 'question_waiting'));
   assert.ok(s.risks.some(r => r.kind === 'milestone_open'), 'Phase 3 window ends within 14 days with R3 not built');
   // Fundraising has no timeline entries.

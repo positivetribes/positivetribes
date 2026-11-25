@@ -19,6 +19,8 @@ export const daysBetween = (a, b) => Math.round((Date.parse(b + 'T12:00:00Z') - 
 // Item numbers as the client sees them (#133), first five, so a flag says which questions to open.
 const refs = qs => qs.slice(0, 5).map(q => `#${q.number}`).join(', ') + (qs.length > 5 ? ` and ${qs.length - 5} more` : '');
 const days = n => `${n} day${n === 1 ? '' : 's'}`;
+// The hub items a flag is about, so the Map links each one straight to its card.
+const itemRefs = qs => qs.map(q => ({ id: q.id, number: q.number, title: q.title, owner: q.owner || null, age: q.age, due_date: q.due_date || null }));
 
 // The flags for one project card. Pure, so the rules are tested on their own.
 export function risksFor(p, today) {
@@ -31,12 +33,12 @@ export function risksFor(p, today) {
     out.push({ kind: 'milestone_open', level: 'medium', text: `Phase ${p.phase.number} ends ${end}: ${ph.total - ph.built} of ${ph.total} requirements not built` });
   }
   const stale = p.questions.filter(q => q.age >= RISK.questionDays);
-  if (stale.length) out.push({ kind: 'question_waiting', level: 'medium', text: `${stale.length} question${stale.length > 1 ? 's' : ''} waiting ${RISK.questionDays}+ days: ${refs(stale)} (oldest ${days(Math.max(...stale.map(q => q.age)))})` });
+  if (stale.length) out.push({ kind: 'question_waiting', level: 'medium', text: `${stale.length} question${stale.length > 1 ? 's' : ''} waiting ${RISK.questionDays}+ days: ${refs(stale)} (oldest ${days(Math.max(...stale.map(q => q.age)))})`, questions: itemRefs(stale) });
   const overdue = p.questions.filter(q => q.due_date && q.due_date < today);
-  if (overdue.length) out.push({ kind: 'question_overdue', level: 'medium', text: `${overdue.length} question${overdue.length > 1 ? 's' : ''} past due: ${refs(overdue)}` });
+  if (overdue.length) out.push({ kind: 'question_overdue', level: 'medium', text: `${overdue.length} question${overdue.length > 1 ? 's' : ''} past due: ${refs(overdue)}`, questions: itemRefs(overdue) });
   // Answered but still open: the client is done, so it waits on us to act on the answer and close it (any age).
   const toClose = p.to_close || [];
-  if (toClose.length) out.push({ kind: 'answered_open', level: 'medium', text: `${toClose.length} question${toClose.length > 1 ? 's' : ''} answered, ready to close: ${refs(toClose)} (oldest answer ${days(Math.max(...toClose.map(q => q.age)))})` });
+  if (toClose.length) out.push({ kind: 'answered_open', level: 'medium', text: `${toClose.length} question${toClose.length > 1 ? 's' : ''} answered, ready to close: ${refs(toClose)} (oldest answer ${days(Math.max(...toClose.map(q => q.age)))})`, questions: itemRefs(toClose) });
   if (!p.scheduled) out.push({ kind: 'no_timeline', level: 'low', text: 'No timeline entries' });
   return out;
 }
@@ -96,10 +98,10 @@ export async function loadMap(db, { today = hubToday(), tasks = null, taskStatus
       // but not closed (waiting on us).
       const asked = own(items.results).filter(i => i.project_id === p.id && i.kind === 'question');
       const to_close = asked.filter(i => i.answered)
-        .map(i => ({ number: i.number, title: i.title, owner: i.owner, age: daysBetween(String(i.updated_at || i.created_at).slice(0, 10), today) }))
+        .map(i => ({ id: i.id, number: i.number, title: i.title, owner: i.owner, age: daysBetween(String(i.updated_at || i.created_at).slice(0, 10), today) }))
         .sort((a, b) => b.age - a.age);
       const questions = asked.filter(i => !i.answered)
-        .map(i => ({ number: i.number, title: i.title, owner: i.owner, due_date: i.due_date || null, age: daysBetween(String(i.created_at).slice(0, 10), today) }))
+        .map(i => ({ id: i.id, number: i.number, title: i.title, owner: i.owner, due_date: i.due_date || null, age: daysBetween(String(i.created_at).slice(0, 10), today) }))
         .sort((a, b) => (a.due_date || '9').localeCompare(b.due_date || '9') || b.age - a.age);
       const undecided = own(items.results).filter(i => i.project_id === p.id && i.kind !== 'question' && i.phase === 'review').length;
       const card = {

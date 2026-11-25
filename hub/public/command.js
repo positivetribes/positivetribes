@@ -921,11 +921,25 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   const mapDay = day => day ? new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
   // A Salesforce link only when the server built one on the org's https domain.
   const mapTask = x => /^https:\/\//.test(x.url || '') ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.subject || 'Task')}</a>` : esc(x.subject || 'Task');
-  // Overdue Tasks are listed by name, due date and days late, each opening in Salesforce; other flags are one line.
-  const riskBody = r => r.items && r.items.length
-    ? `${r.items.length} Salesforce Task${r.items.length > 1 ? 's' : ''} overdue<ul class="map-risk-items">${r.items.map(x => `<li>${mapTask(x)} · due ${esc(mapDay(x.due))} · ${x.late} day${x.late === 1 ? '' : 's'} late</li>`).join('')}</ul>`
-    : esc(r.text);
-  const mapRisk = r => `<li class="map-risk r-${esc(r.level)}">${riskBody(r)}</li>`;
+  // Each flag links to where it's acted on: overdue Tasks open in Salesforce, questions open their card in the client's
+  // workspace (answer, close or nudge there), a late blocker or missing timeline opens the Timeline, an unbuilt phase the
+  // workspace.
+  const ago = n => `${n} day${n === 1 ? '' : 's'}`;
+  const mapAction = (r, slug) => ({
+    late_blocker: ['Open the Timeline', '#/command/timeline'],
+    milestone_open: ['Open the workspace', `#/${slug}/home`],
+    no_timeline: ['Add to the Timeline', '#/command/timeline']
+  })[r.kind];
+  const riskBody = (r, slug) => {
+    if (r.items && r.items.length) return `${r.items.length} Salesforce Task${r.items.length > 1 ? 's' : ''} overdue<ul class="map-risk-items">${r.items.map(x => `<li>${mapTask(x)} · due ${esc(mapDay(x.due))} · ${ago(x.late)} late</li>`).join('')}</ul>`;
+    if (r.questions && r.questions.length && slug) {
+      const verb = r.kind === 'answered_open' ? 'close it' : 'answer or nudge';
+      return `${esc(r.text.replace(/:.*$/, ''))} <span class="map-risk-hint">· open one to ${verb}</span><ul class="map-risk-items">${r.questions.map(q => `<li><a href="#/${esc(slug)}/backlog/${esc(q.id)}">#${esc(q.number)} ${esc(q.title)}</a>${q.owner ? ' · ' + esc(q.owner) : ''}${q.due_date ? ' · due ' + esc(mapDay(q.due_date)) : ''} · ${ago(q.age)}</li>`).join('')}</ul>`;
+    }
+    const act = slug && mapAction(r, slug);
+    return esc(r.text) + (act ? ` · <a href="${esc(act[1])}">${esc(act[0])}</a>` : '');
+  };
+  const mapRisk = (r, slug) => `<li class="map-risk r-${esc(r.level)}">${riskBody(r, slug)}</li>`;
   function mapCard(c, p) {
     const ph = p.phase ? `<p class="small"><strong>Phase ${esc(p.phase.number)}</strong>${p.phase.name ? ' · ' + esc(p.phase.name) : ''} · ${esc(MAP_STAGE[p.phase.stage] || p.phase.stage)}${p.phase.window_end && p.phase.stage === 'uat' ? ' to ' + esc(mapDay(p.phase.window_end)) : ''}</p>` : '';
     const when = [p.now ? `<li><span class="muted">Now</span> ${esc(p.now.label)}${p.now.end_date ? ' · to ' + esc(mapDay(p.now.end_date)) : ''}</li>` : '',
@@ -946,16 +960,16 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const closing = toClose.length ? `<h4>Answered, ready to close</h4><ul class="tl-deps map-waits">${toClose.slice(0, 4).map(q => `<li><span class="tag">Answered</span> #${esc(q.number)} ${esc(q.title)} · ${q.age} days</li>`).join('')}${toClose.length > 4 ? `<li class="muted small">and ${toClose.length - 4} more</li>` : ''}</ul><p class="small"><a href="#/${esc(c.slug)}/home">open</a> to close them</p>` : '';
     const decided = p.decisions.map(d => `<li><span class="muted">${esc(mapDay(d.decided_on))}</span> ${esc(d.summary)}${d.decided_by ? ` <span class="muted">(${esc(d.decided_by)})</span>` : ''}</li>`).join('');
     return `<article class="card map-card"><div class="row"><h3 class="grow">${esc(p.name)}</h3></div>
-      ${p.risks.length ? `<ul class="map-risks">${p.risks.map(mapRisk).join('')}</ul>` : ''}${ph}${when ? `<ul class="map-when small">${when}</ul>` : ''}${req}
+      ${p.risks.length ? `<ul class="map-risks">${p.risks.map(r => mapRisk(r, c.slug)).join('')}</ul>` : ''}${ph}${when ? `<ul class="map-when small">${when}</ul>` : ''}${req}
       ${waits.length ? `<h4>Waiting on</h4><ul class="tl-deps map-waits">${waits.join('')}${more}</ul>` : ''}
       ${closing}
       ${p.undecided ? `<p class="small">${p.undecided} change${p.undecided > 1 ? 's' : ''} not decided yet · <a href="#/${esc(c.slug)}/home">open</a></p>` : ''}
       ${decided ? `<h4>Last decisions</h4><ul class="map-decided small">${decided}</ul>` : ''}</article>`;
   }
   function renderMap(box, data) {
-    const flags = data.clients.flatMap(c => [...c.risks.map(r => ({ ...r, where: c.name })), ...c.projects.flatMap(p => p.risks.map(r => ({ ...r, where: `${c.name} · ${p.name}` })))])
+    const flags = data.clients.flatMap(c => [...c.risks.map(r => ({ ...r, where: c.name, slug: c.slug })), ...c.projects.flatMap(p => p.risks.map(r => ({ ...r, where: `${c.name} · ${p.name}`, slug: c.slug })))])
       .filter(r => r.level !== 'low').sort((a, b) => (a.level === 'high' ? 0 : 1) - (b.level === 'high' ? 0 : 1));
-    const top = flags.length ? `<section class="panel"><h2>Needs a look</h2><ul class="map-risks">${flags.map(r => `<li class="map-risk r-${esc(r.level)}"><strong>${esc(r.where)}</strong> · ${riskBody(r)}</li>`).join('')}</ul></section>`
+    const top = flags.length ? `<section class="panel"><h2>Needs a look</h2><ul class="map-risks">${flags.map(r => `<li class="map-risk r-${esc(r.level)}"><strong>${esc(r.where)}</strong> · ${riskBody(r, r.slug)}</li>`).join('')}</ul></section>`
       : '<section class="panel"><p class="muted">Nothing late or waiting too long.</p></section>';
     const client = c => {
       const t = c.tasks;
@@ -965,7 +979,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
       const across = c.across.length ? `<p class="small">Key dates wait on: ${c.across.map(d => `<span class="${d.late ? 'map-late' : ''}">${esc(d.blocker.name)}${d.needed_by ? ' (' + esc(mapDay(d.needed_by)) + ')' : ''} → ${esc(d.blocked.name)}</span>`).join('; ')}</p>` : '';
       const decided = c.decisions.length ? `<p class="small muted">Decided: ${c.decisions.map(d => `${esc(mapDay(d.decided_on))} ${esc(d.summary)}`).join(' · ')}</p>` : '';
       return `<section class="panel map-client"><div class="row"><h2 class="grow">${esc(c.name)}</h2><a class="client-link small" href="#/command/timeline">Timeline</a> <a class="client-link small" href="#/${esc(c.slug)}/home">Open workspace</a></div>
-        ${c.risks.length ? `<ul class="map-risks">${c.risks.map(mapRisk).join('')}</ul>` : ''}${tasks}${dates}${across}${decided}
+        ${c.risks.length ? `<ul class="map-risks">${c.risks.map(r => mapRisk(r, c.slug)).join('')}</ul>` : ''}${tasks}${dates}${across}${decided}
         <div class="grid map-grid">${c.projects.map(p => mapCard(c, p)).join('')}</div></section>`;
     };
     box.innerHTML = `<div class="head"><div><h2 class="greet">Map</h2><p class="muted small">Every project on one page: where it is, what its current phase still needs, what it waits on and what was decided. Built live from the hub, its requirements copy and Salesforce Tasks; nothing here is typed by hand. Clients don't see this page.</p></div></div>
