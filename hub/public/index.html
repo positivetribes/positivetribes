@@ -1050,9 +1050,14 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 
   // One quiet line on every client home: where to report a problem, and the public page with our support targets
   // (4 business hours for an outage, 1 business day for everything else). The targets live on the site, not here.
+  // "Report a problem" opens the right form, not just the last-used tab: during testing, Test problems on the project being
+  // tested (the same as #/<slug>/problems); otherwise a support request on a live tool, or on the first project.
   function supportLine() {
+    const testing = state.releases.some(r => r.stage === 'uat');
+    const live = state.projects.find(p => isLive(p, state.releases.filter(r => r.project_id === p.id)));
+    const report = () => { state.kind = 'request'; state.filter = 'all'; state.editing = null; state.adding = true; if (live) state.project = live.id; };
     return h('p', { class: 'meta support-line' }, 'Something not working? ',
-      h('a', { href: link('backlog') }, 'Report a problem'), '. ',
+      testing ? h('a', { href: link('problems') }, 'Report a problem') : h('a', { href: link('backlog'), onclick: report }, 'Report a problem'), '. ',
       h('a', { href: 'https://positivetribes.org/care.html#support-title', target: '_blank', rel: 'noopener' }, 'How fast we respond'));
   }
 
