@@ -626,7 +626,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   // Waiting on the viewer: an estimate they decide (in Preview as, whoever really decides), a question named for them,
   // or a suggested change named for them that is still to be decided (status still New, no estimate sent or decided, no proposal marked: that is on us).
   // Whole words only, so "Al" is not matched by "Sally" or "Alan"; a multi-word name needs every word.
-  const nameWords = s => (s || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  // Words split on spaces and list separators only; apostrophes, hyphens and combining marks stay inside a word.
+  const nameWords = s => (s || '').toLowerCase().split(/[\s,;/&+()]+/u)
+    .map(w => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}\p{M}]+$/gu, '').replace(/['\u2019]s$/u, '')).filter(Boolean);
   const ownedBy = (i, name) => { const want = nameWords(name), have = nameWords(i.owner); return want.length > 0 && want.every(w => have.includes(w)); };
   const undecided = i => i.kind === 'change' && i.status === 'new' && !i.proposal_state && !(i.estimate && i.estimate.status !== 'withdrawn' && i.estimate.status !== 'draft');
   const named = (i, name) => (i.kind === 'question' || undecided(i)) && ownedBy(i, name);
@@ -635,7 +637,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     || named(i, firstName()));
   // Positive Tribes (not previewing) sees everything waiting on the client's people: offered estimates and anything named
   // for someone other than the viewer.
-  const waitsOnClient = i => Boolean((i.estimate && i.estimate.status === 'offered') || (i.owner && !ownedBy(i, firstName()) && named(i, i.owner.toLowerCase())));
+  const waitsOnClient = i => Boolean((i.estimate && i.estimate.status === 'offered') || (i.owner && !ownedBy(i, firstName()) && (i.kind === 'question' || undecided(i))));
   const waitingList = () => open(state.items).filter(viewer().role === 'pt' && !state.preview ? waitsOnClient : waitsOnMe);
   const shownBy = (i, key) => key === 'all' || (key === 'yours' ? waitsOnMe(i) : i.phase === key);
   // Nice-to-have and idea suggestions are the Wishlist: listed, never counted in badges, weighed at each phase review.
@@ -814,6 +816,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const forYou = waitingList().length;
     const ptOwn = isPt && !state.preview;
     const searching = document.activeElement && document.activeElement.id === 'hub-search';
+    const arrow = document.activeElement && document.activeElement.closest && document.activeElement.closest('.next-nav') ? document.activeElement.getAttribute('aria-label') : null;
     $('main').replaceChildren(
       h('div', { class: 'hero ws' }, h('div', { class: 'eyebrow' }, 'Your workspace',
         state.client.salesforce_url && [' \u00b7 ', h('a', { class: 'eb-sf', href: state.client.salesforce_url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Open Salesforce (opens in a new tab)' }, 'Salesforce \u2197')]),
@@ -828,6 +831,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     $('main').querySelectorAll('.badge').forEach(b => { if (!b.textContent) b.remove(); });
     // A background refresh re-renders the page; keep the cursor in the search box if it was there.
     if (searching) { const box = $('hub-search'); box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+    // Same for the next-step arrows, so a keyboard user stepping through the card keeps their place.
+    if (arrow) { const b = [...$('main').querySelectorAll('.next-nav button')].find(x => x.getAttribute('aria-label') === arrow); if (b) b.focus(); }
   }
   function viewNode(isPt) {
     return state.view === 'home' ? home() : state.view === 'timeline' ? timelineView() : state.view === 'waiting' ? waitingView(isPt) : state.view === 'ideas' ? ideas(isPt) : state.view === 'documents' ? (documents() || h('div', { class: 'card' }, h('h2', {}, 'Documents'), h('p', { class: 'muted' }, 'Proposals, plans and test scripts will appear here once they are shared with you.'))) : backlog(isPt);
@@ -997,7 +1002,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       })); }),
       systemStatus(),
       // The list below leaves out the lead only, so it stays put while the card above steps through the queue.
-      waitingCard(queue[0]),
+      waitingCard(queue),
       supportLine());
   }
 
@@ -1005,13 +1010,16 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   // the arrow, the counter is a live region screen readers announce, and text typed elsewhere on the page is kept.
   // The place is kept by item id; if that item is gone (answered), the card shows whatever now sits at the same position.
   function nextCard(queue) {
-    const found = queue.findIndex(i => i.id === state.focusId);
+    // Until the viewer steps, the lead shows, so a new must-have question takes the card on the next refresh.
+    const found = state.focusId == null ? 0 : queue.findIndex(i => i.id === state.focusId);
     let at = found >= 0 ? found : Math.min(state.focusAt || 0, queue.length - 1);
     const title = h('h2', {}), details = h('p', { class: 'muted' }), go = h('a', { class: 'btn' });
-    const count = h('span', { class: 'meta', 'aria-live': 'polite', 'aria-atomic': 'true' });
-    const show = () => {
+    const count = h('span', { class: 'meta', 'aria-hidden': 'true' });
+    // One live region read out on each step: the position and the question now showing.
+    const said = h('span', { class: 'visually-hidden', 'aria-live': 'polite', 'aria-atomic': 'true' });
+    const show = announce => {
       const f = queue[at];
-      Object.assign(state, { focusId: f.id, focusAt: at });
+      if (announce) said.textContent = (at + 1) + ' of ' + queue.length + ': ' + f.title;
       title.textContent = f.title;
       details.textContent = f.details || '';
       details.hidden = !f.details;
@@ -1019,13 +1027,13 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       go.textContent = f.kind === 'question' ? 'Answer this' : 'See the problem';
       count.textContent = (at + 1) + ' of ' + queue.length;
     };
-    const step = d => { at = (at + d + queue.length) % queue.length; show(); };
-    show();
+    const step = d => { at = (at + d + queue.length) % queue.length; Object.assign(state, { focusId: queue[at].id, focusAt: at }); show(true); };
+    show(false);
     return h('div', { class: 'card next' },
       h('div', { class: 'next-top' }, h('div', { class: 'label' }, 'Your next step'),
         queue.length > 1 && h('div', { class: 'next-nav', role: 'group', 'aria-label': 'Step through what is waiting on you' },
           h('button', { class: 'btn ghost small', type: 'button', 'aria-label': 'Previous', onclick: () => step(-1) }, '\u2039'),
-          count,
+          count, said,
           h('button', { class: 'btn ghost small', type: 'button', 'aria-label': 'Next', onclick: () => step(1) }, '\u203a'))),
       title, details, h('div', {}, go));
   }
@@ -1039,9 +1047,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   }
 
   // The home card: the first few things waiting on the viewer, soonest due first, and a link to the full list.
-  function waitingCard(focus) {
+  // Leaves out what the "Your next step" card already steps through.
+  function waitingCard(shown) {
     const all = sortWaiting(waitingList());
-    const rest = all.filter(i => !focus || i.id !== focus.id);
+    const rest = all.filter(i => !shown.some(s => s.id === i.id));
     if (!rest.length) return null;
     const ptOwn = viewer().role === 'pt' && !state.preview;
     return h('div', { class: 'card' }, h('h2', {}, ptOwn ? 'Waiting on them' : 'Waiting on you'),
