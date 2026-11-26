@@ -724,7 +724,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const sum = list => ({ minutes: list.reduce((n, r) => n + r.minutes, 0), cents: list.reduce((n, r) => n + r.value_cents, 0) });
     const hrs = m => { const x = m / 60; return (Number.isInteger(x) ? x : x.toFixed(1)) + ' h'; };
     const usd = c => '$' + (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
-    const day = at => at ? new Date(String(at).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const day = at => at ? new Date(String(at).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', donYear === 'all' ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' }) : '';
     const what = r => r.source === 'change' ? 'Donated change' : (r.note || 'Donated time');
     const groups = [...rows.reduce((m, r) => m.set(r.slug, [...m.get(r.slug) || [], r]), new Map())]
       .map(([slug, list]) => ({ slug, client: list[0].client, list, ...sum(list) })).sort((a, b) => b.cents - a.cents);
@@ -732,9 +732,9 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const label = donYear === 'all' ? 'all time' : donYear;
     const chip = (key, text) => `<button type="button" data-year="${esc(key)}" aria-pressed="${key === donYear}">${esc(text)}</button>`;
     const line = r => `<li><span class="given-date">${esc(day(r.at))}</span>
-      <span class="given-what"><a href="#/${esc(r.slug)}/backlog/${esc(r.item_id)}">#${esc(r.item_id)} ${esc(r.title)}</a><span class="meta"> · ${esc(r.project || 'General')} · ${esc(what(r))}</span></span>
+      <span class="given-what"><a href="#/${esc(r.slug)}/backlog/${esc(r.item_id)}">#${esc(r.item_id)} ${esc(r.title)}</a><span class="meta">${esc(r.project || 'General')} · ${esc(what(r))}</span></span>
       <span class="given-value">${esc(hrs(r.minutes))} · ${esc(usd(r.value_cents))}</span></li>`;
-    const group = g => `<section class="panel" style="margin-top:16px"><div class="row" style="justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+    const group = g => `<section class="panel" style="margin-top:16px"><div class="given-head">
         <h2>${esc(g.client)}<span class="count">${g.list.length}</span></h2>
         <span><strong>${esc(hrs(g.minutes))} · ${esc(usd(g.cents))} value</strong> <button type="button" class="btn ghost small" data-csv="${esc(g.slug)}">Download CSV</button></span></div>
         <ul class="given-list">${g.list.map(line).join('')}</ul></section>`;
