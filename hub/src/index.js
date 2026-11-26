@@ -5,6 +5,7 @@ import { pushRequirements, requirementTokens } from './requirements.js';
 import { accessIdentity } from './access.js';
 import { handleAdmin, localDay, taskStatus } from './admin.js';
 import { runSupportWatch } from './supportwatch.js';
+import { runClientInstant, runClientDigest, setEmailPref } from './clientmail.js';
 import { runMapDigest } from './mapdigest.js';
 import { runWebDigest } from './web.js';
 import { windowEnd } from './dates.js';
@@ -357,6 +358,9 @@ export default {
     if (event.cron === SUPPORT_CRON) {
       ctx.waitUntil(runSupportWatch(env).then(r => console.log('support_watch', JSON.stringify(r)))
         .catch(error => console.error('support_watch_failed', error.message)));
+      // Client emails (src/clientmail.js): instant ones, business hours only; off for every client until email_mode is set.
+      ctx.waitUntil(runClientInstant(env).then(r => console.log('client_mail_instant', JSON.stringify({ ...r, errors: r.errors ? r.errors.length : 0 })))
+        .catch(error => console.error('client_mail_instant_failed', error.message)));
       return;
     }
     if (event.cron === WEB_CRON) {
@@ -365,6 +369,9 @@ export default {
       // The project digest (Map step 4): a snapshot of the Map so Today can show what changed since last week.
       ctx.waitUntil(runMapDigest(env, localDay(Date.now()), { taskStatus: () => taskStatus(env) }).then(r => console.log('map_digest', r.ran ? `saved ${r.week}, ${r.projects} projects, ${r.drift} drift` : r.reason))
         .catch(error => console.error('map_digest_failed', error.message)));
+      // Each client person's Monday summary (src/clientmail.js).
+      ctx.waitUntil(runClientDigest(env).then(r => console.log('client_mail_digest', JSON.stringify({ ...r, errors: r.errors ? r.errors.length : 0 })))
+        .catch(error => console.error('client_mail_digest_failed', error.message)));
       return;
     }
     // Phases whose testing window ended with no problems get a Salesforce Task to confirm and invoice (src/phasetask.js).
@@ -409,7 +416,7 @@ export default {
         return handleAdmin(request, env, url, { service: who.service });
       }
       const email = who.email;
-      const user = await db.prepare('SELECT id, email, name, role, client_id, created_at FROM users WHERE email = ?').bind(email).first();
+      const user = await db.prepare('SELECT id, email, name, role, client_id, created_at, email_pref FROM users WHERE email = ?').bind(email).first();
       // The command center is Positive Tribes' own; to anyone else it does not exist.
       if (commandCenter) {
         if (!user || user.role !== 'pt') return json({ error: 'Not found.' }, 404);
@@ -427,7 +434,14 @@ export default {
           ? await db.prepare('SELECT slug, name, accent, status FROM clients ORDER BY name').all()
           : await db.prepare('SELECT slug, name, accent, status FROM clients WHERE id = ?').bind(user.client_id).all();
         // Positive Tribes' own Salesforce, for the command center link; only Positive Tribes is told it.
-        return json({ user: { email: user.email, name: user.name, role: user.role }, clients, ...(user.role === 'pt' ? { salesforce_url: safeSalesforceUrl(env.SF_DOMAIN) } : {}) });
+        return json({ user: { email: user.email, name: user.name, role: user.role, email_pref: user.email_pref }, clients, ...(user.role === 'pt' ? { salesforce_url: safeSalesforceUrl(env.SF_DOMAIN) } : {}) });
+      }
+
+      // How often this person gets the hub's emails (src/clientmail.js): their own row only.
+      if (url.pathname === '/api/me/email' && method === 'PUT') {
+        const b = await body(request);
+        if (!(await setEmailPref(db, user, b.pref))) throw new InputError('Choose all, weekly or off.');
+        return json({ ok: true, email_pref: b.pref });
       }
 
       // The bell, for a client's people. Positive Tribes' bell is the command center Inbox.

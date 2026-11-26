@@ -76,6 +76,8 @@ p{margin:0}
 .bell-panel .bp-pin{background:var(--soft)}
 .bell-panel .bp-empty{padding:20px 16px;color:var(--muted);margin:0}
 .bell-panel .bp-foot{padding:10px 16px;border-top:1px solid var(--line);text-align:center}
+.bell-panel .bp-email{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;font-size:14px}
+.bell-panel .bp-email select{font:inherit;font-size:14px;min-height:36px;max-width:100%}
 .hero{padding:18px 0 22px;border-bottom:1px solid var(--line);margin-bottom:6px;position:relative}
 .eyebrow .eb-sf{color:var(--muted);text-decoration:none;border-bottom:1px solid transparent}
 .eyebrow .eb-sf:hover,.eyebrow .eb-sf:focus-visible{color:var(--ink);border-bottom-color:var(--client)}
@@ -2294,7 +2296,20 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         h('div', { class: 'bp-head' }, h('h2', {}, preview ? state.preview.name + '’s notifications' : 'Notifications'), action),
         reminders.length || items.length ? h('ul', {}, ...reminders, ...items.map(row)) : h('p', { class: 'bp-empty' }, empty),
         // The full list only has something the bell lacks when the bell is cut off at 15, or Patch needs a look.
-        pt && (more || patchNote) ? h('div', { class: 'bp-foot' }, h('a', { href: '#/command/inbox', onclick: () => open(false) }, more ? `See all ${data.items.length}` + (patchNote ? ' · ' + patchNote : '') : patchNote)) : null].filter(Boolean));
+        pt && (more || patchNote) ? h('div', { class: 'bp-foot' }, h('a', { href: '#/command/inbox', onclick: () => open(false) }, more ? `See all ${data.items.length}` + (patchNote ? ' · ' + patchNote : '') : patchNote)) : null,
+        pt || preview ? null : emailChoice()].filter(Boolean));
+    }
+    // How often the hub emails this person (src/clientmail.js). Their own choice; saved as soon as it changes.
+    const EMAIL_CHOICES = [['all', 'Each update and a Monday summary'], ['weekly', 'Only the Monday summary'], ['off', 'Never']];
+    function emailChoice() {
+      const now = state.me.user.email_pref || 'all';
+      const note = h('span', { class: 'bp-meta', role: 'status' }, '');
+      const pick = h('select', { id: 'email-pref', onchange: async e => {
+        const pref = e.target.value;
+        try { await api('/me/email', { method: 'PUT', body: JSON.stringify({ pref }) }); state.me.user.email_pref = pref; note.textContent = 'Saved'; }
+        catch (err) { e.target.value = now; note.textContent = err.message; }
+      } }, EMAIL_CHOICES.map(([k, l]) => h('option', { value: k, ...(now === k ? { selected: true } : {}) }, l)));
+      return h('div', { class: 'bp-foot bp-email' }, h('label', { for: 'email-pref' }, 'Email me'), pick, note);
     }
 
     async function load() {
