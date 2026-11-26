@@ -11,6 +11,8 @@
   "vars": {
     // Support watch alerts (src/supportwatch.js) go here only.
     "ALERT_TO": "eric@positivetribes.org",
+    // Client emails (src/clientmail.js): a blind copy of every live email goes here while they settle in. Blank it to stop.
+    "CLIENT_MAIL_BCC": "eric@positivetribes.org",
     "ACCESS_TEAM_DOMAIN": "positivetribes.cloudflareaccess.com",
     "ACCESS_AUD": "9dc04910d410b1e8c6739841b429ce28e81e7a9796758c75bbac93bf10bd634a",
     // The daily command center sync routine's Access service token (its client ID, a public identifier). Only this
@@ -39,7 +41,13 @@
   // "30 * * * *": the support watch (src/supportwatch.js); it acts only Mon-Fri 8am-6pm Mountain.
   "triggers": { "crons": ["0 12 * * *", "0 14 * * MON", "30 * * * *"] },
   // Support watch emails go only to Eric; the destination must be verified in Email Routing.
-  "send_email": [{ "name": "ALERT_MAIL", "destination_address": "eric@positivetribes.org" }],
+  // CLIENT_MAIL: client emails (src/clientmail.js), used only for clients whose email_mode is 'live'. It may send to any
+  // address once positivetribes.org is onboarded in Email Service > Email Sending (Workers Paid), and only from hello@.
+  // The code only ever sends to a users row of that client.
+  "send_email": [
+    { "name": "ALERT_MAIL", "destination_address": "eric@positivetribes.org" },
+    { "name": "CLIENT_MAIL", "allowed_sender_addresses": ["hello@positivetribes.org"] }
+  ],
   // Prospect PoCs (src/pocusage.js): each PoC Worker's `Usage` RPC entrypoint, for Today's "PoC use" line.
   // STATUS: tribe-status's `Incidents` RPC entrypoint (closed outages and check coverage) for the support watch.
   "services": [{ "binding": "POC_WFA", "service": "wfa-commissions", "entrypoint": "Usage" }, { "binding": "STATUS", "service": "tribe-status", "entrypoint": "Incidents" }],

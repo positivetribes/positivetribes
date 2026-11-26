@@ -6,7 +6,7 @@ import { database } from './helpers.mjs';
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql', '0026_change_estimates.sql', '0027_donated_changes.sql', '0028_estimate_lines.sql', '0029_agreement_ref.sql', '0031_item_proposal.sql', '0033_timeline.sql', '0037_item_images.sql', '0041_item_asks_back.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql', '0026_change_estimates.sql', '0027_donated_changes.sql', '0028_estimate_lines.sql', '0029_agreement_ref.sql', '0031_item_proposal.sql', '0033_timeline.sql', '0037_item_images.sql', '0041_item_asks_back.sql', '0043_client_email.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler'), (1, 'fundraising', 'Fundraising'), (2, 'chapters', 'Chapters');
@@ -312,6 +312,23 @@ test('opening the hub records when each person was last seen', async () => {
   const before = seen();
   await call('molly@uep.org', '/api/me');
   assert.equal(seen(), before);
+});
+
+test('each person sets how often the hub emails them, for their own row only', async () => {
+  const { call, sqlite } = setup();
+  const pref = email => sqlite.prepare('SELECT email_pref FROM users WHERE email = ?').get(email).email_pref;
+  assert.equal((await (await call('molly@uep.org', '/api/me')).json()).user.email_pref, 'all');
+  let r = await call('molly@uep.org', '/api/me/email', 'PUT', { pref: 'weekly' });
+  assert.equal(r.status, 200);
+  assert.equal(pref('molly@uep.org'), 'weekly');
+  assert.equal((await (await call('molly@uep.org', '/api/me')).json()).user.email_pref, 'weekly');
+  r = await call('molly@uep.org', '/api/me/email', 'PUT', { pref: 'hourly' });
+  assert.equal(r.status, 400);
+  r = await call('molly@uep.org', '/api/me/email', 'PUT', { pref: 'off', email: 'someone@else.org' });
+  assert.equal(pref('molly@uep.org'), 'off');
+  const others = sqlite.prepare("SELECT COUNT(*) AS n FROM users WHERE email != 'molly@uep.org' AND email_pref != 'all'").get().n;
+  assert.equal(others, 0, 'nobody else changes');
+  assert.equal((await call(null, '/api/me/email', 'PUT', { pref: 'off' })).status, 401);
 });
 
 test('system status: scoped to the client, states only, safe when the status Worker is down', async () => {
