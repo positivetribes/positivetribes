@@ -268,6 +268,7 @@ section.tier{display:flex;flex-direction:column;gap:10px}
 section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .count{font-family:var(--font);font-size:15px;color:var(--muted);font-weight:400}
 .item{display:flex;flex-direction:column;gap:10px}.item h3{font-size:20px;font-family:var(--font);font-weight:600}
+.given-list{list-style:none;margin:6px 0 14px;padding:0;border-top:1px solid var(--line)}.given-list li{display:grid;grid-template-columns:4.5em 1fr auto;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:.92em}.given-date,.given-value{color:var(--muted);white-space:nowrap}.given-value{text-align:right}.linkish{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit}
 .item p{white-space:pre-wrap;overflow-wrap:anywhere}.item.flash{outline:3px solid var(--client);outline-offset:3px}
 .item.is-done h3{color:var(--muted)}
 .answer{background:var(--ok-bg);border-radius:10px;padding:10px 14px}
@@ -503,6 +504,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
 .cc .panel.calm .reply-list+.label{margin-top:14px}
 .cc .attention .items{margin:0}
 .cc .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:6px 0 10px}
+.cc a.tile{text-decoration:none}.cc a.tile:hover,.cc a.tile:focus-visible{outline:2px solid var(--line)}
 .cc .tile{display:flex;flex-direction:column;padding:12px 14px;background:var(--bg);border-radius:10px}
 .cc .tile .num{font-family:var(--display);font-size:30px;line-height:1.1}
 .cc .tile .unit{font-size:13px;color:var(--muted);margin-top:2px}
@@ -748,7 +750,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     // Four daily tabs, then the Playbook (commands and kits). What clients changed lives in the bell (its "See all" opens #/command/inbox) and on each client's card,
     // so Inbox has no tab of its own. Improve this hub sits apart at the right end.
     const tabs = (inboxBadge, careBadge) => [tab('today', '#/command', 'Today'), tab('clients', '#/command/clients', 'Clients', null, 'client'),
-      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents'), tab('map', '#/command/map', 'Map'), tab('timeline', '#/command/timeline', 'Timeline'), tab('playbook', '#/command/playbook', 'Playbook')];
+      tab('care', '#/command/care', 'Care plans', careBadge, 'triage'), tab('documents', '#/command/documents', 'Documents'), tab('map', '#/command/map', 'Map'), tab('timeline', '#/command/timeline', 'Timeline'), tab('donated', '#/command/donated', 'Donated'), tab('playbook', '#/command/playbook', 'Playbook')];
     const box = h('div', { class: 'cc', id: 'cc' }, h('p', { class: 'muted' }, 'Loading the command center…'));
     const keep = !first && $('cc') && $('cc-tabs');
     if (keep) {
@@ -1237,17 +1239,32 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       await reloadItems(); render();
     } catch (e) { showError(e.message); }
   }
-  // Donated so far on one project: approved donated changes plus logged donated time.
+  // Donated so far on one project: approved donated changes plus logged donated time. "See what was given" opens
+  // the list behind the total (newest first, each line opens its card), so a client can show a funder or their books.
   function donatedTotal(items) {
-    let minutes = 0, cents = 0;
+    const rows = [];
     for (const i of items) {
-      if (i.estimate && i.estimate.donated && i.estimate.status === 'approved_now') { minutes += i.estimate.hours * 60; cents += i.estimate.price_cents; }
-      for (const d of i.donated_time || []) { minutes += d.minutes; cents += d.value_cents; }
+      if (i.estimate && i.estimate.donated && i.estimate.status === 'approved_now')
+        rows.push({ item: i, minutes: i.estimate.hours * 60, cents: i.estimate.price_cents, at: i.estimate.decided_at || '', what: 'Donated change' });
+      for (const d of i.donated_time || []) rows.push({ item: i, minutes: d.minutes, cents: d.value_cents, at: d.created_at || '', what: d.note || 'Donated time' });
     }
-    if (!minutes) return null;
-    const hrs = minutes / 60, dollars = cents / 100;
-    return h('p', { class: 'meta donated-total' }, h('b', {}, 'Donated by Positive Tribes so far: '),
-      (hrs === 1 ? '1 hour' : (Number.isInteger(hrs) ? hrs : hrs.toFixed(1)) + ' hours') + ' · $' + dollars.toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' value');
+    if (!rows.length) return null;
+    const minutes = rows.reduce((n, r) => n + r.minutes, 0), cents = rows.reduce((n, r) => n + r.cents, 0);
+    const hrs = m => { const x = m / 60; return x === 1 ? '1 hour' : (Number.isInteger(x) ? x : x.toFixed(1)) + ' hours'; };
+    const usd = c => '$' + (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const open = !!state.givenOpen;
+    const line = h('p', { class: 'meta donated-total' }, h('b', {}, 'Donated by Positive Tribes so far: '), hrs(minutes) + ' · ' + usd(cents) + ' value · ',
+      h('button', { type: 'button', class: 'linkish', 'aria-expanded': String(open), 'aria-controls': 'given-list',
+        onclick: () => { state.givenOpen = !open; render(); } }, open ? 'Hide the list' : 'See what was given'));
+    if (!open) return line;
+    rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    const list = h('ul', { class: 'given-list', id: 'given-list' }, rows.map(r => h('li', {},
+      h('span', { class: 'given-date' }, r.at ? shortDate(String(r.at).slice(0, 10)) : ''),
+      h('span', { class: 'given-what' },
+        h('a', { href: '#/' + state.slug + '/backlog/' + r.item.id }, '#' + (r.item.legacy_id || r.item.id) + ' ' + r.item.title),
+        h('span', { class: 'meta' }, ' · ' + r.what)),
+      h('span', { class: 'given-value' }, hrs(r.minutes).replace(' hours', ' h').replace(' hour', ' h') + ' · ' + usd(r.cents)))));
+    return h('div', { class: 'given' }, line, list);
   }
 
   function estimateBlock(item) {

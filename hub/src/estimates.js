@@ -123,6 +123,23 @@ export async function donatedTotals(db, since = '0000-01-01') {
   return results.map(r => ({ ...r, hours_label: hoursLabel(r.minutes), value_label: moneyLabel(r.value_cents) }));
 }
 
+// Every donation, one row each, for the command center's Donated page (Positive Tribes only): approved donated
+// changes and logged donated time, with client, project and item, newest first. Same rule as donatedTotals.
+export async function donatedRows(db) {
+  const { results } = await db.prepare(
+    `SELECT t.source, t.minutes, t.value_cents, t.at, t.note, i.id AS item_id, i.title, i.kind,
+            c.slug, c.name AS client, p.name AS project
+     FROM (SELECT 'change' AS source, client_id, item_id, minutes, price_cents AS value_cents, decided_at AS at, '' AS note
+             FROM change_estimates WHERE donated = 1 AND status = 'approved_now'
+           UNION ALL SELECT 'time', client_id, item_id, minutes, value_cents, created_at, note FROM donated_time) t
+     JOIN clients c ON c.id = t.client_id
+     JOIN items i ON i.id = t.item_id AND i.client_id = t.client_id
+     LEFT JOIN projects p ON p.id = i.project_id
+     ORDER BY t.at DESC`
+  ).all();
+  return results.map(r => ({ ...r, hours_label: hoursLabel(r.minutes), value_label: moneyLabel(r.value_cents) }));
+}
+
 // ---- Salesforce Task for an approved change ----
 
 const sfReady = env => Boolean(env.SF_DOMAIN && env.SF_CLIENT_ID && env.SF_CLIENT_SECRET);
