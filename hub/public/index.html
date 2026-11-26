@@ -1547,7 +1547,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const filters = (showBy || estBy) && h('div', { class: 'actions' }, showBy || null, estBy || null);
     nodes.push(state.adding
       ? (careMode ? careForm() : addForm())
-      : h('div', { class: 'bar' }, h('button', { class: 'btn', type: 'button', onclick: () => { state.adding = true; render(); const f = $('f-title') || $('c-title'); if (f) f.focus(); } }, opener), filters || null));
+      : h('div', { class: 'bar' }, h('button', { class: 'btn', type: 'button', onclick: () => { state.adding = true; render(); const f = $('f-title') || $('c-title'); if (f) f.focus(); } }, hasDraft(careMode ? 'care' : state.kind) ? 'Continue your draft' : opener), filters || null));
     if (state.adding && filters) nodes.push(filters);
     // Answers someone else gave lately, above the open questions, so they are never only in the fold at the bottom.
     const fresh = kind === 'question' ? finished.filter(isNewAnswer) : [];
@@ -1650,6 +1650,19 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     return { el, upload, clear, listen };
   }
 
+  // A half-written add form is kept in this tab's sessionStorage as it is typed, so leaving the page (a link, the
+  // bell, Back, a reload) and coming back brings it back. One draft per client, project and form; it is cleared when
+  // the item is saved or cancelled, and never leaves the browser. Screenshots are not kept (the leave warning covers them).
+  const draftKey = form => 'hub-draft:' + state.slug + ':' + (state.project ?? '') + ':' + form;
+  const hasDraft = form => !!store.get(draftKey(form));
+  function keepDraft(form, el, fields) {
+    const key = draftKey(form);
+    try { const saved = JSON.parse(store.get(key) || '{}'); for (const [name, f] of Object.entries(fields)) if (saved[name]) { f.value = saved[name]; f.dispatchEvent(new Event('change')); } } catch {}
+    const save = () => { const v = {}; for (const [name, f] of Object.entries(fields)) if (f.value.trim()) v[name] = f.value; store.set(key, Object.keys(v).length ? JSON.stringify(v) : ''); };
+    el.addEventListener('input', save); el.addEventListener('change', save);
+    return () => store.set(key, '');
+  }
+
   function addForm() {
     const { kind } = state;
     const verb = { question: ['Ask a question', 'What do we need to know?', 'Add question'], change: ['Suggest a change', 'What should change?', 'Add suggestion'], problem: ['Report a problem', 'What went wrong?', 'Add problem'], request: ['Ask for help', 'What do you need?', 'Send request'] }[kind];
@@ -1663,6 +1676,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       TIER_NAMES[kind].map(([k, l]) => h('option', { value: k }, l)));
     const owner = h('input', { type: 'text', maxlength: 60, id: 'f-owner', placeholder: kind === 'problem' ? 'Test 3, step 5' : 'Who can answer?', ...(kind === 'question' ? { list: 'f-owner-list', autocomplete: 'off' } : {}) });
     const shots = pendingShots(kind, 'f-shots');
+    let dropDraft = () => {};
     const form = h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
       const button = form.querySelector('button[type=submit]');
@@ -1672,6 +1686,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         if (kind === 'question' || kind === 'problem') payload.owner = owner.value;
         const created = await api(base() + '/items', post(payload));
         state.items = created.items;
+        dropDraft();
         await shots.upload(created.id);
         state.adding = false; render();
       } catch (err) { showError(err.message); button.disabled = false; }
@@ -1683,8 +1698,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier, meaning),
         (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, kind === 'question' && ownerList('f-owner-list'))),
       kind === 'change' && h('p', { class: 'meta' }, 'We’ll reply and tell you whether this is already in your agreement or needs an estimate. Nothing is added or charged until you approve it.'),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { shots.clear(); state.adding = false; render(); } }, 'Cancel')));
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { dropDraft(); shots.clear(); state.adding = false; render(); } }, 'Cancel')));
     shots.listen(form);
+    dropDraft = keepDraft(kind, form, { title, details, tier, owner });
     return form;
   }
 
@@ -1703,12 +1719,14 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       } }, p.name))) : null;
     const b = c.balance;
     const shots = pendingShots('request', 'c-shots');
+    let dropDraft = () => {};
     const form = h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
       const button = form.querySelector('button[type=submit]');
       button.disabled = true;
       try {
         const data = await api(base() + '/items', post({ care: true, kind: 'request', project_id: tool, title: title.value, details: why.value }));
+        dropDraft();
         state.items = data.items; state.care = data.care; state.project = tool;
         await shots.upload(data.id);
         state.adding = false; render();
@@ -1728,8 +1746,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         b ? h('p', { class: 'meta' }, 'This month: ' + plural(b.available, 'credit') + ' left') : null),
       h('p', { class: 'muted' }, h('b', {}, 'Something broken? '), 'Report it as a problem instead. Fixes are always free. ',
         h('button', { type: 'button', class: 'btn ghost small', onclick: () => { state.kind = 'problem'; state.filter = 'all'; state.adding = true; render(); } }, 'Report a problem')),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Send request'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { shots.clear(); state.adding = false; render(); } }, 'Cancel')));
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Send request'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { dropDraft(); shots.clear(); state.adding = false; render(); } }, 'Cancel')));
     shots.listen(form);
+    dropDraft = keepDraft('care', form, { title, why });
     return form;
   }
 
@@ -2294,6 +2313,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   // people leave to take a screenshot, and a redraw would wipe what they typed and attached.
   const formOpen = () => state.adding || state.editing || state.ideaEditing || state.signing || state.askStep === 'comment'
     || [...document.querySelectorAll('#main form input[type=text], #main form textarea')].some(f => f.value.trim());
+  // Reloading or closing the tab with typed text or a screenshot waiting asks first (the typed text is kept as a draft anyway).
+  window.addEventListener('beforeunload', e => {
+    const typed = [...document.querySelectorAll('#main form input[type=text], #main form textarea')].some(f => f.value.trim());
+    if (typed || (state.itemFiles && state.itemFiles.length)) { e.preventDefault(); e.returnValue = ''; }
+  });
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden || !state.client || formOpen() || state.mode === COMMAND) return;
     try { state.items = (await api(base() + '/items')).items; render(); } catch {}
