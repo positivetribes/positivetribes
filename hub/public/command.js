@@ -186,10 +186,10 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const d = data.donated || [];
     if (!d.length) return '';
     const minutes = d.reduce((n, r) => n + r.minutes, 0), cents = d.reduce((n, r) => n + r.value_cents, 0), hrs = minutes / 60;
-    return tile(esc(Number.isInteger(hrs) ? hrs : hrs.toFixed(1)) + ' h', 'donated this year · $' + esc((cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })),
-      d.map(r => r.client + ' ' + r.value_label).join(', '));
+    return tile(esc(Number.isInteger(hrs) ? hrs : hrs.toFixed(1)) + ' h', 'donated this year · $' + esc((cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })) + ' · see all',
+      d.map(r => r.client + ' ' + r.value_label).join(', '), '#/command/donated');
   };
-  const tile = (num, unit, title) => `<div class="tile"${title ? ` title="${esc(title)}"` : ''}><span class="num">${num}</span><span class="unit">${unit}</span></div>`;
+  const tile = (num, unit, title, href) => `<${href ? `a href="${esc(href)}"` : 'div'} class="tile"${title ? ` title="${esc(title)}"` : ''}><span class="num">${num}</span><span class="unit">${unit}</span></${href ? 'a' : 'div'}>`;
   // Last week's website numbers (the Monday digest: leads and gifts from Salesforce, visits from Cloudflare Web Analytics).
   // One line; open it for sources, pages, a leads trend and Run now.
   const webPart = data => {
@@ -713,6 +713,56 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   }
 
   // Playbook: what to type in Claude Code, and the kits behind it. Data is generated from the commands and kits at deploy.
+  // Donated: everything Positive Tribes has given, per client, for funder reports and each client's in-kind letter.
+  // A year filter, totals, a list per client (each line opens the card in the client's hub) and a CSV per client.
+  let donYear = String(new Date().getFullYear());
+  function renderDonated(box, data) {
+    const all = data.rows || [];
+    const years = [...new Set(all.map(r => String(r.at).slice(0, 4)).filter(Boolean))].sort().reverse();
+    if (donYear !== 'all' && !years.includes(donYear)) donYear = years[0] || 'all';
+    const rows = donYear === 'all' ? all : all.filter(r => String(r.at).startsWith(donYear));
+    const sum = list => ({ minutes: list.reduce((n, r) => n + r.minutes, 0), cents: list.reduce((n, r) => n + r.value_cents, 0) });
+    const hrs = m => { const x = m / 60; return (Number.isInteger(x) ? x : x.toFixed(1)) + ' h'; };
+    const usd = c => '$' + (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const day = at => at ? new Date(String(at).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const what = r => r.source === 'change' ? 'Donated change' : (r.note || 'Donated time');
+    const groups = [...rows.reduce((m, r) => m.set(r.slug, [...m.get(r.slug) || [], r]), new Map())]
+      .map(([slug, list]) => ({ slug, client: list[0].client, list, ...sum(list) })).sort((a, b) => b.cents - a.cents);
+    const t = sum(rows);
+    const label = donYear === 'all' ? 'all time' : donYear;
+    const chip = (key, text) => `<button type="button" data-year="${esc(key)}" aria-pressed="${key === donYear}">${esc(text)}</button>`;
+    const line = r => `<li><span class="given-date">${esc(day(r.at))}</span>
+      <span class="given-what"><a href="#/${esc(r.slug)}/backlog/${esc(r.item_id)}">#${esc(r.item_id)} ${esc(r.title)}</a><span class="meta"> · ${esc(r.project || 'General')} · ${esc(what(r))}</span></span>
+      <span class="given-value">${esc(hrs(r.minutes))} · ${esc(usd(r.value_cents))}</span></li>`;
+    const group = g => `<section class="panel" style="margin-top:16px"><div class="row" style="justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+        <h2>${esc(g.client)}<span class="count">${g.list.length}</span></h2>
+        <span><strong>${esc(hrs(g.minutes))} · ${esc(usd(g.cents))} value</strong> <button type="button" class="btn ghost small" data-csv="${esc(g.slug)}">Download CSV</button></span></div>
+        <ul class="given-list">${g.list.map(line).join('')}</ul></section>`;
+    box.innerHTML = `<div class="head"><div><h2 class="greet">Donated</h2><p class="muted small">Everything Positive Tribes has given clients: donated changes they approved, and donated time logged on their cards. For funder reports and each client's in-kind letter. Clients see their own list under "Donated by Positive Tribes so far" in Questions &amp; changes.</p></div></div>
+      <div class="seg small subnav" role="group" aria-label="Which year">${years.map(y => chip(y, y)).join('')}${chip('all', 'All time')}</div>
+      <div class="tiles"><div class="tile"><span class="num">${esc(hrs(t.minutes))}</span><span class="unit">donated, ${esc(label)}</span></div>
+        <div class="tile"><span class="num">${esc(usd(t.cents).replace(/\.00$/, ''))}</span><span class="unit">value at each client's rate</span></div>
+        <div class="tile"><span class="num">${groups.length}</span><span class="unit">${groups.length === 1 ? 'client' : 'clients'} helped</span></div>
+        <div class="tile"><span class="num">${rows.length}</span><span class="unit">${rows.length === 1 ? 'gift' : 'gifts'}</span></div></div>
+      ${groups.map(group).join('') || '<p class="empty">Nothing donated in this period yet.</p>'}
+      <p class="muted small" style="margin-top:14px">Not listed: discounts written into a signed proposal (a "$X value donated" line on its invoice). Log those as donated time on one of the project's cards to count them here.</p>`;
+    box.onclick = e => {
+      const y = e.target.closest('[data-year]');
+      if (y) { donYear = y.dataset.year; renderDonated(box, data); return; }
+      const c = e.target.closest('[data-csv]');
+      if (!c) return;
+      const g = groups.find(x => x.slug === c.dataset.csv);
+      const cell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+      const csv = [['Date', 'Project', 'Item', 'Title', 'Kind', 'Note', 'Hours', 'Value (USD)'],
+        ...g.list.map(r => [String(r.at).slice(0, 10), r.project || 'General', '#' + r.item_id, r.title, r.source === 'change' ? 'Donated change' : 'Donated time', r.note || '', (r.minutes / 60).toFixed(2), (r.value_cents / 100).toFixed(2)])]
+        .map(row => row.map(cell).join(',')).join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+      a.download = `donated-${g.slug}-${donYear}.csv`;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+  }
+
   function renderPlaybook(box, data) {
     const commands = data.commands || [], kits = data.kits || [];
     const cmd = c => {
@@ -1132,7 +1182,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
     const client = (sub || '').match(/^client\/([A-Za-z0-9]{15,18})$/);
     if (client) return { view: 'client', id: client[1] };
     if (sub === 'care/triage' || sub === 'triage') return { view: 'triage' };
-    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas', 'playbook', 'timeline', 'map'].includes(sub) ? sub : 'today' };
+    return { view: ['inbox', 'clients', 'care', 'documents', 'ideas', 'playbook', 'timeline', 'map', 'donated'].includes(sub) ? sub : 'today' };
   };
   async function show(box, sub = '', refresh = false) {
     if (current.box !== box || current.sub !== sub) scrollTo(0, 0);
@@ -1170,6 +1220,11 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
         if (current.box !== box) return;
         document.title = 'Map | Command center';
         renderMap(box, data);
+      } else if (view === 'donated') {
+        const data = await api('/donated');
+        if (current.box !== box) return;
+        document.title = 'Donated | Command center';
+        renderDonated(box, data);
       } else if (view === 'playbook') {
         const data = await api('/playbook');
         if (current.box !== box) return;

@@ -11,7 +11,7 @@ import { InputError } from './triage.js';
 import { addBusinessHours, formatMT, parseUtc, SUPPORT } from './businesshours.js';
 import { patchAdmin, patchInbox, aiCost } from './patch.js';
 import { replyAdmin } from './reply.js';
-import { estimateAdmin, estimateLists, donatedTotals } from './estimates.js';
+import { estimateAdmin, estimateLists, donatedTotals, donatedRows } from './estimates.js';
 import { webAdmin, latestWebDigest } from './web.js';
 import { timelineAdmin } from './timeline.js';
 import { requirementsAdmin } from './requirements.js';
@@ -960,6 +960,8 @@ export async function handleAdmin(request, env, url, who) {
     if (route === 'GET /api/admin/feedback') return env.DB ? json(await feedbackOverview(env.DB)) : json({ error: 'The hub database is not connected.' }, 503);
     // The Playbook tab: Claude Code commands and kits, generated at deploy by scripts/playbook.mjs (names and one-liners only).
     if (route === 'GET /api/admin/playbook') return json(PLAYBOOK);
+    // The Donated page: every donated change and logged donated time, across clients.
+    if (route === 'GET /api/admin/donated') return env.DB ? json({ rows: await donatedRows(env.DB) }) : json({ error: 'The hub database is not connected.' }, 503);
 
     const docId = path.match(/^\/api\/admin\/documents(?:\/(\d+))?$/);
     if (docId) {

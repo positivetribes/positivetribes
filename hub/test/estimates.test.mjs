@@ -506,3 +506,17 @@ test('a change that needs a proposal: only Positive Tribes sets it, it blocks an
   assert.equal((await mark(PT, { agreement_ref: 'F7' })).status, 200);
   assert.equal((await mark(PT, { proposal_state: 'planned' })).status, 409);
 });
+
+test('the Donated page lists every donation with client, project and item, for Positive Tribes only', async () => {
+  const { estimate, offer, decide, call, PT } = setup();
+  await estimate(1, 1, { donated: true });
+  await offer(1);
+  await decide('molly@uep.org', 1, 'now');
+  await call(PT, 'admin/items/3/donated-time', 'POST', { hours: 1.5, note: 'Matching-gift prompt' });
+  assert.equal((await call('molly@uep.org', 'admin/donated')).status, 404, 'clients cannot reach it');
+  const { rows } = (await call(PT, 'admin/donated')).body;
+  assert.deepEqual(rows.map(r => [r.slug, r.item_id, r.source, r.minutes, r.value_cents]).sort((a, b) => a[1] - b[1]),
+    [['uep', 1, 'change', 60, 5000], ['uep', 3, 'time', 90, 7500]]);
+  assert.equal(rows.find(r => r.source === 'time').note, 'Matching-gift prompt');
+  assert.ok(rows.every(r => r.title && r.client && r.at));
+});
