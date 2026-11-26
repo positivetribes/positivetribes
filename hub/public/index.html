@@ -268,7 +268,7 @@ section.tier{display:flex;flex-direction:column;gap:10px}
 section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .count{font-family:var(--font);font-size:15px;color:var(--muted);font-weight:400}
 .item{display:flex;flex-direction:column;gap:10px}.item h3{font-size:20px;font-family:var(--font);font-weight:600}
-.given-list{list-style:none;margin:6px 0 14px;padding:0;border-top:1px solid var(--line)}.given-list li{display:grid;grid-template-columns:4.5em 1fr auto;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:.92em}.given-date,.given-value{color:var(--muted);white-space:nowrap}.given-value{text-align:right}.linkish{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit}
+.given-list{list-style:none;margin:6px 0 14px;padding:0;border-top:1px solid var(--line)}.given-list li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 16px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line);font-size:.92em}.given-what .meta{display:block;margin-top:2px}.given-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px 16px}.given-head h2{margin:0}.given-head .btn{margin-left:10px}.given-date,.given-value{color:var(--muted);white-space:nowrap}.given-value{text-align:right}.linkish{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit}
 .item p{white-space:pre-wrap;overflow-wrap:anywhere}.item.flash{outline:3px solid var(--client);outline-offset:3px}
 .item.is-done h3{color:var(--muted)}
 .answer{background:var(--ok-bg);border-radius:10px;padding:10px 14px}
@@ -1262,7 +1262,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('span', { class: 'given-date' }, r.at ? shortDate(String(r.at).slice(0, 10)) : ''),
       h('span', { class: 'given-what' },
         h('a', { href: '#/' + state.slug + '/backlog/' + r.item.id }, '#' + (r.item.legacy_id || r.item.id) + ' ' + r.item.title),
-        h('span', { class: 'meta' }, ' · ' + r.what)),
+        h('span', { class: 'meta' }, r.what)),
       h('span', { class: 'given-value' }, hrs(r.minutes).replace(' hours', ' h').replace(' hour', ' h') + ' · ' + usd(r.cents)))));
     return h('div', { class: 'given' }, line, list);
   }
