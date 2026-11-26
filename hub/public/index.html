@@ -1009,6 +1009,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production'))));
       })); }),
       systemStatus(),
+      // Goodwill, not work: the donated total sits near the foot of the home page, out of the way of the lists.
+      donatedTotal(state.items, null),
       // The list below leaves out the lead only, so it stays put while the card above steps through the queue.
       waitingCard(queue),
       supportLine());
@@ -1287,7 +1289,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     } catch (e) { showError(e.message); }
   }
   // Donated so far to this client, across all its projects (approved donated changes plus logged donated time), with
-  // the share of the project on screen. "See what was given" opens the list behind the total (newest first, each line
+  // the share of the project on screen when one is given (none on the home page, where it now lives). "See what was given" opens the list behind the total (newest first, each line
   // names its project and opens its card), so a client can show a funder or their books.
   function donatedTotal(items, projectId) {
     const rows = [];
@@ -1303,8 +1305,9 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const open = !!state.givenOpen;
     const here = rows.filter(r => r.item.project_id === projectId).reduce((n, r) => n + r.cents, 0);
     const pname = id => (state.projects.find(p => p.id === id) || {}).name || 'General';
-    const several = new Set(rows.map(r => r.item.project_id)).size > 1 || here !== cents;
-    const share = several ? ' across all your projects (' + (here ? usd(here) + ' on ' + pname(projectId) : 'none yet on ' + pname(projectId)) + ')' : '';
+    const several = new Set(rows.map(r => r.item.project_id)).size > 1 || (projectId != null && here !== cents);
+    const share = !several ? '' : projectId == null ? ' across all your projects'
+      : ' across all your projects (' + (here ? usd(here) + ' on ' + pname(projectId) : 'none yet on ' + pname(projectId)) + ')';
     const line = h('p', { class: 'meta donated-total' }, h('b', {}, 'Donated by Positive Tribes so far: '), hrs(minutes) + ' · ' + usd(cents) + ' value' + share + ' · ',
       h('button', { type: 'button', class: 'linkish', 'aria-expanded': String(open), 'aria-controls': 'given-list',
         onclick: () => { state.givenOpen = !open; render(); } }, open ? 'Hide the list' : 'See what was given'));
@@ -1590,8 +1593,6 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       const n = tally(here.filter(i => i.kind === key)).length;
       return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, label, n > 0 && h('span', { class: 'n' }, String(n)));
     }))));
-    const given = donatedTotal(state.items, project);
-    if (given) nodes.push(given);
     // The form stays closed behind one button until someone wants it, so the list comes first.
     const careMode = kind === 'request' && state.care && state.care.plan;
     const opener = careMode ? 'Request an improvement' : { question: 'Ask a question', change: 'Suggest a change', problem: 'Report a problem', request: 'Ask for help' }[kind];
