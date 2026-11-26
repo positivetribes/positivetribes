@@ -252,3 +252,69 @@ test('Monday summary: nothing from before the client was turned on, and no testi
   assert.match(client[0].text, /Finished last week:\n- Scheduler Phase 3\n/);
   assert.doesNotMatch(client[0].text, /Before turn-on|Phase 2/);
 });
+
+test('a Monday summary that failed is retried each business hour that week, and only that one', async () => {
+  const { h, env, client } = setup('live');
+  item(h, { title: 'Pick a date', owner: 'Molly' });
+  let fail = true;
+  env.CLIENT_MAIL = { send: async m => { if (fail) throw new Error('E_DELIVERY_FAILED'); client.push(m); } };
+  h.db.prepare("UPDATE users SET email_pref = 'off' WHERE id = 2").run();
+  let r = await runClientDigest(env, MONDAY);
+  assert.equal(r.failed, 1);
+  fail = false;
+  h.db.prepare("UPDATE users SET email_pref = 'weekly' WHERE id = 2").run();
+  const TUESDAY = Date.parse('2026-12-01T17:30:00Z'); // 10:30am MT
+  assert.equal((await runClientDigest(env, Date.parse('2026-12-01T05:00:00Z'), { retryOnly: true })).ran, false, 'not at night');
+  r = await runClientDigest(env, TUESDAY, { retryOnly: true });
+  assert.equal(r.week, '2026-11-30', 'Tuesday still belongs to the week of Monday Nov 30');
+  assert.equal(client.length, 1, 'only the failed one is resent, nobody new');
+  assert.equal(client[0].to.email, 'molly@uep.test');
+  await runClientDigest(env, TUESDAY + 3600e3, { retryOnly: true });
+  assert.equal(client.length, 1, 'once it is sent, it stays sent');
+});
+
+test('a question named for someone after it was added reaches them, once', async () => {
+  const { h, env, alerts } = setup();
+  const q = item(h, { title: 'Who signs?', owner: '' });
+  event(h, { item: q, action: 'added', title: 'Who signs?' });
+  await runClientInstant(env, T0);
+  assert.equal(alerts.length, 0, 'nobody named yet');
+  h.sqlite.exec(`UPDATE items SET owner = 'Molly' WHERE id = ${q}`);
+  h.sqlite.prepare("INSERT INTO events (client_id, item_id, action, item_title, item_kind, detail, actor_email, at) VALUES (1, ?, 'edited', 'Who signs?', 'question', 'Changed who answers', 'eric@pt.test', '2026-11-24 17:10:00')").run(q);
+  await runClientInstant(env, T0 + 3600e3);
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0].subject, /Preview for Molly Smith.*A question for you: “Who signs\?”/);
+  h.sqlite.prepare("INSERT INTO events (client_id, item_id, action, item_title, item_kind, detail, actor_email, at) VALUES (1, ?, 'edited', 'Who signs?', 'question', 'Changed title, who answers', 'eric@pt.test', '2026-11-24 18:10:00')").run(q);
+  await runClientInstant(env, T0 + 7200e3);
+  assert.equal(alerts.length, 1, 'told once per question');
+});
+
+test('the Monday summary leaves out questions they already answered, unless we asked something back', async () => {
+  const { h, env, client } = setup('live');
+  item(h, { title: 'Answered, waiting on us', owner: 'Molly', answer: 'Yes, 9am' });
+  const back = item(h, { title: 'We asked back', owner: 'Molly', answer: 'Maybe' });
+  h.sqlite.exec(`UPDATE items SET asks_back = 1 WHERE id = ${back}`);
+  h.db.prepare("UPDATE users SET email_pref = 'off' WHERE id = 2").run();
+  await runClientDigest(env, MONDAY);
+  assert.equal(client[0].subject, 'Your week on the UEP hub: 1 waiting on you');
+  assert.match(client[0].text, /We asked back/);
+  assert.doesNotMatch(client[0].text, /Answered, waiting on us/);
+});
+
+test('testing reminders: a preview one does not block the live one, and a moved end date gets its own', async () => {
+  const { h, env, alerts, client } = setup();
+  h.db.prepare("UPDATE users SET email_pref = 'off' WHERE id = 2").run();
+  h.sqlite.exec(`INSERT INTO releases (client_id, project_id, number, name, stage, uat_started, uat_days) VALUES (1, 1, 3, 'Phase 3', 'uat', '2026-11-01', 25)`);
+  await runClientInstant(env, T0);
+  assert.match(alerts.map(a => a.text).join('\n'), /Testing for Scheduler Phase 3 ends Thu, Nov 26/);
+  h.sqlite.exec("UPDATE clients SET email_mode = 'live', email_since = '2026-11-24 17:30:00' WHERE id = 1");
+  await runClientInstant(env, T0 + 3600e3);
+  assert.equal(client.length, 1);
+  assert.match(client[0].text, /Testing for Scheduler Phase 3 ends Thu, Nov 26/);
+  await runClientInstant(env, T0 + 7200e3);
+  assert.equal(client.length, 1, 'not again for the same end date');
+  h.sqlite.exec('UPDATE releases SET uat_days = 26 WHERE number = 3');
+  await runClientInstant(env, T0 + 3 * 3600e3);
+  assert.equal(client.length, 2);
+  assert.match(client[1].text, /Testing for Scheduler Phase 3 ends Fri, Nov 27/);
+});

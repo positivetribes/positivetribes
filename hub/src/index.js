@@ -361,6 +361,9 @@ export default {
       // Client emails (src/clientmail.js): instant ones, business hours only; off for every client until email_mode is set.
       ctx.waitUntil(runClientInstant(env).then(r => console.log('client_mail_instant', JSON.stringify({ ...r, errors: r.errors ? r.errors.length : 0 })))
         .catch(error => console.error('client_mail_instant_failed', error.message)));
+      // A Monday summary that failed is retried each business hour for the rest of its week.
+      ctx.waitUntil(runClientDigest(env, Date.now(), { retryOnly: true }).then(r => console.log('client_mail_digest_retry', JSON.stringify({ ...r, errors: r.errors ? r.errors.length : 0 })))
+        .catch(error => console.error('client_mail_digest_retry_failed', error.message)));
       return;
     }
     if (event.cron === WEB_CRON) {
