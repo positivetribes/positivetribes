@@ -224,7 +224,11 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .pill.new-answer{background:var(--ok);color:var(--card)}
 .new-answers{background:var(--ok-bg);border-radius:12px;padding:12px 16px}
 .new-answers .na-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.new-answers .na-head .btn{flex:none}
-.new-answers ul{margin:6px 0 0;padding-left:18px}.new-answers li{margin:2px 0}.new-answers a{font-weight:600;color:var(--ink)}
+.new-answers ul{margin:6px 0 0;padding-left:18px}.new-answers li{margin:6px 0}.new-answers a{font-weight:600;color:var(--ink);text-decoration:none}.new-answers a:hover,.new-answers a:focus-visible{text-decoration:underline}
+.new-answers .na-answer{margin:2px 0 0;color:var(--muted);font-size:15px}
+.new-answers.to-close{background:var(--card);border:1px solid var(--line)}
+.tc-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.tc-row .btn{flex:none}
+.pick-row{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap}
 .cc .reply-list.answers .said{font-weight:400;font-size:.88em;opacity:.8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .pill.must{background:var(--must-bg);color:var(--must)}.pill.nice{background:var(--nice-bg);color:var(--nice)}.pill.idea{background:var(--idea-bg);color:var(--idea)}.pill.done{background:var(--ok-bg);color:var(--ok)}
 .pill.est{text-transform:none;letter-spacing:0;font-weight:600}.pill.est.draft{background:var(--nice-bg);color:var(--nice)}.pill.est.sent{background:var(--idea-bg);color:var(--idea)}.pill.est.yes{background:var(--ok-bg);color:var(--ok)}.pill.est.quiet{background:transparent;border:1px solid var(--line);color:var(--muted)}
@@ -555,6 +559,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const seenAnswers = () => { try { return JSON.parse(localStorage.getItem(seenKey()) || '{}') || {}; } catch { return {}; } };
   const isNewAnswer = i => i.kind === 'question' && i.done && Boolean(i.answered_at) && !i.answered_mine
     && Date.now() - Date.parse(i.answered_at) < ANSWER_DAYS * 864e5 && seenAnswers()[i.id] !== i.answered_at;
+  const clip = (text, n) => { const t = String(text).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).trimEnd() + '\u2026' : t; };
   const markSeen = items => { const m = seenAnswers(); for (const i of items) m[i.id] = i.answered_at; try { localStorage.setItem(seenKey(), JSON.stringify(m)); } catch {} };
   const PHASES = [['review', 'Not decided yet'], ['prototype', 'Prototype'], ['full', 'In the build'], ['later', 'After launch']];
   const STEPS = [['kickoff', 'Kickoff'], ['discovery', 'Discovery'], ['prototype', 'Prototype'], ['build', 'Build'], ['uat', 'Testing'], ['launch', 'Launch'], ['hypercare', 'Settling in'], ['support', 'Care plan']];
@@ -807,7 +812,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     if (!state.client) return;
     const isPt = viewer().role === 'pt';
     renderBar();
-    const waiting = open(state.items).filter(i => i.kind === 'question').length;
+    // Every count on this page means the same thing: open items, Wishlist left out, so the tab equals the projects' sum.
+    const waiting = tally(state.items).length;
     const forYou = waitingList().length;
     const ptOwn = isPt && !state.preview;
     const searching = document.activeElement && document.activeElement.id === 'hub-search';
@@ -1533,16 +1539,16 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const mine = here.filter(i => i.kind === kind && (estFilter === 'all' || estimateStage(i) === estFilter));
     const tiers = TIER_NAMES[kind];
     const nodes = [];
-    if (state.projects.length > 1) {
-      nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a project' }, state.projects.map(p => {
-        const n = tally(state.items.filter(i => i.project_id === p.id)).length;
-        return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(p.id === project), onclick: () => { state.project = p.id; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, p.name, n > 0 && h('span', { class: 'n' }, String(n)));
-      })));
-    }
-    nodes.push(h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a kind of item' }, KIND_TABS.map(([key, label]) => {
+    // One row: the project as a compact picker (with its open count), then the kinds, so the list starts higher up.
+    const projectPick = state.projects.length > 1 && h('div', { class: 'show-by' },
+      h('label', { for: 'pick-project' }, 'Project'),
+      h('select', { id: 'pick-project', onchange: e => { state.project = Number(e.target.value); state.filter = 'all'; state.editing = null; state.adding = false; render(); } },
+        state.projects.map(p => { const n = tally(state.items.filter(i => i.project_id === p.id)).length;
+          return h('option', { value: String(p.id), ...(p.id === project ? { selected: true } : {}) }, p.name + (n ? ' (' + n + ')' : '')); })));
+    nodes.push(h('div', { class: 'pick-row' }, projectPick || null, h('div', { class: 'seg', role: 'group', 'aria-label': 'Choose a kind of item' }, KIND_TABS.map(([key, label]) => {
       const n = tally(here.filter(i => i.kind === key)).length;
       return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, label, n > 0 && h('span', { class: 'n' }, String(n)));
-    })));
+    }))));
     const given = donatedTotal(state.items, project);
     if (given) nodes.push(given);
     // The form stays closed behind one button until someone wants it, so the list comes first.
@@ -1577,7 +1583,18 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', { class: 'na-head' }, h('strong', {}, fresh.length === 1 ? '1 new answer' : fresh.length + ' new answers'),
         h('button', { class: 'btn ghost small', type: 'button', onclick: () => { markSeen(fresh); render(); } }, 'Got it')),
       h('ul', {}, fresh.map(i => h('li', {}, h('a', { href: link('backlog', i.id), onclick: () => markSeen([i]) }, '#' + itemNo(i) + ' ' + i.title),
-        i.owner ? h('span', { class: 'meta' }, ' · answered by ' + i.owner) : null)))));
+        i.owner ? h('span', { class: 'meta' }, ' · answered by ' + i.owner) : null,
+        // The answer itself, shortened, so reading the box is enough and Got it means read.
+        i.answer && h('p', { class: 'na-answer' }, clip(i.answer, 200)))))));
+    // Positive Tribes: open questions that already have an answer (and don't ask anything back) are ours to close.
+    const toClose = kind === 'question' && isPt && !state.preview && filter !== 'done' ? open(mine).filter(i => i.answer && !i.asks_back) : [];
+    if (toClose.length) nodes.push(h('section', { class: 'new-answers to-close', 'aria-label': 'Answered, ready to close' },
+      h('div', { class: 'na-head' }, h('strong', {}, toClose.length === 1 ? '1 answered question is still open' : toClose.length + ' answered questions are still open'),
+        h('span', { class: 'meta' }, 'Only Positive Tribes sees this')),
+      h('ul', {}, toClose.map(i => h('li', {}, h('div', { class: 'tc-row' },
+        h('a', { href: link('backlog', i.id) }, '#' + itemNo(i) + ' ' + i.title),
+        h('button', { class: 'btn ghost small', type: 'button', 'aria-label': 'Mark #' + itemNo(i) + ' answered', onclick: () => act(base() + '/items/' + i.id, patch({ done: true })) }, 'Mark answered')),
+        h('p', { class: 'na-answer' }, clip(i.answer, 200)))))));
     if (filter === 'done') {
       nodes.push(finished.length ? h('div', { class: 'stack' }, finished.map(i => card(i, finished, isPt))) : h('p', { class: 'empty' }, 'Nothing ' + DONE_WORD[kind] + ' yet.'));
       return h('div', { class: 'stack' }, nodes);
