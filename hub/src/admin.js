@@ -673,6 +673,13 @@ async function stepToSalesforce(env, url, db, before, after) {
   catch (error) { console.error('admin_step_sync_failed', error.message); return 'error'; }
 }
 
+// The routine's own steps from the last 30 days, whatever became of them, so a later run reuses an existing
+// external_id instead of adding the same promise again under a new slug (it did, 2026-11-22 and 23).
+export async function syncSteps(db) {
+  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 19) + 'Z';
+  return (await db.prepare("SELECT external_id, title, status FROM next_steps WHERE source = 'claude' AND external_id IS NOT NULL AND created_at >= ? ORDER BY external_id").bind(since).all()).results;
+}
+
 // ---- Writes ----
 
 async function saveActivity(db, input) {
@@ -1043,14 +1050,15 @@ export async function handleAdmin(request, env, url, who) {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
       const auth = await salesforce(env);
       // AccountContactRelation covers each contact's own account plus any other accounts they are linked to.
-      const [accounts, relations, meta, lastSync] = await Promise.all([
+      const [accounts, relations, meta, lastSync, steps] = await Promise.all([
         records(auth, 'SELECT Id, Name, Website FROM Account WHERE IsPersonAccount = false AND Name != ' + quote(OWN_ACCOUNT) + ' ORDER BY Name LIMIT 200'),
         records(auth, 'SELECT AccountId, IsDirect, Contact.Name, Contact.Email FROM AccountContactRelation WHERE IsActive = true AND Account.IsPersonAccount = false LIMIT 2000'),
         db.prepare('SELECT * FROM client_meta').all(),
-        db.prepare('SELECT ran_at FROM sync_runs ORDER BY id DESC LIMIT 1').first()
+        db.prepare('SELECT ran_at FROM sync_runs ORDER BY id DESC LIMIT 1').first(),
+        syncSteps(db)
       ]);
       const contacts = relations.map(r => ({ AccountId: r.AccountId, IsDirect: r.IsDirect, Name: r.Contact?.Name, Email: r.Contact?.Email }));
-      return json({ today, timeZone: TIME_ZONE, lastSync: lastSync?.ran_at || null, clients: buildMatch(accounts, contacts, meta.results) });
+      return json({ today, timeZone: TIME_ZONE, lastSync: lastSync?.ran_at || null, clients: buildMatch(accounts, contacts, meta.results), steps });
     }
     if (route === 'POST /api/admin/activity') {
       return json({ ok: true, ...await saveActivity(db, await body(request)) });

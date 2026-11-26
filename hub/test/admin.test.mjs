@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { database } from './helpers.mjs';
 import { accessIdentity } from '../src/access.js';
-import { handleAdmin, buildOverview, rankNow, buildMatch, buildClient, buildInbox, BACKLOGS, lastSeenBy } from '../src/admin.js';
+import { handleAdmin, buildOverview, rankNow, buildMatch, buildClient, buildInbox, BACKLOGS, lastSeenBy, syncSteps } from '../src/admin.js';
 import hub from '../src/index.js';
 
 const TEAM = 'positivetribes.cloudflareaccess.com';
@@ -164,6 +164,18 @@ test('links must be web addresses', async () => {
   assert.deepEqual(JSON.parse(row.match_json).domains, ['upendingparkinsons.org']);
   assert.equal((await call(db, 'PUT', `/api/admin/clients/${UEP}/meta`, { links: [{ label: 'x', url: 'javascript:alert(1)' }] })).status, 400);
   assert.equal((await call(db, 'PUT', `/api/admin/clients/${UEP}/meta`, { match: { domains: ['not a domain'] } })).status, 400);
+});
+
+test('the routine sees its own recent steps, done or dismissed too, so it reuses them', async () => {
+  const { db, sqlite } = database();
+  await call(db, 'POST', '/api/admin/activity', { steps: [
+    { external_id: 'step:gmail:t1:fixed-price', account_id: UEP, title: 'Send UEP the fixed price' },
+    { external_id: 'step:gmail:t2:old', account_id: UEP, title: 'Old promise' }
+  ] }, { who: ROUTINE, origin: null });
+  await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'Eric\'s own step' });
+  sqlite.exec("UPDATE next_steps SET status = 'dismissed' WHERE external_id = 'step:gmail:t1:fixed-price'");
+  sqlite.exec("UPDATE next_steps SET created_at = '2020-01-01T00:00:00Z' WHERE external_id = 'step:gmail:t2:old'");
+  assert.deepEqual((await syncSteps(db)).map(r => ({ ...r })), [{ external_id: 'step:gmail:t1:fixed-price', title: 'Send UEP the fixed price', status: 'dismissed' }]);
 });
 
 test('a reply step closes itself once Eric sent the latest message', async () => {
