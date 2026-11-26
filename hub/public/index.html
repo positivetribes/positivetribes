@@ -1239,9 +1239,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       await reloadItems(); render();
     } catch (e) { showError(e.message); }
   }
-  // Donated so far on one project: approved donated changes plus logged donated time. "See what was given" opens
-  // the list behind the total (newest first, each line opens its card), so a client can show a funder or their books.
-  function donatedTotal(items) {
+  // Donated so far to this client, across all its projects (approved donated changes plus logged donated time), with
+  // the share of the project on screen. "See what was given" opens the list behind the total (newest first, each line
+  // names its project and opens its card), so a client can show a funder or their books.
+  function donatedTotal(items, projectId) {
     const rows = [];
     for (const i of items) {
       if (i.estimate && i.estimate.donated && i.estimate.status === 'approved_now')
@@ -1253,7 +1254,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const hrs = m => { const x = m / 60; return x === 1 ? '1 hour' : (Number.isInteger(x) ? x : x.toFixed(1)) + ' hours'; };
     const usd = c => '$' + (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
     const open = !!state.givenOpen;
-    const line = h('p', { class: 'meta donated-total' }, h('b', {}, 'Donated by Positive Tribes so far: '), hrs(minutes) + ' · ' + usd(cents) + ' value · ',
+    const here = rows.filter(r => r.item.project_id === projectId).reduce((n, r) => n + r.cents, 0);
+    const pname = id => (state.projects.find(p => p.id === id) || {}).name || 'General';
+    const several = new Set(rows.map(r => r.item.project_id)).size > 1 || here !== cents;
+    const share = several ? ' across all your projects (' + (here ? usd(here) + ' on ' + pname(projectId) : 'none yet on ' + pname(projectId)) + ')' : '';
+    const line = h('p', { class: 'meta donated-total' }, h('b', {}, 'Donated by Positive Tribes so far: '), hrs(minutes) + ' · ' + usd(cents) + ' value' + share + ' · ',
       h('button', { type: 'button', class: 'linkish', 'aria-expanded': String(open), 'aria-controls': 'given-list',
         onclick: () => { state.givenOpen = !open; render(); } }, open ? 'Hide the list' : 'See what was given'));
     if (!open) return line;
@@ -1262,7 +1267,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('span', { class: 'given-date' }, r.at ? shortDate(String(r.at).slice(0, 10)) : ''),
       h('span', { class: 'given-what' },
         h('a', { href: '#/' + state.slug + '/backlog/' + r.item.id }, '#' + (r.item.legacy_id || r.item.id) + ' ' + r.item.title),
-        h('span', { class: 'meta' }, r.what)),
+        h('span', { class: 'meta' }, (several ? pname(r.item.project_id) + ' · ' : '') + r.what)),
       h('span', { class: 'given-value' }, hrs(r.minutes).replace(' hours', ' h').replace(' hour', ' h') + ' · ' + usd(r.cents)))));
     return h('div', { class: 'given' }, line, list);
   }
@@ -1538,7 +1543,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       const n = tally(here.filter(i => i.kind === key)).length;
       return h('button', { type: 'button', class: n ? '' : 'zero', 'aria-pressed': String(key === kind), onclick: () => { state.kind = key; state.filter = 'all'; state.editing = null; state.adding = false; render(); } }, label, n > 0 && h('span', { class: 'n' }, String(n)));
     })));
-    const given = donatedTotal(here);
+    const given = donatedTotal(state.items, project);
     if (given) nodes.push(given);
     // The form stays closed behind one button until someone wants it, so the list comes first.
     const careMode = kind === 'request' && state.care && state.care.plan;
