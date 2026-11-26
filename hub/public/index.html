@@ -225,6 +225,7 @@ dialog.shot-view .bar{justify-content:flex-end;margin-bottom:8px}
 .item-no{font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;font-variant-numeric:tabular-nums}.item-no:hover{color:var(--ink);text-decoration:underline}
 .pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 10px;border-radius:99px;white-space:nowrap}
 .pill.new-answer{background:var(--ok);color:var(--card)}
+.pill.for-you{text-transform:none;letter-spacing:0;font-weight:700;background:transparent;border:1px solid var(--client);color:var(--ink)}
 .new-answers{background:var(--ok-bg);border-radius:12px;padding:12px 16px}
 .new-answers .na-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.new-answers .na-head .btn{flex:none}
 .new-answers ul{margin:6px 0 0;padding-left:18px}.new-answers li{margin:6px 0}.new-answers a{font-weight:600;color:var(--ink);text-decoration:none}.new-answers a:hover,.new-answers a:focus-visible{text-decoration:underline}
@@ -869,7 +870,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   // ---- Search: every item this person can already see (state.items), in the browser; nothing new is fetched ----
   // "133" or "#133" opens that item; words match title, details and the answer or reply, all words required.
   function searchBox() {
-    const input = h('input', { type: 'search', id: 'hub-search', class: 'search', placeholder: 'Search items, documents or #133', 'aria-label': 'Search questions, changes and documents', value: state.query || '', autocomplete: 'off',
+    const input = h('input', { type: 'search', id: 'hub-search', class: 'search', placeholder: 'Search, or #133', 'aria-label': 'Search questions, changes and documents', value: state.query || '', autocomplete: 'off',
       oninput: e => { state.query = e.target.value; $('view-slot').replaceChildren(state.query.trim() ? searchView() : viewNode(viewer().role === 'pt')); },
       onkeydown: e => {
         if (e.key === 'Escape') { e.target.value = ''; e.target.dispatchEvent(new Event('input')); }
@@ -1870,7 +1871,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const shipsIn = tracked && item.release_id && !item.done && h('span', { class: 'pill phase' }, 'Ships in ' + phaseName({ name: item.release_name, number: item.release_number }));
     // On Waiting on you there are no priority headings, so each open card carries its priority.
     const tierPill = state.view === 'waiting' && !item.done && h('span', { class: 'pill ' + item.tier }, tiers.find(t => t[0] === item.tier)[1]);
-    const pills = [isNewAnswer(item) && h('span', { class: 'pill new-answer' }, 'New answer'), item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), tierPill, duePill, statusPill, estimatePill(item), shipsIn, !phaseless && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1])].filter(Boolean);
+    // On Questions & changes, an open card waiting on the viewer says so (Waiting on you lists only those, so it needs no pill).
+    const forYou = state.view === 'backlog' && !item.done && waitsOnMe(item) && h('span', { class: 'pill for-you' }, 'For you');
+    // A question with no phase set has nothing to say about phase, and "Not decided yet" there reads as "not answered".
+    const phasePill = !phaseless && !(item.kind === 'question' && item.phase === 'review') && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1]);
+    const pills = [forYou, isNewAnswer(item) && h('span', { class: 'pill new-answer' }, 'New answer'), item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), tierPill, duePill, statusPill, estimatePill(item), shipsIn, phasePill].filter(Boolean);
     // Positive Tribes picks the status in one tap. Not doing closes it; anything else reopens a declined one.
     const picker = isPt && tracked && (!item.done || declined) && h('select', { class: 'status-pick', 'aria-label': 'Status for ' + item.title, onchange: e => act(base() + '/items/' + item.id, patch({ status: e.target.value })) },
       STATUS_NAMES[item.kind].map(([k]) => h('option', { value: k, ...(item.status === k ? { selected: true } : {}) }, statusName(item, k))));
