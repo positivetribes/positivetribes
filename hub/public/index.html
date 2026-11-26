@@ -639,13 +639,16 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     .map(w => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}\p{M}]+$/gu, '').replace(/['\u2019]s$/u, '')).filter(Boolean);
   const ownedBy = (i, name) => { const want = nameWords(name), have = nameWords(i.owner); return want.length > 0 && want.every(w => have.includes(w)); };
   const undecided = i => i.kind === 'change' && i.status === 'new' && !i.proposal_state && !(i.estimate && i.estimate.status !== 'withdrawn' && i.estimate.status !== 'draft');
-  const named = (i, name) => (i.kind === 'question' || undecided(i)) && ownedBy(i, name);
+  // A question they already answered waits on us to close it (the "answered, still open" strip), unless we asked something
+  // back. The Monday email (src/clientmail.js) uses the same rule.
+  const openQuestion = i => i.kind === 'question' && (!i.answer || Boolean(i.asks_back));
+  const named = (i, name) => (openQuestion(i) || undecided(i)) && ownedBy(i, name);
   const waitsOnMe = i => Boolean(
     (i.estimate && i.estimate.status === 'offered' && (state.preview ? state.preview.decides : i.estimate.can_decide))
     || named(i, firstName()));
   // Positive Tribes (not previewing) sees everything waiting on the client's people: offered estimates and anything named
   // for someone other than the viewer.
-  const waitsOnClient = i => Boolean((i.estimate && i.estimate.status === 'offered') || (i.owner && !ownedBy(i, firstName()) && (i.kind === 'question' || undecided(i))));
+  const waitsOnClient = i => Boolean((i.estimate && i.estimate.status === 'offered') || (i.owner && !ownedBy(i, firstName()) && (openQuestion(i) || undecided(i))));
   const waitingList = () => open(state.items).filter(viewer().role === 'pt' && !state.preview ? waitsOnClient : waitsOnMe);
   const shownBy = (i, key) => key === 'all' || (key === 'yours' ? waitsOnMe(i) : i.phase === key);
   // Nice-to-have and idea suggestions are the Wishlist: listed, never counted in badges, weighed at each phase review.
