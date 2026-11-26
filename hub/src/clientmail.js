@@ -16,7 +16,9 @@ import { canDecideEstimate } from './estimates.js';
 const HUB = 'https://hub.positivetribes.org';
 const FROM = 'hello@positivetribes.org';
 const REPLY_TO = 'eric@positivetribes.org';
-export const MAIL = { lookbackHours: 48, testingDays: 3, listMax: 8, shippedDays: 7 };
+// lookbackHours must outlast the longest gap between instant runs (Friday 5:30pm to Monday 8:30am is 63 hours); the
+// email_log keys stop repeats, and email_since still caps it for a client just turned on.
+export const MAIL = { lookbackHours: 7 * 24, testingDays: 3, listMax: 8, shippedDays: 7 };
 const INSTANT_ACTIONS = ['added', 'estimate_offered', 'uat_started', 'live'];
 
 const sqlTime = ms => new Date(ms).toISOString().replace('T', ' ').slice(0, 19);
@@ -36,6 +38,8 @@ export const ownedBy = (owner, personName) => {
   return want.length > 0 && want.every(w => have.includes(w));
 };
 
+// A phase event's title is only the phase ("Phase 3"); name the project too, as the testing reminders do.
+const phaseName = e => oneLine(e.project ? `${e.project} ${e.item_title}` : e.item_title);
 const link = (slug, path) => `${HUB}/#/${slug}/${path}`;
 const itemLink = (slug, id) => link(slug, 'backlog/' + Number(id));
 
@@ -90,66 +94,32 @@ async function deliver(env, client, person, mail) {
   return 'sent';
 }
 
+// The keys are marked 'pending' before sending: if that write fails nothing is sent, and if the write after sending
+// fails the 'pending' rows still stop the next run from sending the same email again (and Eric hears about it).
 async function sendAndLog(env, client, person, kind, keys, mail, out) {
   const db = env.DB;
-  let status, error = '';
-  try { status = await deliver(env, client, person, mail); } catch (e) { status = 'failed'; error = oneLine(e.message, 200); }
-  await db.batch(keys.map(k => db.prepare(
+  const log = (status, error = '') => db.batch(keys.map(k => db.prepare(
     `INSERT INTO email_log (key, client_id, user_id, kind, status, error) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT (key) DO UPDATE SET status = excluded.status, error = excluded.error, at = CURRENT_TIMESTAMP`
   ).bind(k, client.id, person.id, kind, status, error)));
+  try { await log('pending'); } catch (e) { out.failed++; out.errors.push(`${client.slug}: not sent, could not write email_log: ${oneLine(e.message, 200)}`); return; }
+  let status, error = '';
+  try { status = await deliver(env, client, person, mail); } catch (e) { status = 'failed'; error = oneLine(e.message, 200); }
   out[status === 'failed' ? 'failed' : status === 'preview' ? 'previewed' : 'sent']++;
   if (status === 'failed') out.errors.push(`${client.slug}: ${error}`);
+  try { await log(status, error); } catch (e) { out.errors.push(`${client.slug}: ${status} but email_log still says pending: ${oneLine(e.message, 200)}`); }
 }
 
 // 1. Instant emails.
 export async function runClientInstant(env, now = Date.now()) {
   if (!env.DB) return { ran: false, reason: 'no database' };
   if (!isBusinessTime(now)) return { ran: false, reason: 'outside business hours' };
-  const db = env.DB, today = dayMT(now);
+  const db = env.DB;
   const out = { ran: true, sent: 0, previewed: 0, failed: 0, errors: [] };
-  for (const client of await clientsOn(db)) {
-    const people = await peopleOf(db, client.id, ['all']);
-    if (!people.length) continue;
-    const since = [sqlTime(now - MAIL.lookbackHours * 3600e3), client.email_since || ''].sort().at(-1);
-    const marks = INSTANT_ACTIONS.map(() => '?').join(', ');
-    const { results: events } = await db.prepare(
-      `SELECT e.id, e.action, e.item_id, e.item_title, e.item_kind, e.actor_email, i.owner, i.done, i.answer, ce.status AS estimate
-       FROM events e
-       LEFT JOIN items i ON i.id = e.item_id AND i.client_id = e.client_id AND e.item_kind NOT IN ('release', 'idea', 'document')
-       LEFT JOIN change_estimates ce ON ce.item_id = i.id AND ce.client_id = e.client_id
-       WHERE e.client_id = ? AND e.at >= ? AND e.action IN (${marks}) ORDER BY e.id`
-    ).bind(client.id, since, ...INSTANT_ACTIONS).all();
-    const testing = (await testingReleases(db, client.id)).filter(r => { const left = daysUntil(today, r.ends); return left >= 0 && left <= MAIL.testingDays; });
-    const plan = await planOf(db, client.id);
-    const logged = await loggedKeys(db, client.id);
-    for (const person of people) {
-      const lines = [];
-      for (const e of events) {
-        if (e.actor_email && e.actor_email.toLowerCase() === person.email.toLowerCase()) continue;
-        const key = `instant:${person.id}:${e.id}`;
-        if (logged.has(key)) continue;
-        if (e.action === 'added' && e.item_kind === 'question' && e.done === 0 && !e.answer && ownedBy(e.owner, person.name)) lines.push({ key, group: 'For you', text: `A question for you: ${q(e.item_title)}`, url: itemLink(client.slug, e.item_id) });
-        else if (e.action === 'estimate_offered' && e.estimate === 'offered' && canDecideEstimate(person, plan)) lines.push({ key, group: 'For you', text: `An estimate for you to decide: ${q(e.item_title)}`, url: itemLink(client.slug, e.item_id) });
-        else if (e.action === 'uat_started') lines.push({ key, group: 'News', text: `${oneLine(e.item_title)} is ready for you to test`, url: link(client.slug, 'home') });
-        else if (e.action === 'live') lines.push({ key, group: 'News', text: `${oneLine(e.item_title)} is live`, url: link(client.slug, 'home') });
-      }
-      for (const r of testing) {
-        const key = `testing:${person.id}:${r.id}`;
-        if (logged.has(key)) continue;
-        const left = daysUntil(today, r.ends);
-        lines.push({ key, group: 'For you', text: `Testing for ${oneLine(r.label)} ends ${left === 0 ? 'today' : left === 1 ? 'tomorrow' : niceDay(r.ends)}`, url: link(client.slug, 'home') });
-      }
-      // The same news twice (a phase restarted, an item re-added) reads as one line; every key is still logged.
-      const seen = new Map();
-      for (const l of lines) { const k = l.text + ' ' + l.url; if (seen.has(k)) seen.get(k).keys.push(l.key); else seen.set(k, { ...l, keys: [l.key] }); }
-      lines.length = 0; lines.push(...seen.values());
-      if (!lines.length) continue;
-      const sections = ['For you', 'News'].map(g => ({ title: g === 'For you' ? 'Waiting on you' : 'News', lines: lines.filter(l => l.group === g) })).filter(s => s.lines.length);
-      const subject = lines.length === 1 ? lines[0].text : `${lines.length} updates on your ${client.name} hub`;
-      const mail = compose(client, person, { subject, intro: `Here's what's new on your ${client.name} hub.`, sections });
-      await sendAndLog(env, client, person, 'instant', lines.flatMap(l => l.keys), mail, out);
-    }
+  let clients = [];
+  try { clients = await clientsOn(db); } catch (e) { out.errors.push(`could not list clients: ${oneLine(e.message, 200)}`); }
+  for (const client of clients) {
+    try { await instantFor(env, client, now, out); } catch (e) { out.errors.push(`${client.slug}: stopped: ${oneLine(e.message, 200)}`); }
   }
   await reportFailures(env, now, out, 'instant');
   return out;
@@ -160,41 +130,10 @@ export async function runClientDigest(env, now = Date.now()) {
   if (!env.DB) return { ran: false, reason: 'no database' };
   const db = env.DB, week = dayMT(now);
   const out = { ran: true, week, sent: 0, previewed: 0, failed: 0, skipped: 0, errors: [] };
-  for (const client of await clientsOn(db)) {
-    const people = await peopleOf(db, client.id, ['all', 'weekly']);
-    if (!people.length) continue;
-    const { results: open } = await db.prepare(
-      `SELECT i.id, i.kind, i.title, i.owner, i.status, i.proposal_state, i.due_date, ce.status AS estimate
-       FROM items i LEFT JOIN change_estimates ce ON ce.item_id = i.id AND ce.client_id = i.client_id
-       WHERE i.client_id = ? AND i.done = 0 AND i.kind IN ('question', 'change')
-       ORDER BY CASE WHEN i.due_date = '' THEN 1 ELSE 0 END, i.due_date, i.id`
-    ).bind(client.id).all();
-    const testing = await testingReleases(db, client.id);
-    const { results: finished } = await db.prepare(
-      `SELECT action, item_title FROM events WHERE client_id = ? AND at >= ?
-       AND (action IN ('live', 'shipped') OR (action = 'done' AND item_kind IN ('change', 'problem', 'request'))) ORDER BY id DESC`
-    ).bind(client.id, sqlTime(now - MAIL.shippedDays * 86400e3)).all();
-    const shipped = [...new Set(finished.map(e => oneLine(e.item_title)))];
-    const plan = await planOf(db, client.id);
-    const logged = await loggedKeys(db, client.id);
-    for (const person of people) {
-      const key = `digest:${person.id}:${week}`;
-      if (logged.has(key)) continue;
-      // The same rule as the hub's Waiting on you page: questions named for them, undecided changes named for them, and
-      // estimates they decide.
-      const undecided = i => i.kind === 'change' && i.status === 'new' && !i.proposal_state && !(i.estimate && i.estimate !== 'withdrawn' && i.estimate !== 'draft');
-      const waiting = open.filter(i => (i.estimate === 'offered' && canDecideEstimate(person, plan)) || ((i.kind === 'question' || undecided(i)) && ownedBy(i.owner, person.name)));
-      if (!waiting.length && !testing.length && !shipped.length) { out.skipped++; continue; }
-      const cap = (rows, more) => rows.length > MAIL.listMax ? [...rows.slice(0, MAIL.listMax), { text: `and ${rows.length - MAIL.listMax} more`, url: more }] : rows;
-      const sections = [
-        { title: `Waiting on you (${waiting.length})`, lines: cap(waiting.map(i => ({ text: (i.estimate === 'offered' ? 'Estimate to decide: ' : i.kind === 'change' ? 'To decide: ' : '') + q(i.title) + (i.due_date ? ` (due ${niceDay(i.due_date)})` : ''), url: itemLink(client.slug, i.id) })), link(client.slug, 'waiting')) },
-        { title: 'In testing', lines: testing.map(r => ({ text: `${oneLine(r.label)}, testing until ${niceDay(r.ends)}`, url: link(client.slug, 'home') })) },
-        { title: 'Finished last week', lines: cap(shipped.map(t => ({ text: t, url: link(client.slug, 'backlog') })), link(client.slug, 'backlog')) }
-      ].filter(s => s.lines.length);
-      const subject = waiting.length ? `Your week on the ${client.name} hub: ${waiting.length} waiting on you` : `Your week on the ${client.name} hub`;
-      const mail = compose(client, person, { subject, intro: `Here's your week on the ${client.name} hub.`, sections });
-      await sendAndLog(env, client, person, 'digest', [key], mail, out);
-    }
+  let clients = [];
+  try { clients = await clientsOn(db); } catch (e) { out.errors.push(`could not list clients: ${oneLine(e.message, 200)}`); }
+  for (const client of clients) {
+    try { await digestFor(env, client, now, out); } catch (e) { out.errors.push(`${client.slug}: stopped: ${oneLine(e.message, 200)}`); }
   }
   await reportFailures(env, now, out, 'digest');
   return out;
@@ -206,8 +145,8 @@ async function reportFailures(env, now, out, kind) {
   const key = `client-mail-errors:${kind}:${dayMT(now)}`;
   if (await env.DB.prepare('SELECT 1 FROM support_alerts WHERE key = ?').bind(key).first()) return;
   try {
-    await env.ALERT_MAIL.send({ from: FROM, to: env.ALERT_TO, subject: `Client email: ${out.failed} ${kind} email${out.failed === 1 ? '' : 's'} failed`,
-      text: `The hub could not send these client emails. They are retried on the next run.\n\n${[...new Set(out.errors)].map(e => '- ' + e).join('\n')}\n\nSee email_log in hub-db (status 'failed').` });
+    await env.ALERT_MAIL.send({ from: FROM, to: env.ALERT_TO, subject: out.failed ? `Client email: ${out.failed} ${kind} email${out.failed === 1 ? '' : 's'} failed` : `Client email: the ${kind} run hit a problem`,
+      text: `The hub could not send these client emails. They are retried on the next run.\n\n${[...new Set(out.errors)].map(e => '- ' + e).join('\n')}\n\nSee email_log in hub-db (status 'failed' or 'pending').` });
     await env.DB.prepare('INSERT OR REPLACE INTO support_alerts (key, stage) VALUES (?, ?)').bind(key, 'sent').run();
   } catch (error) { console.error('client_mail_report_failed', error.message); }
 }
@@ -218,4 +157,95 @@ export async function setEmailPref(db, user, pref) {
   if (!EMAIL_PREFS.includes(pref)) return false;
   await db.prepare('UPDATE users SET email_pref = ? WHERE id = ?').bind(pref, user.id).run();
   return true;
+}
+
+// One client's instant emails; an error here stops only this client (runClientInstant reports it).
+async function instantFor(env, client, now, out) {
+  const db = env.DB, today = dayMT(now);
+  const people = await peopleOf(db, client.id, ['all']);
+  if (!people.length) return;
+  const since = [sqlTime(now - MAIL.lookbackHours * 3600e3), client.email_since || ''].sort().at(-1);
+  const marks = INSTANT_ACTIONS.map(() => '?').join(', ');
+  const { results: events } = await db.prepare(
+    `SELECT e.id, e.action, e.item_id, e.item_title, e.item_kind, e.actor_email, i.owner, i.done, i.answer, ce.status AS estimate, p.name AS project
+     FROM events e
+     LEFT JOIN items i ON i.id = e.item_id AND i.client_id = e.client_id AND e.item_kind NOT IN ('release', 'idea', 'document')
+     LEFT JOIN change_estimates ce ON ce.item_id = i.id AND ce.client_id = e.client_id
+     LEFT JOIN releases r ON r.id = e.item_id AND r.client_id = e.client_id AND e.item_kind = 'release'
+     LEFT JOIN projects p ON p.id = r.project_id
+     WHERE e.client_id = ? AND e.at >= ? AND e.action IN (${marks}) ORDER BY e.id`
+  ).bind(client.id, since, ...INSTANT_ACTIONS).all();
+  const testing = (await testingReleases(db, client.id)).filter(r => { const left = daysUntil(today, r.ends); return left >= 0 && left <= MAIL.testingDays; });
+  const plan = await planOf(db, client.id);
+  const logged = await loggedKeys(db, client.id);
+  for (const person of people) {
+    const lines = [];
+    for (const e of events) {
+      if (e.actor_email && e.actor_email.toLowerCase() === person.email.toLowerCase()) continue;
+      const key = `instant:${person.id}:${e.id}`;
+      if (logged.has(key)) continue;
+      if (e.action === 'added' && e.item_kind === 'question' && e.done === 0 && !e.answer && ownedBy(e.owner, person.name)) lines.push({ key, group: 'For you', text: `A question for you: ${q(e.item_title)}`, url: itemLink(client.slug, e.item_id) });
+      else if (e.action === 'estimate_offered' && e.estimate === 'offered' && canDecideEstimate(person, plan)) lines.push({ key, group: 'For you', text: `An estimate for you to decide: ${q(e.item_title)}`, url: itemLink(client.slug, e.item_id) });
+      else if (e.action === 'uat_started') lines.push({ key, group: 'News', text: `${phaseName(e)} is ready for you to test`, url: link(client.slug, 'home') });
+      else if (e.action === 'live') lines.push({ key, group: 'News', text: `${phaseName(e)} is live`, url: link(client.slug, 'home') });
+    }
+    for (const r of testing) {
+      const key = `testing:${person.id}:${r.id}`;
+      if (logged.has(key)) continue;
+      const left = daysUntil(today, r.ends);
+      lines.push({ key, group: 'For you', text: `Testing for ${oneLine(r.label)} ends ${left === 0 ? 'today' : left === 1 ? 'tomorrow' : niceDay(r.ends)}`, url: link(client.slug, 'home') });
+    }
+    // The same news twice (a phase restarted, an item re-added) reads as one line; every key is still logged.
+    const seen = new Map();
+    for (const l of lines) { const k = l.text + ' ' + l.url; if (seen.has(k)) seen.get(k).keys.push(l.key); else seen.set(k, { ...l, keys: [l.key] }); }
+    lines.length = 0; lines.push(...seen.values());
+    if (!lines.length) continue;
+    const sections = ['For you', 'News'].map(g => ({ title: g === 'For you' ? 'Waiting on you' : 'News', lines: lines.filter(l => l.group === g) })).filter(s => s.lines.length);
+    const subject = lines.length === 1 ? lines[0].text : `${lines.length} updates on your ${client.name} hub`;
+    const mail = compose(client, person, { subject, intro: `Here's what's new on your ${client.name} hub.`, sections });
+    await sendAndLog(env, client, person, 'instant', lines.flatMap(l => l.keys), mail, out);
+  }
+}
+
+// One client's digest emails; an error here stops only this client (runClientDigest reports it).
+async function digestFor(env, client, now, out) {
+  const db = env.DB, week = dayMT(now);
+  const people = await peopleOf(db, client.id, ['all', 'weekly']);
+  if (!people.length) return;
+  const { results: open } = await db.prepare(
+    `SELECT i.id, i.kind, i.title, i.owner, i.status, i.proposal_state, i.due_date, ce.status AS estimate
+     FROM items i LEFT JOIN change_estimates ce ON ce.item_id = i.id AND ce.client_id = i.client_id
+     WHERE i.client_id = ? AND i.done = 0 AND i.kind IN ('question', 'change')
+     ORDER BY CASE WHEN i.due_date = '' THEN 1 ELSE 0 END, i.due_date, i.id`
+  ).bind(client.id).all();
+  // A window that has ended but isn't signed off yet is not "in testing" any more.
+  const testing = (await testingReleases(db, client.id)).filter(r => daysUntil(week, r.ends) >= 0);
+  const { results: finished } = await db.prepare(
+    `SELECT e.action, e.item_title, p.name AS project FROM events e
+     LEFT JOIN releases r ON r.id = e.item_id AND r.client_id = e.client_id AND e.item_kind = 'release'
+     LEFT JOIN projects p ON p.id = r.project_id
+     WHERE e.client_id = ? AND e.at >= ?
+     AND (e.action IN ('live', 'shipped') OR (e.action = 'done' AND e.item_kind IN ('change', 'problem', 'request'))) ORDER BY e.id DESC`
+  ).bind(client.id, [sqlTime(now - MAIL.shippedDays * 86400e3), client.email_since || ''].sort().at(-1)).all();
+  const shipped = [...new Set(finished.map(phaseName))];
+  const plan = await planOf(db, client.id);
+  const logged = await loggedKeys(db, client.id);
+  for (const person of people) {
+    const key = `digest:${person.id}:${week}`;
+    if (logged.has(key)) continue;
+    // The same rule as the hub's Waiting on you page: questions named for them, undecided changes named for them, and
+    // estimates they decide.
+    const undecided = i => i.kind === 'change' && i.status === 'new' && !i.proposal_state && !(i.estimate && i.estimate !== 'withdrawn' && i.estimate !== 'draft');
+    const waiting = open.filter(i => (i.estimate === 'offered' && canDecideEstimate(person, plan)) || ((i.kind === 'question' || undecided(i)) && ownedBy(i.owner, person.name)));
+    if (!waiting.length && !testing.length && !shipped.length) { out.skipped++; continue; }
+    const cap = (rows, more) => rows.length > MAIL.listMax ? [...rows.slice(0, MAIL.listMax), { text: `and ${rows.length - MAIL.listMax} more`, url: more }] : rows;
+    const sections = [
+      { title: `Waiting on you (${waiting.length})`, lines: cap(waiting.map(i => ({ text: (i.estimate === 'offered' ? 'Estimate to decide: ' : i.kind === 'change' ? 'To decide: ' : '') + q(i.title) + (i.due_date ? ` (due ${niceDay(i.due_date)})` : ''), url: itemLink(client.slug, i.id) })), link(client.slug, 'waiting')) },
+      { title: 'In testing', lines: testing.map(r => ({ text: `${oneLine(r.label)}, testing until ${niceDay(r.ends)}`, url: link(client.slug, 'home') })) },
+      { title: 'Finished last week', lines: cap(shipped.map(t => ({ text: t, url: link(client.slug, 'backlog') })), link(client.slug, 'backlog')) }
+    ].filter(s => s.lines.length);
+    const subject = waiting.length ? `Your week on the ${client.name} hub: ${waiting.length} waiting on you` : `Your week on the ${client.name} hub`;
+    const mail = compose(client, person, { subject, intro: `Here's your week on the ${client.name} hub.`, sections });
+    await sendAndLog(env, client, person, 'digest', [key], mail, out);
+  }
 }

@@ -72,7 +72,7 @@ test('live: phases, estimates for the decider only, testing ending; nothing the 
   assert.equal(molly.bcc, undefined, 'no blind copy unless CLIENT_MAIL_BCC is set');
   assert.match(molly.subject, /^3 updates on your UEP hub$/);
   assert.match(molly.text, /An estimate for you to decide: “Add a column”/);
-  assert.match(molly.text, /Phase 3 is ready for you to test/);
+  assert.match(molly.text, /Scheduler Phase 3 is ready for you to test/, 'the phase names its project');
   assert.match(molly.text, /Testing for Scheduler Phase 3 ends Thu, Nov 26/);
   assert.doesNotMatch(tammie.text, /estimate/, 'staff do not decide estimates');
   assert.doesNotMatch(tammie.text, /Tammie asks/, 'her own question is not news to her');
@@ -187,4 +187,68 @@ test('a person can only pick all, weekly or off', async () => {
   assert.equal(await setEmailPref(h.db, { id: 1 }, 'off'), true);
   assert.equal(h.sqlite.prepare('SELECT email_pref FROM users WHERE id = 1').get().email_pref, 'off');
   assert.equal(h.sqlite.prepare('SELECT email_pref FROM users WHERE id = 2').get().email_pref, 'all');
+});
+
+test('a question added Friday evening still reaches the person on Monday morning', async () => {
+  const { h, env, alerts } = setup();
+  const q = item(h, { title: 'Weekend question', owner: 'Molly' });
+  event(h, { item: q, action: 'added', title: 'Weekend question', at: '2026-11-28 01:15:00' }); // Fri 6:15pm MT
+  await runClientInstant(env, Date.parse('2026-11-30T15:30:00Z')); // Mon 8:30am MT, the first run after the weekend
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0].subject, /Weekend question/);
+});
+
+test('an error with one client stops only that client, and Eric is told', async () => {
+  const { h, env, alerts } = setup();
+  h.sqlite.exec("UPDATE clients SET email_mode = 'preview', email_since = '2026-11-20 00:00:00' WHERE id = 2");
+  for (const c of [1, 2]) { const q = item(h, { title: 'Q' + c, owner: c === 1 ? 'Molly' : 'Mandy', client: c }); event(h, { item: q, action: 'added', title: 'Q' + c, client: c }); }
+  const real = env.DB;
+  env.DB = { ...real, batch: real.batch.bind(real), prepare: sql => {
+    const st = real.prepare(sql);
+    if (!sql.includes('FROM care_plans')) return st;
+    return { bind: (...a) => a[0] === 1 ? { first: async () => { throw new Error('D1_ERROR: boom'); } } : st.bind(...a) };
+  } };
+  const r = await runClientInstant(env, T0);
+  assert.equal(r.previewed, 1, 'the second client still gets its email');
+  assert.match(alerts[0].subject, /Preview for Mandy/);
+  assert.equal(alerts.length, 2);
+  assert.match(alerts[1].subject, /^Client email: the instant run hit a problem$/);
+  assert.match(alerts[1].text, /uep: stopped: D1_ERROR: boom/);
+});
+
+test('the log is written before sending: no log, no send; sent but unrecorded is never sent again', async () => {
+  const { h, env, client, alerts } = setup('live');
+  const q = item(h, { title: 'Log me', owner: 'Molly' });
+  event(h, { item: q, action: 'added', title: 'Log me' });
+  const real = env.DB;
+  let calls = 0, failOn = 1;
+  env.DB = { prepare: real.prepare.bind(real), batch: async st => { calls++; if (calls === failOn) throw new Error('D1_ERROR: busy'); return real.batch(st); } };
+  let r = await runClientInstant(env, T0);
+  assert.equal(client.length, 0, 'nothing sent when the log could not be written first');
+  assert.equal(r.failed, 1);
+  calls = 0; failOn = 2;
+  r = await runClientInstant(env, T0 + 3600e3);
+  assert.equal(client.length, 1, 'sent once the log is written');
+  assert.match(r.errors.join('\n'), /uep: sent but email_log still says pending/);
+  assert.equal(h.sqlite.prepare('SELECT status FROM email_log').get().status, 'pending');
+  calls = 0; failOn = 0;
+  await runClientInstant(env, T0 + 7200e3);
+  assert.equal(client.length, 1, 'pending is never resent');
+  assert.equal(alerts.length, 1, 'Eric hears once a day');
+});
+
+test('Monday summary: nothing from before the client was turned on, and no testing window that has ended', async () => {
+  const { h, env, client } = setup('live');
+  h.sqlite.exec("UPDATE clients SET email_since = '2026-11-26 00:00:00' WHERE id = 1");
+  const d = item(h, { kind: 'change', title: 'Before turn-on', done: 1 });
+  event(h, { item: d, action: 'done', title: 'Before turn-on', kind: 'change', at: '2026-11-25 15:00:00' });
+  h.sqlite.exec(`INSERT INTO releases (client_id, project_id, number, name, stage, uat_started, uat_days) VALUES (1, 1, 2, 'Phase 2', 'uat', '2026-10-01', 30)`);
+  let r = await runClientDigest(env, MONDAY);
+  assert.equal(client.length, 0, 'nothing left to say');
+  h.sqlite.exec(`INSERT INTO releases (client_id, project_id, number, name, stage, uat_started, uat_days) VALUES (1, 1, 3, 'Phase 3', 'live', '2026-10-01', 30)`);
+  h.sqlite.exec("UPDATE events SET at = '2026-11-27 16:00:00' WHERE action = 'live'");
+  h.sqlite.exec("DELETE FROM email_log");
+  r = await runClientDigest(env, MONDAY);
+  assert.match(client[0].text, /Finished last week:\n- Scheduler Phase 3\n/);
+  assert.doesNotMatch(client[0].text, /Before turn-on|Phase 2/);
 });
