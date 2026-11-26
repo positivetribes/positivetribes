@@ -683,7 +683,9 @@ async function saveActivity(db, input) {
     if (!ACTIVITY_KINDS.includes(item.kind)) throw new InputError('kind must be email, meeting or calendar.');
     return {
       externalId, accountId: accountIdOf(item.account_id), kind: item.kind, at: timeOf(item.occurred_at),
-      title: text(item.title, 300, { required: true, label: 'title' }), summary: text(item.summary, 2000, { label: 'summary', multiline: true }), url: urlOf(item.url, 'url')
+      title: text(item.title, 300, { required: true, label: 'title' }), summary: text(item.summary, 2000, { label: 'summary', multiline: true }), url: urlOf(item.url, 'url'),
+      // eric_last: the routine saw that Eric sent the thread's most recent message, so its reply step is answered.
+      ericLast: item.eric_last === true
     };
   });
   const steps = list(input.steps, 50, step => {
@@ -699,7 +701,7 @@ async function saveActivity(db, input) {
     const found = await db.prepare('SELECT external_id FROM activity WHERE external_id IN (SELECT value FROM json_each(?1)) UNION SELECT external_id FROM next_steps WHERE external_id IN (SELECT value FROM json_each(?1))').bind(JSON.stringify(chunk)).all();
     for (const row of found.results) known.add(row.external_id);
   }
-  const counts = { added: 0, updated: 0, removed: 0, steps: 0 };
+  const counts = { added: 0, updated: 0, removed: 0, steps: 0, closed: 0 };
   const statements = [];
   for (const i of items) {
     if (i.cancelled) { if (known.has(i.externalId)) { counts.removed++; statements.push(db.prepare('DELETE FROM activity WHERE external_id = ?').bind(i.externalId)); } continue; }
@@ -712,6 +714,25 @@ async function saveActivity(db, input) {
     if (known.has(s.externalId)) continue;
     counts.steps++;
     statements.push(db.prepare("INSERT OR IGNORE INTO next_steps (account_id, title, due_date, source, external_id) VALUES (?, ?, ?, 'claude', ?)").bind(s.accountId, s.title, s.due, s.externalId));
+  }
+  // A "Reply to ..." step closes itself once Eric has replied: the thread's latest message is his and came after the
+  // step was made. Only the routine's own reply steps (step:<item id>, or step:slack:<dm>:<ts> for a Slack DM) close;
+  // commitment steps carry an extra :slug and stay open. Steps linked to a Salesforce Task are left to Eric, and no
+  // Task is written here: Gmail already logs the reply itself.
+  const replied = items.filter(i => !i.cancelled && i.ericLast && i.kind === 'email');
+  if (replied.length) {
+    const doneAt = new Date().toISOString();
+    for (const i of replied) {
+      const exact = 'step:' + i.externalId;
+      const dm = /^slack:[^:]+$/.test(i.externalId) ? exact.replace(/[\\%_]/g, c => '\\' + c) + ':%' : null;
+      const rows = (await db.prepare("SELECT id, external_id FROM next_steps WHERE status = 'open' AND source = 'claude' AND sf_task_id IS NULL AND created_at < ? AND (external_id = ? OR (? IS NOT NULL AND external_id LIKE ? ESCAPE '\\'))")
+        .bind(i.at, exact, dm, dm).all()).results
+        .filter(r => r.external_id === exact || !r.external_id.slice(exact.length + 1).includes(':'));
+      for (const r of rows) {
+        counts.closed++;
+        statements.push(db.prepare("UPDATE next_steps SET status = 'done', done_at = ? WHERE id = ? AND status = 'open'").bind(doneAt, r.id));
+      }
+    }
   }
   statements.push(db.prepare('INSERT INTO sync_runs (added, updated, removed, steps, note) VALUES (?, ?, ?, ?, ?)').bind(counts.added, counts.updated, counts.removed, counts.steps, note));
   await db.batch(statements);
