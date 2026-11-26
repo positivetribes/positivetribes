@@ -673,6 +673,13 @@ async function stepToSalesforce(env, url, db, before, after) {
   catch (error) { console.error('admin_step_sync_failed', error.message); return 'error'; }
 }
 
+// The routine's own steps from the last 30 days, whatever became of them, so a later run reuses an existing
+// external_id instead of adding the same promise again under a new slug (it did, 2026-11-22 and 23).
+export async function syncSteps(db) {
+  const since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 19) + 'Z';
+  return (await db.prepare("SELECT external_id, title, status FROM next_steps WHERE source = 'claude' AND external_id IS NOT NULL AND created_at >= ? ORDER BY external_id").bind(since).all()).results;
+}
+
 // ---- Writes ----
 
 async function saveActivity(db, input) {
@@ -683,7 +690,9 @@ async function saveActivity(db, input) {
     if (!ACTIVITY_KINDS.includes(item.kind)) throw new InputError('kind must be email, meeting or calendar.');
     return {
       externalId, accountId: accountIdOf(item.account_id), kind: item.kind, at: timeOf(item.occurred_at),
-      title: text(item.title, 300, { required: true, label: 'title' }), summary: text(item.summary, 2000, { label: 'summary', multiline: true }), url: urlOf(item.url, 'url')
+      title: text(item.title, 300, { required: true, label: 'title' }), summary: text(item.summary, 2000, { label: 'summary', multiline: true }), url: urlOf(item.url, 'url'),
+      // eric_last: the routine saw that Eric sent the thread's most recent message, so its reply step is answered.
+      ericLast: item.eric_last === true
     };
   });
   const steps = list(input.steps, 50, step => {
@@ -699,7 +708,7 @@ async function saveActivity(db, input) {
     const found = await db.prepare('SELECT external_id FROM activity WHERE external_id IN (SELECT value FROM json_each(?1)) UNION SELECT external_id FROM next_steps WHERE external_id IN (SELECT value FROM json_each(?1))').bind(JSON.stringify(chunk)).all();
     for (const row of found.results) known.add(row.external_id);
   }
-  const counts = { added: 0, updated: 0, removed: 0, steps: 0 };
+  const counts = { added: 0, updated: 0, removed: 0, steps: 0, closed: 0 };
   const statements = [];
   for (const i of items) {
     if (i.cancelled) { if (known.has(i.externalId)) { counts.removed++; statements.push(db.prepare('DELETE FROM activity WHERE external_id = ?').bind(i.externalId)); } continue; }
@@ -712,6 +721,25 @@ async function saveActivity(db, input) {
     if (known.has(s.externalId)) continue;
     counts.steps++;
     statements.push(db.prepare("INSERT OR IGNORE INTO next_steps (account_id, title, due_date, source, external_id) VALUES (?, ?, ?, 'claude', ?)").bind(s.accountId, s.title, s.due, s.externalId));
+  }
+  // A "Reply to ..." step closes itself once Eric has replied: the thread's latest message is his and came after the
+  // step was made. Only the routine's own reply steps (step:<item id>, or step:slack:<dm>:<ts> for a Slack DM) close;
+  // commitment steps carry an extra :slug and stay open. Steps linked to a Salesforce Task are left to Eric, and no
+  // Task is written here: Gmail already logs the reply itself.
+  const replied = items.filter(i => !i.cancelled && i.ericLast && i.kind === 'email');
+  if (replied.length) {
+    const doneAt = new Date().toISOString();
+    for (const i of replied) {
+      const exact = 'step:' + i.externalId;
+      const dm = /^slack:[^:]+$/.test(i.externalId) ? exact.replace(/[\\%_]/g, c => '\\' + c) + ':%' : null;
+      const rows = (await db.prepare("SELECT id, external_id FROM next_steps WHERE status = 'open' AND source = 'claude' AND sf_task_id IS NULL AND created_at < ? AND (external_id = ? OR (? IS NOT NULL AND external_id LIKE ? ESCAPE '\\'))")
+        .bind(i.at, exact, dm, dm).all()).results
+        .filter(r => r.external_id === exact || !r.external_id.slice(exact.length + 1).includes(':'));
+      for (const r of rows) {
+        counts.closed++;
+        statements.push(db.prepare("UPDATE next_steps SET status = 'done', done_at = ? WHERE id = ? AND status = 'open'").bind(doneAt, r.id));
+      }
+    }
   }
   statements.push(db.prepare('INSERT INTO sync_runs (added, updated, removed, steps, note) VALUES (?, ?, ?, ?, ?)').bind(counts.added, counts.updated, counts.removed, counts.steps, note));
   await db.batch(statements);
@@ -1022,14 +1050,15 @@ export async function handleAdmin(request, env, url, who) {
       if (!salesforceReady(env)) return json({ error: 'Salesforce is not connected.' }, 503);
       const auth = await salesforce(env);
       // AccountContactRelation covers each contact's own account plus any other accounts they are linked to.
-      const [accounts, relations, meta, lastSync] = await Promise.all([
+      const [accounts, relations, meta, lastSync, steps] = await Promise.all([
         records(auth, 'SELECT Id, Name, Website FROM Account WHERE IsPersonAccount = false AND Name != ' + quote(OWN_ACCOUNT) + ' ORDER BY Name LIMIT 200'),
         records(auth, 'SELECT AccountId, IsDirect, Contact.Name, Contact.Email FROM AccountContactRelation WHERE IsActive = true AND Account.IsPersonAccount = false LIMIT 2000'),
         db.prepare('SELECT * FROM client_meta').all(),
-        db.prepare('SELECT ran_at FROM sync_runs ORDER BY id DESC LIMIT 1').first()
+        db.prepare('SELECT ran_at FROM sync_runs ORDER BY id DESC LIMIT 1').first(),
+        syncSteps(db)
       ]);
       const contacts = relations.map(r => ({ AccountId: r.AccountId, IsDirect: r.IsDirect, Name: r.Contact?.Name, Email: r.Contact?.Email }));
-      return json({ today, timeZone: TIME_ZONE, lastSync: lastSync?.ran_at || null, clients: buildMatch(accounts, contacts, meta.results) });
+      return json({ today, timeZone: TIME_ZONE, lastSync: lastSync?.ran_at || null, clients: buildMatch(accounts, contacts, meta.results), steps });
     }
     if (route === 'POST /api/admin/activity') {
       return json({ ok: true, ...await saveActivity(db, await body(request)) });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { database } from './helpers.mjs';
 import { accessIdentity } from '../src/access.js';
-import { handleAdmin, buildOverview, rankNow, buildMatch, buildClient, buildInbox, BACKLOGS, lastSeenBy } from '../src/admin.js';
+import { handleAdmin, buildOverview, rankNow, buildMatch, buildClient, buildInbox, BACKLOGS, lastSeenBy, syncSteps } from '../src/admin.js';
 import hub from '../src/index.js';
 
 const TEAM = 'positivetribes.cloudflareaccess.com';
@@ -166,6 +166,57 @@ test('links must be web addresses', async () => {
   assert.equal((await call(db, 'PUT', `/api/admin/clients/${UEP}/meta`, { match: { domains: ['not a domain'] } })).status, 400);
 });
 
+test('the routine sees its own recent steps, done or dismissed too, so it reuses them', async () => {
+  const { db, sqlite } = database();
+  await call(db, 'POST', '/api/admin/activity', { steps: [
+    { external_id: 'step:gmail:t1:fixed-price', account_id: UEP, title: 'Send UEP the fixed price' },
+    { external_id: 'step:gmail:t2:old', account_id: UEP, title: 'Old promise' }
+  ] }, { who: ROUTINE, origin: null });
+  await call(db, 'POST', '/api/admin/steps', { accountId: UEP, title: 'Eric\'s own step' });
+  sqlite.exec("UPDATE next_steps SET status = 'dismissed' WHERE external_id = 'step:gmail:t1:fixed-price'");
+  sqlite.exec("UPDATE next_steps SET created_at = '2020-01-01T00:00:00Z' WHERE external_id = 'step:gmail:t2:old'");
+  assert.deepEqual((await syncSteps(db)).map(r => ({ ...r })), [{ external_id: 'step:gmail:t1:fixed-price', title: 'Send UEP the fixed price', status: 'dismissed' }]);
+});
+
+test('a reply step closes itself once Eric sent the latest message', async () => {
+  const { db, sqlite } = database();
+  const post = body => call(db, 'POST', '/api/admin/activity', body, { who: ROUTINE, origin: null });
+  const email = (id, at, ericLast) => ({ external_id: id, account_id: UEP, kind: 'email', occurred_at: at, title: 'UAT 3', ...(ericLast === undefined ? {} : { eric_last: ericLast }) });
+  await post({ items: [email('gmail:t1', '2026-11-23T04:19:00Z')], steps: [
+    { external_id: 'step:gmail:t1', account_id: UEP, title: 'Reply to Tammie: UAT 3', due_date: '2026-11-24' },
+    { external_id: 'step:gmail:t1:send-link', account_id: UEP, title: 'Send the test link' },
+    { external_id: 'step:slack:D1:1732.5', account_id: UEP, title: 'Reply to Molly (Slack)' },
+    { external_id: 'step:slack:D1:1732.5:demo', account_id: UEP, title: 'Book the demo' },
+    { external_id: 'step:gmail:t2', account_id: UEP, title: 'Reply to Molly: pilot' }
+  ] });
+  sqlite.exec("UPDATE next_steps SET created_at = '2026-11-24T12:03:03Z'");
+  const status = id => sqlite.prepare('SELECT status, done_at FROM next_steps WHERE external_id = ?').get(id);
+
+  // The client wrote last, or the routine did not say: nothing closes.
+  let r = await post({ items: [email('gmail:t1', '2026-11-25T09:00:00Z', false), email('gmail:t2', '2026-11-25T09:00:00Z')] });
+  assert.equal(r.body.closed, 0);
+  // Eric's last message is older than the step: it was not a reply to what the step asks.
+  r = await post({ items: [email('gmail:t1', '2026-11-24T11:00:00Z', true)] });
+  assert.equal(r.body.closed, 0);
+
+  // Eric replied after the step was made: only the reply steps close, commitments stay open.
+  sqlite.exec("UPDATE next_steps SET sf_task_id = '00TPr000019zzzzMAA' WHERE external_id = 'step:gmail:t2'");
+  r = await post({ items: [email('gmail:t1', '2026-11-24T21:01:46Z', true), email('slack:D1', '2026-11-24T21:05:00Z', true), email('gmail:t2', '2026-11-24T22:00:00Z', true)] });
+  assert.equal(r.body.closed, 2);
+  assert.equal(status('step:gmail:t1').status, 'done');
+  assert.ok(status('step:gmail:t1').done_at);
+  assert.equal(status('step:slack:D1:1732.5').status, 'done');
+  assert.equal(status('step:gmail:t1:send-link').status, 'open');
+  assert.equal(status('step:slack:D1:1732.5:demo').status, 'open');
+  assert.equal(status('step:gmail:t2').status, 'open', 'a step linked to a Salesforce Task is left to Eric');
+
+  // A step Eric dismissed stays dismissed, and a rerun closes nothing new.
+  sqlite.exec("UPDATE next_steps SET status = 'dismissed' WHERE external_id = 'step:gmail:t1:send-link'");
+  r = await post({ items: [email('gmail:t1', '2026-11-24T21:01:46Z', true)] });
+  assert.equal(r.body.closed, 0);
+  assert.equal(status('step:gmail:t1:send-link').status, 'dismissed');
+});
+
 test('the sync routine can post activity, and reruns do not duplicate it', async () => {
   const { db, sqlite } = database();
   const payload = {
@@ -177,14 +228,14 @@ test('the sync routine can post activity, and reruns do not duplicate it', async
     steps: [{ external_id: 'fathom:9:1', account_id: UEP, title: 'Send revised scope', due_date: '2026-11-02' }]
   };
   let r = await call(db, 'POST', '/api/admin/activity', payload, { who: ROUTINE, origin: null });
-  assert.deepEqual(r.body, { ok: true, added: 2, updated: 0, removed: 0, steps: 1 });
+  assert.deepEqual(r.body, { ok: true, added: 2, updated: 0, removed: 0, steps: 1, closed: 0 });
   assert.equal(sqlite.prepare("SELECT occurred_at FROM activity WHERE external_id = 'gcal:evt1'").get().occurred_at, '2026-11-04T00:00:00.000Z');
 
   // A suggestion Eric dismissed stays dismissed when the routine sends it again.
   sqlite.exec("UPDATE next_steps SET status = 'dismissed'");
   payload.items[1].occurred_at = '2026-11-05T17:00:00Z';
   r = await call(db, 'POST', '/api/admin/activity', payload, { who: ROUTINE, origin: null });
-  assert.deepEqual(r.body, { ok: true, added: 0, updated: 2, removed: 0, steps: 0 });
+  assert.deepEqual(r.body, { ok: true, added: 0, updated: 2, removed: 0, steps: 0, closed: 0 });
   assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM activity').get().n, 2);
   assert.equal(sqlite.prepare('SELECT status FROM next_steps').get().status, 'dismissed');
   assert.equal(sqlite.prepare("SELECT occurred_at FROM activity WHERE external_id = 'gcal:evt1'").get().occurred_at, '2026-11-05T17:00:00.000Z');
