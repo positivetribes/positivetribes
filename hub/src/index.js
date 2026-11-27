@@ -21,6 +21,7 @@ import { scoreManualTriage, careAnswer, runPatch } from './patch.js';
 import { estimatesFor, donatedTimeFor, decideEstimate, canDecideEstimate } from './estimates.js';
 import { askPhase, askCare, pendingFor, answerAsk, runFeedback } from './feedback.js';
 import { handlePhotos, listPhotos } from './photos.js';
+import { filesFor, handleItemFiles, itemFileKeys } from './files.js';
 export { windowEnd };
 
 // Credit routes take JSON only (the Origin check for every client write is in fetch below).
@@ -108,11 +109,11 @@ async function listItems(db, clientId, user) {
      WHERE i.client_id = ?1
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
   ).bind(clientId, String(user?.email || '')).all();
-  const [estimates, donated, answers, answerDays] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user), answersFor(db, clientId, user), answerDaysFor(db, clientId)]);
+  const [estimates, donated, answers, answerDays, files] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user), answersFor(db, clientId, user), answerDaysFor(db, clientId), filesFor(db, clientId, user)]);
   return results.map(({ proposal_doc_title, proposal_doc_url, proposal_doc_visible, image_ids, ...item }) => ({
     ...item, done: Boolean(item.done), asks_back: Boolean(item.asks_back),
     // Screenshots: ids only, plus whether this viewer added each one (so they may remove it). Never who else did.
-    images: image_ids ? String(image_ids).split(',').map(x => { const [id, mine] = x.split(':'); return { id: Number(id), mine: mine === '1' }; }) : [], estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [],
+    images: image_ids ? String(image_ids).split(',').map(x => { const [id, mine] = x.split(':'); return { id: Number(id), mine: mine === '1' }; }) : [], files: files.get(item.id) || [], estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [],
     answered_at: answers.get(item.id)?.at || null, answer_date: answerDays.get(item.id) || null, answered_mine: Boolean(answers.get(item.id)?.mine),
     // The proposal's link is the document's own visibility: clients never get the title or URL of a hidden document.
     proposal_doc: item.proposal_document_id && proposal_doc_title && (user.role === 'pt' || proposal_doc_visible) ? { title: proposal_doc_title, url: proposal_doc_url } : null
@@ -614,6 +615,15 @@ export default {
         return json({ error: 'Not found.' }, 404);
       }
 
+      // Files on an item (documents, logos, headshots): see src/files.js. Same people as screenshots.
+      const itemFiles = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/items\/(\d+)\/files(?:\/(\d+))?$/);
+      if (itemFiles) {
+        const client = await scope(db, user, itemFiles[1]);
+        const item = await requireItem(db, client.id, itemFiles[2]);
+        const out = await handleItemFiles({ db, env, request, url, user, client, item, fileId: itemFiles[3], listItems });
+        return out.response || json(out.json, out.status || 200);
+      }
+
       // The client's decision on an estimate: only the director or the named contact, JSON only, same-origin only.
       const decide = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/items\/(\d+)\/estimate\/decide$/);
       if (decide) {
@@ -896,13 +906,17 @@ export default {
                 + (SELECT COUNT(*) FROM donated_time WHERE item_id = ?1 AND client_id = ?2) AS n`
         ).bind(item.id, client.id).first();
         if (kept.n) throw new InputError('This item has an approved estimate or donated time on record. Mark it done instead.', 409);
+        const fileKeys = await itemFileKeys(db, client.id, item.id);
         await db.batch([
           db.prepare('DELETE FROM care_requests WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
           db.prepare('DELETE FROM change_estimates WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
           db.prepare('DELETE FROM item_images WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
+          db.prepare('DELETE FROM item_files WHERE item_id = ? AND client_id = ?').bind(item.id, client.id),
           db.prepare('DELETE FROM items WHERE id = ? AND client_id = ?').bind(item.id, client.id),
           logEvent(db, client.id, item.id, 'deleted', item, '', user)
         ]);
+        // The stored files go with the item (after the rows, so a failed batch leaves nothing pointing at a missing file).
+        if (fileKeys.length && env.FILES) await env.FILES.delete(fileKeys);
         return json({ ok: true, items: await listItems(db, client.id, user) });
       }
 
