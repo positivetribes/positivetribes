@@ -414,7 +414,7 @@ window.CommandCenter = function createCommandCenter({ api: hubApi }) {
   function actionName(i) {
     if (i.action === 'added') return 'New ' + (KIND[i.kind] || 'item');
     if (i.action === 'done') return i.kind === 'question' ? 'Marked answered' : i.kind === 'problem' ? 'Marked fixed' : 'Marked done';
-    return { answered: 'Answered', reopened: 'Reopened', tier: 'Priority changed', phase: 'Phase changed', edited: 'Edited', deleted: 'Deleted', signed_off: 'Signed off' }[i.action] || i.action;
+    return { answered: 'Answered', reopened: 'Reopened', tier: 'Priority changed', phase: 'Phase changed', edited: 'Edited', deleted: 'Deleted', signed_off: 'Signed off', file_added: 'File added' }[i.action] || i.action;
   }
   const BACKLOG_STATUS = { off: 'The hub database is not connected.', not_ready: 'No change log yet.', error: 'Could not be read just now. Reload the page.' };
 

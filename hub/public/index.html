@@ -217,6 +217,12 @@ nav.tabs a[aria-current=page]{color:var(--ink);border-color:var(--client)}
 .shot button.thumb:hover{border-color:var(--ink)}
 .shot img{width:100%;height:100%;object-fit:cover;object-position:top left;display:block}
 .shot-why{border-left:3px solid var(--rust);padding:6px 10px;background:var(--soft);border-radius:6px;font-size:15px}
+.files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.files li{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.files .file{display:inline-flex;gap:8px;align-items:center;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink);font:inherit;font-size:15px;cursor:pointer;max-width:100%;text-align:left}
+.files .file:hover{border-color:var(--ink)}
+.files .file b{font-weight:600;overflow-wrap:anywhere}
+.files .file span{color:var(--muted);font-size:13px;white-space:nowrap}
 .drop{border:2px dashed var(--line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:15px;color:var(--muted)}
 .drop.over{border-color:var(--client);background:color-mix(in srgb,var(--client) 8%,transparent)}
 .drop input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
@@ -830,7 +836,17 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     render();
   }
 
+  // While an item's editor is open, a redraw (a screenshot or file saved, a list refresh) keeps what was typed in it,
+  // such as an answer not yet saved: its fields are copied across by id, only when the same item is still open.
   function render() {
+    const editing = state.editing;
+    const typed = editing != null ? [...document.querySelectorAll('#main form [id^="e-"]')]
+      .filter(f => /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName) && f.type !== 'file').map(f => [f.id, f.type === 'checkbox' ? f.checked : f.value]) : [];
+    renderPage();
+    if (editing == null || state.editing !== editing) return;
+    for (const [id, v] of typed) { const f = document.getElementById(id); if (!f) continue; if (f.type === 'checkbox') f.checked = v; else f.value = v; }
+  }
+  function renderPage() {
     if (state.mode === COMMAND) {
       ideaButton();
       if (state.ccView === 'ideas' && $('cc')) $('cc').replaceChildren(ideas(true));
@@ -1797,7 +1813,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const itemShotList = (item, remove) => item.images && item.images.length > 0 && h('div', { class: 'shots' }, item.images.map((img, n) => h('div', { class: 'shot' },
     h('button', { type: 'button', class: 'thumb', 'aria-label': 'View screenshot ' + (n + 1) + ' for ' + item.title, onclick: e => showShot(e.currentTarget.querySelector('img')) }, shotImg(itemShotPath(item, img.id), 'Screenshot ' + (n + 1) + ' for ' + item.title)),
     remove && !state.preview && (img.mine || viewer().role === 'pt') && h('button', { type: 'button', class: 'btn ghost small', onclick: () => remove(img.id) }, 'Remove'))));
-  // Screenshot changes on an open item save right away and keep the editor open.
+  // Screenshot changes on an open item save right away and keep the editor open (render() keeps what was typed).
   const itemShotsSaved = data => { state.items = data.items; render(); };
   const addItemShots = (item, files) => addShots(files, MAX_SHOTS - item.images.length, async blob => itemShotsSaved(await uploadShot(itemShotPath(item), blob)));
   function itemShotsEditor(item) {
@@ -1806,6 +1822,91 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('p', { class: 'meta', style: 'margin-bottom:8px' }, (SHOT_WHY[item.kind] || '') + ' Adding or removing a screenshot saves right away.'),
       itemShotList(item, async id => { showError(''); try { itemShotsSaved(await api(base() + '/items/' + item.id + '/images/' + id, { method: 'DELETE' })); } catch (e) { showError(e.message); } }),
       item.images.length < MAX_SHOTS && !state.preview && h('div', { style: 'margin-top:8px' }, shotPicker('e-shots', MAX_SHOTS - item.images.length, files => addItemShots(item, files))));
+  }
+
+  // ---- Files on items: documents, logos, headshots and spreadsheets sent with an answer or a request (src/files.js).
+  // Anyone who can see the client adds them to an open item; each downloads with the page's own sign-in. ----
+  const MAX_FILES = 10, FILE_BYTES = 25 * 1024 * 1024;
+  const FILE_ACCEPT = '.pdf,.docx,.xlsx,.pptx,.txt,.csv,.md,.zip,.png,.jpg,.jpeg,.webp,.gif,.heic,.heif,.svg,.ai,.eps';
+  const FILE_KINDS = 'PDF, Word, Excel, PowerPoint, text, CSV, ZIP, and image or logo files (PNG, JPEG, HEIC, SVG, AI, EPS)';
+  const FILE_CARE = 'Please don’t attach patient or health information, passwords or bank details.';
+  const fileSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const itemFilePath = (item, id) => '/api' + base() + '/items/' + item.id + '/files' + (id ? '/' + id : '');
+  async function downloadFile(path, name) {
+    showError('');
+    try {
+      const r = await fetch(path, { headers: devHeaders() });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Could not download that file.');
+      const url = URL.createObjectURL(await r.blob());
+      const a = h('a', { href: url, download: name, style: 'display:none' });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { showError(e.message); }
+  }
+  async function uploadFile(path, file) {
+    if (state.preview) throw new Error('This is a read-only preview. Exit the preview to make changes.');
+    if (file.size > FILE_BYTES) throw new Error('“' + file.name + '” is larger than 25 MB. Try a smaller copy, or split it.');
+    let response;
+    try { response = await fetch(path + '?' + new URLSearchParams({ name: file.name }), { method: 'POST', headers: devHeaders({ 'content-type': 'application/octet-stream' }), body: file }); }
+    catch { throw new Error('Could not reach the server. Check your connection and try again.'); }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error('“' + file.name + '”: ' + (data.error || 'Could not add the file. Please try again.'));
+    return data;
+  }
+  const itemFileList = (item, remove) => item.files && item.files.length > 0 && h('ul', { class: 'files', 'aria-label': 'Files for ' + item.title }, item.files.map(f => h('li', {},
+    h('button', { type: 'button', class: 'file', title: 'Download ' + f.name, onclick: () => downloadFile(itemFilePath(item, f.id), f.name) }, '📎 ', h('b', {}, f.name), h('span', {}, fileSize(f.bytes))),
+    remove && !state.preview && (f.mine || viewer().role === 'pt') && h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Remove ' + f.name, onclick: () => remove(f.id) }, 'Remove'))));
+  // A file picker that also takes dropped files. onFiles receives the chosen files.
+  function filePicker(id, room, onFiles) {
+    const input = h('input', { type: 'file', id, accept: FILE_ACCEPT, multiple: true, onchange: e => { onFiles([...e.target.files]); e.target.value = ''; } });
+    const zone = h('div', { class: 'drop' }, input,
+      h('label', { for: id, class: 'btn ghost small', tabindex: '0', role: 'button', onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } } }, 'Attach files'),
+      h('span', {}, 'or drop them here (' + (room < MAX_FILES ? room + ' more allowed' : 'up to ' + MAX_FILES) + ', 25 MB each)'));
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); zone.classList.remove('over'); onFiles([...e.dataTransfer.files]); });
+    return zone;
+  }
+  function roomFor(files, room) {
+    if (files.length > room) showError('An item can have at most ' + MAX_FILES + ' files. Only the first ' + Math.max(0, room) + ' were added; put the rest in a ZIP file.');
+    return files.slice(0, Math.max(0, room));
+  }
+  // On an open item, files save right away and keep the editor open.
+  function itemFilesEditor(item) {
+    const files = item.files || [];
+    if (item.done) return files.length > 0 && h('div', {}, h('label', {}, 'Files'), itemFileList(item));
+    const add = async list => {
+      showError('');
+      for (const f of roomFor(list, MAX_FILES - files.length)) {
+        try { state.items = (await uploadFile(itemFilePath(item), f)).items; render(); } catch (e) { showError(e.message); return; }
+      }
+    };
+    return h('div', {}, h('label', {}, 'Files'),
+      h('p', { class: 'meta', style: 'margin-bottom:8px' }, 'Documents, logos, photos or spreadsheets we asked for: ' + FILE_KINDS + '. ' + FILE_CARE + ' Adding or removing a file saves right away.'),
+      itemFileList(item, async id => { showError(''); try { state.items = (await api(base() + '/items/' + item.id + '/files/' + id, { method: 'DELETE' })).items; render(); } catch (e) { showError(e.message); } }),
+      files.length < MAX_FILES && !state.preview && h('div', { style: 'margin-top:8px' }, filePicker('e-files', MAX_FILES - files.length, add)));
+  }
+  // Files chosen on an add form wait in the browser until the item is saved, like screenshots (pendingShots).
+  function pendingAttach(id) {
+    state.pendingFiles = [];
+    const files = state.pendingFiles;
+    const el = h('div', {});
+    const take = list => { showError(''); files.push(...roomFor(list, MAX_FILES - files.length)); draw(); };
+    const draw = () => el.replaceChildren(...[
+      h('label', {}, 'Files (optional)'),
+      h('p', { class: 'meta', style: 'margin-bottom:8px' }, FILE_KINDS + '. ' + FILE_CARE),
+      files.length > 0 && h('ul', { class: 'files', style: 'margin-bottom:8px' }, files.map((f, n) => h('li', {},
+        h('span', { class: 'file' }, '📎 ', h('b', {}, f.name), h('span', {}, fileSize(f.size))),
+        h('button', { type: 'button', class: 'btn ghost small', 'aria-label': 'Remove ' + f.name, onclick: () => { files.splice(n, 1); draw(); } }, 'Remove')))),
+      files.length < MAX_FILES && filePicker(id, MAX_FILES - files.length, take)].filter(Boolean));
+    draw();
+    const clear = () => { state.pendingFiles = []; };
+    const upload = async itemId => {
+      try { for (const f of files) state.items = (await uploadFile(itemFilePath({ id: itemId }), f)).items; }
+      catch (err) { showError('Saved, but a file was not added: ' + err.message + ' Open it and choose Edit to try again.'); }
+      finally { clear(); }
+    };
+    return { el, upload, clear };
   }
 
   // Screenshots chosen on an add form wait in the browser until the item is saved; only this part redraws, so typed
@@ -1860,6 +1961,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       TIER_NAMES[kind].map(([k, l]) => h('option', { value: k }, l)));
     const owner = h('input', { type: 'text', maxlength: 60, id: 'f-owner', placeholder: kind === 'problem' ? 'Test 3, step 5' : 'Who can answer?', ...(kind === 'question' ? { list: 'f-owner-list', autocomplete: 'off' } : {}) });
     const shots = pendingShots(kind, 'f-shots');
+    const attach = pendingAttach('f-files');
     let dropDraft = () => {};
     const form = h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
@@ -1872,6 +1974,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         state.items = created.items;
         dropDraft();
         await shots.upload(created.id);
+        await attach.upload(created.id);
         state.adding = false; render();
       } catch (err) { showError(err.message); button.disabled = false; }
     } },
@@ -1879,10 +1982,11 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', {}, h('label', { for: 'f-title' }, verb[1]), title),
       h('div', {}, h('label', { for: 'f-details' }, 'More detail (optional)'), details),
       shots.el,
+      attach.el,
       h('div', { class: 'row' }, h('div', {}, h('label', { for: 'f-tier' }, kind === 'question' ? 'How soon do you need an answer?' : 'How much does it matter?'), tier, meaning),
         (kind === 'question' || kind === 'problem') && h('div', {}, h('label', { for: 'f-owner' }, kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, kind === 'question' && ownerList('f-owner-list'))),
       kind === 'change' && h('p', { class: 'meta' }, 'We’ll reply and tell you whether this is already in your agreement or needs an estimate. Nothing is added or charged until you approve it.'),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { dropDraft(); shots.clear(); state.adding = false; render(); } }, 'Cancel')));
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, verb[2]), h('button', { class: 'btn ghost', type: 'button', onclick: () => { dropDraft(); shots.clear(); attach.clear(); state.adding = false; render(); } }, 'Cancel')));
     shots.listen(form);
     dropDraft = keepDraft(kind, form, { title, details, tier, owner });
     return form;
@@ -1903,6 +2007,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       } }, p.name))) : null;
     const b = c.balance;
     const shots = pendingShots('request', 'c-shots');
+    const attach = pendingAttach('c-files');
     let dropDraft = () => {};
     const form = h('form', { class: 'card stack', onsubmit: async e => {
       e.preventDefault(); showError('');
@@ -1913,6 +2018,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         dropDraft();
         state.items = data.items; state.care = data.care; state.project = tool;
         await shots.upload(data.id);
+        await attach.upload(data.id);
         state.adding = false; render();
       } catch (err) { showError(err.message); button.disabled = false; }
     } },
@@ -1921,6 +2027,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', {}, h('label', { for: 'c-title' }, 'What would you like?'), title),
       h('div', {}, h('label', { for: 'c-why' }, 'Why does it help?'), why),
       shots.el,
+      attach.el,
       h('div', { class: 'care-note' },
         h('b', {}, 'What happens next'),
         h('ol', { class: 'care-steps' },
@@ -1930,7 +2037,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
         b ? h('p', { class: 'meta' }, 'This month: ' + plural(b.available, 'credit') + ' left') : null),
       h('p', { class: 'muted' }, h('b', {}, 'Something broken? '), 'Report it as a problem instead. Fixes are always free. ',
         h('button', { type: 'button', class: 'btn ghost small', onclick: () => { state.kind = 'problem'; state.filter = 'all'; state.adding = true; render(); } }, 'Report a problem')),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Send request'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { dropDraft(); shots.clear(); state.adding = false; render(); } }, 'Cancel')));
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'submit' }, 'Send request'), h('button', { class: 'btn ghost', type: 'button', onclick: () => { dropDraft(); shots.clear(); attach.clear(); state.adding = false; render(); } }, 'Cancel')));
     shots.listen(form);
     dropDraft = keepDraft('care', form, { title, why });
     return form;
@@ -2014,6 +2121,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
       itemShotList(item),
+      itemFileList(item),
       item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : item.asks_back ? 'Our answer, and a question for you' : 'What we know so far',
         item.answer_date && h('span', { class: 'answer-date' }, ' · ' + answerDay(item.answer_date))), answerText,
         long && h('button', { type: 'button', class: 'show-all', onclick: e => { const shut = answerText.classList.toggle('clamp'); e.target.textContent = shut ? 'Show all' : 'Show less'; } }, 'Show all')),
@@ -2102,6 +2210,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('div', {}, h('label', { for: 'e-title' }, 'Title'), title),
       h('div', {}, h('label', { for: 'e-details' }, 'Details'), details),
       itemShotsEditor(item),
+      itemFilesEditor(item),
       asks && h('div', {}, h('label', { for: 'e-owner' }, item.kind === 'problem' ? 'Where did it happen?' : 'Who can answer?'), owner, item.kind === 'question' && ownerList('e-owner-list')),
       (asks || replies) && h('div', {}, h('label', { for: 'e-answer' }, replies ? 'Our reply' : item.kind === 'problem' ? 'Fix' : 'Answer'), answer),
       asksBackable && h('label', { for: 'e-asks-back', style: 'display:flex;gap:10px;align-items:center;font-weight:400' }, asksBack,
@@ -2521,7 +2630,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   // Reloading or closing the tab with typed text or a screenshot waiting asks first (the typed text is kept as a draft anyway).
   window.addEventListener('beforeunload', e => {
     const typed = [...document.querySelectorAll('#main form input[type=text], #main form textarea')].some(f => f.value.trim());
-    if (typed || (state.itemFiles && state.itemFiles.length)) { e.preventDefault(); e.returnValue = ''; }
+    if (typed || (state.itemFiles && state.itemFiles.length) || (state.pendingFiles && state.pendingFiles.length)) { e.preventDefault(); e.returnValue = ''; }
   });
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden || !state.client || formOpen() || state.mode === COMMAND) return;
