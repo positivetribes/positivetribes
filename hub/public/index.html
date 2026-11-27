@@ -300,6 +300,7 @@ section.tier h2{font-size:22px;display:flex;align-items:center;gap:10px;flex-wra
 .care-note{background:var(--soft);border-radius:10px;padding:10px 12px;font-size:14px}
 .care-steps{margin:0;padding-left:20px;font-size:14px;display:grid;gap:4px}
 .answer b{display:block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ok)}
+.answer .answer-date{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)}
 .actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.spacer{flex:1}
 .confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--must-bg);border-radius:10px;padding:8px 12px}
 .empty{color:var(--muted);font-style:italic}
@@ -563,6 +564,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const ANSWER_DAYS = 14;
   const seenKey = () => 'answers-seen-' + state.slug;
   const seenAnswers = () => { try { return JSON.parse(localStorage.getItem(seenKey()) || '{}') || {}; } catch { return {}; } };
+  // "Nov 24", or "Nov 24, 2025" outside this year (answer_date is a UTC YYYY-MM-DD).
+  const answerDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC', ...(d.slice(0, 4) === String(new Date().getUTCFullYear()) ? {} : { year: 'numeric' }) });
   const isNewAnswer = i => i.kind === 'question' && i.done && Boolean(i.answered_at) && !i.answered_mine
     && Date.now() - Date.parse(i.answered_at) < ANSWER_DAYS * 864e5 && seenAnswers()[i.id] !== i.answered_at;
   const clip = (text, n) => { const t = String(text).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).trimEnd() + '\u2026' : t; };
@@ -1919,7 +1922,8 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
       h('h3', {}, item.title),
       item.details && h('p', { class: 'muted' }, item.details),
       itemShotList(item),
-      item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : item.asks_back ? 'Our answer, and a question for you' : 'What we know so far'), answerText,
+      item.answer && h('div', { class: 'answer' }, h('b', {}, item.kind === 'change' ? 'Our reply' : item.done ? (item.kind === 'problem' ? 'Fix' : 'Answer') : item.asks_back ? 'Our answer, and a question for you' : 'What we know so far',
+        item.answer_date && h('span', { class: 'answer-date' }, ' · ' + answerDay(item.answer_date))), answerText,
         long && h('button', { type: 'button', class: 'show-all', onclick: e => { const shut = answerText.classList.toggle('clamp'); e.target.textContent = shut ? 'Show all' : 'Show less'; } }, 'Show all')),
       careBlock(item, isPt),
       estimateBlock(item),

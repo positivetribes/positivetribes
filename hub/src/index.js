@@ -107,12 +107,12 @@ async function listItems(db, clientId, user) {
      WHERE i.client_id = ?1
      ORDER BY p.position, p.id, i.kind DESC, CASE i.tier WHEN 'must' THEN 0 WHEN 'nice' THEN 1 ELSE 2 END, i.done, i.position, i.id`
   ).bind(clientId, String(user?.email || '')).all();
-  const [estimates, donated, answers] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user), answersFor(db, clientId, user)]);
+  const [estimates, donated, answers, answerDays] = await Promise.all([estimatesFor(db, clientId, user), donatedTimeFor(db, clientId, user), answersFor(db, clientId, user), answerDaysFor(db, clientId)]);
   return results.map(({ proposal_doc_title, proposal_doc_url, proposal_doc_visible, image_ids, ...item }) => ({
     ...item, done: Boolean(item.done), asks_back: Boolean(item.asks_back),
     // Screenshots: ids only, plus whether this viewer added each one (so they may remove it). Never who else did.
     images: image_ids ? String(image_ids).split(',').map(x => { const [id, mine] = x.split(':'); return { id: Number(id), mine: mine === '1' }; }) : [], estimate: estimates.get(item.id) || null, donated_time: donated.get(item.id) || [],
-    answered_at: answers.get(item.id)?.at || null, answered_mine: Boolean(answers.get(item.id)?.mine),
+    answered_at: answers.get(item.id)?.at || null, answer_date: answerDays.get(item.id) || null, answered_mine: Boolean(answers.get(item.id)?.mine),
     // The proposal's link is the document's own visibility: clients never get the title or URL of a hidden document.
     proposal_doc: item.proposal_document_id && proposal_doc_title && (user.role === 'pt' || proposal_doc_visible) ? { title: proposal_doc_title, url: proposal_doc_url } : null
   }));
@@ -129,6 +129,15 @@ export async function answersFor(db, clientId, user) {
   const me = String(user?.email || '').toLowerCase(), map = new Map();
   for (const e of results) map.set(e.item_id, { at: String(e.at).replace(' ', 'T') + (String(e.at).endsWith('Z') ? '' : 'Z'), mine: String(e.actor_email || '').toLowerCase() === me });
   return map;
+}
+
+// The day each item's answer was last written (UTC date), shown beside the answer so people see how fresh it is.
+// Date only: like answered_at, never who wrote it.
+export async function answerDaysFor(db, clientId) {
+  const { results } = await db.prepare(
+    `SELECT item_id, MAX(at) AS at FROM events WHERE client_id = ? AND action = 'answered' GROUP BY item_id`
+  ).bind(clientId).all();
+  return new Map(results.map(e => [e.item_id, String(e.at).slice(0, 10)]));
 }
 
 async function listReleases(db, clientId) {
