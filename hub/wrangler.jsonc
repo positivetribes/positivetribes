@@ -56,11 +56,15 @@
     // The command center's own notes, next steps, synced activity and sync history (tables created at runtime).
     { "binding": "ADMIN_DB", "database_name": "positivetribes-admin-db", "database_id": "c74ab999-3171-432b-9234-da16795e7e50" }
   ],
+  // Client photos (src/photos.js, migration 0044): private bucket, no public access or r2.dev address; served only through
+  // /api/c/<slug>/photos/<id> to that client's people and Positive Tribes.
+  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "tribe-client-photos" }],
   // Pull request builds run `wrangler preview`; previews use their own database so test edits never touch real data.
   "previews": {
     "d1_databases": [
       { "binding": "DB", "database_name": "hub-preview-db", "database_id": "5ccf4e7c-c052-4064-b0bd-f94fdc8b6c86", "migrations_dir": "migrations" },
       { "binding": "ADMIN_DB", "database_name": "positivetribes-admin-preview-db", "database_id": "f6140db8-4e66-4952-bacc-9a71c293a8f9" }
-    ]
+    ],
+    "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "tribe-client-photos-preview" }]
   }
 }
