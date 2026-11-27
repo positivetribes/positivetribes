@@ -149,6 +149,8 @@ test('items say when a question was last answered and whether the viewer answere
   assert.ok(!JSON.stringify(eric).includes('molly@uep.org'));
   const molly = (await (await call('molly@uep.org', '/api/c/uep/items')).json()).items[0];
   assert.equal(molly.answered_mine, true);
+  assert.match(molly.answer_date, /^\d{4}-\d\d-\d\d$/);
+  assert.equal(r.items[0].answer_date, null);
 });
 
 test('add, answer, move, done and delete are logged with the real person', async () => {
