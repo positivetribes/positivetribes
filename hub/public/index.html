@@ -1883,7 +1883,10 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const forYou = state.view === 'backlog' && !item.done && waitsOnMe(item) && h('span', { class: 'pill for-you' }, 'For you');
     // A question with no phase set has nothing to say about phase, and "Not decided yet" there reads as "not answered".
     const phasePill = !phaseless && !(item.kind === 'question' && item.phase === 'review') && h('span', { class: 'pill phase' }, PHASES.find(p => p[0] === item.phase)[1]);
-    const pills = [forYou, isNewAnswer(item) && h('span', { class: 'pill new-answer' }, 'New answer'), item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), tierPill, duePill, statusPill, estimatePill(item), shipsIn, phasePill].filter(Boolean);
+    // Which project the card belongs to, first in the row, when the client has more than one (search results show it the same way).
+    const proj = state.projects.length > 1 && state.projects.find(p => p.id === item.project_id);
+    const projectPill = proj && h('span', { class: 'pill kind' }, proj.name);
+    const pills = [projectPill, forYou, isNewAnswer(item) && h('span', { class: 'pill new-answer' }, 'New answer'), item.done && !declined && h('span', { class: 'pill done' }, DONE_WORD[item.kind]), tierPill, duePill, statusPill, estimatePill(item), shipsIn, phasePill].filter(Boolean);
     // Positive Tribes picks the status in one tap. Not doing closes it; anything else reopens a declined one.
     const picker = isPt && tracked && (!item.done || declined) && h('select', { class: 'status-pick', 'aria-label': 'Status for ' + item.title, onchange: e => act(base() + '/items/' + item.id, patch({ status: e.target.value })) },
       STATUS_NAMES[item.kind].map(([k]) => h('option', { value: k, ...(item.status === k ? { selected: true } : {}) }, statusName(item, k))));
