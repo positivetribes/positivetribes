@@ -20,6 +20,7 @@ import { InputError, PENDING, PENDING_STATUSES, clip, logEvent, spendRow, applyT
 import { scoreManualTriage, careAnswer, runPatch } from './patch.js';
 import { estimatesFor, donatedTimeFor, decideEstimate, canDecideEstimate } from './estimates.js';
 import { askPhase, askCare, pendingFor, answerAsk, runFeedback } from './feedback.js';
+import { handlePhotos, listPhotos } from './photos.js';
 export { windowEnd };
 
 // Credit routes take JSON only (the Origin check for every client write is in fetch below).
@@ -564,6 +565,15 @@ export default {
         return json({ error: 'Not found.' }, 404);
       }
 
+      // Client photos (src/photos.js): a banner and a strip on the client's home page, stored in the private R2 bucket.
+      // Everyone who can see the client sees them; only Positive Tribes changes them.
+      const photos = url.pathname.match(/^\/api\/c\/([a-z0-9-]+)\/photos(?:\/(\d+))?$/);
+      if (photos) {
+        const client = await scope(db, user, photos[1]);
+        const out = await handlePhotos({ db, env, request, url, user, client, photoId: photos[2] });
+        return out.response || json(out.json, out.status || 200);
+      }
+
       // Screenshots on an item (test problem, change, request, question): same checks as hub idea screenshots.
       // Anyone who can see the client may add one while the item is open; the person who added it, or Positive
       // Tribes, may remove it. The image is served only to people who can see the client.
@@ -670,7 +680,9 @@ export default {
           releases: await listReleases(db, client.id),
           documents: await listDocuments(db, client.id, user.role === 'pt'),
           // Only entries marked for the client, for everyone here (Positive Tribes sees the rest in the command center).
-          timeline: await clientTimeline(db, client.id)
+          timeline: await clientTimeline(db, client.id),
+          // Banner and strip photos for the home page (src/photos.js); the consent note only for Positive Tribes.
+          photos: await listPhotos(db, client.id, user)
         });
       }
 

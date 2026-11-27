@@ -88,6 +88,17 @@ h1{font-size:clamp(30px,6vw,44px);margin-top:4px}
 .hero.ws{padding:12px 0 16px}.hero.ws h1{font-size:clamp(26px,4.5vw,36px)}
 /* The client's logo mark sits on a white tile so dark marks stay visible in dark mode. */
 .ws-name{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:4px}.ws-name input.search{margin-left:auto}.ws-name h1{margin-top:0}
+/* Client photos (src/photos.js): a banner at the top of the home page and a strip of up to three near its foot. */
+.ws-banner{margin:0;border-radius:16px;overflow:hidden;background:var(--line);height:clamp(150px,24vw,260px)}
+.ws-banner img,.photo-strip img{display:block;width:100%;height:100%;object-fit:cover}
+.photo-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0;padding:0;list-style:none}
+.photo-strip li{height:210px;border-radius:12px;overflow:hidden;background:var(--line)}
+.pf-top{object-position:center 0}.pf-upper{object-position:center 25%}.pf-center{object-position:center 50%}.pf-lower{object-position:center 75%}.pf-bottom{object-position:center 100%}
+.photo-admin ul{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}
+.photo-admin li{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;align-items:start;border-top:1px solid var(--line);padding-top:12px}
+.photo-admin li img{width:120px;height:80px;object-fit:cover;border-radius:8px;background:var(--line)}
+.photo-admin .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.photo-admin input[type=text]{flex:1 1 100%;min-width:0}.photo-admin .row .btn{flex:0 0 auto}
 .ws-logo{width:48px;height:48px;flex:none;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:12px;padding:5px}
 nav.tabs{display:flex;gap:4px;margin:6px 0 22px;overflow-x:auto}
 .tabrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 22px}.tabrow nav.tabs{margin:0;flex:1 1 auto;min-width:0}
@@ -673,7 +684,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     const [p, i, d, st, care] = await Promise.all([api('/c/' + slug + '/projects'), api('/c/' + slug + '/items'), api('/ideas').catch(() => ({ ideas: [] })), api('/c/' + slug + '/status').catch(() => null), api('/c/' + slug + '/care').catch(() => null)]);
     // How it went: the one quick question waiting for this person, if any (src/feedback.js). Never blocks the page.
     const ask = await api('/c/' + slug + '/feedback').then(r => r.ask).catch(() => null);
-    Object.assign(state, { ask, askStep: null, askScore: null, focusId: null, focusAt: 0, care, status: st, slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], timeline: p.timeline || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
+    Object.assign(state, { ask, askStep: null, askScore: null, focusId: null, focusAt: 0, care, status: st, slug, client: p.client, projects: p.projects, releases: p.releases || [], documents: p.documents || [], timeline: p.timeline || [], photos: p.photos || [], items: i.items, ideas: d.ideas, preview: null, people: [] });
     if (state.me.user.role === 'pt') { try { state.people = (await api('/c/' + slug + '/people')).people; } catch {} }
     document.documentElement.style.setProperty('--client', p.client.accent);
     document.title = p.client.name + ' | Positive Tribes';
@@ -976,7 +987,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             ? h('p', {}, h('b', {}, 'Anything else?'), h('span', { class: 'muted' }, ' Questions and change ideas go here, apart from testing.'))
             : h('p', {}, h('b', {}, 'You’re all caught up.'), h('span', { class: 'muted' }, ' We’ll tell you here, and by email, when we need something.')),
           h('a', { class: 'btn ghost small', href: link('backlog') }, 'Suggest a change or ask a question'));
-    return h('div', { class: 'stack' }, state.releases.filter(r => r.stage === 'uat').map(testing), hero, askCard(), carePlan(),
+    return h('div', { class: 'stack' }, photoBanner(), state.releases.filter(r => r.stage === 'uat').map(testing), hero, askCard(), carePlan(),
       // Projects with several client phases come first and span the row; the rest share the next row evenly.
       ...[true, false].map(wide => { const group = state.projects.filter(p => (state.releases.filter(r => r.project_id === p.id).length > 1) === wide); return group.length > 0 && h('div', { class: 'grid' }, group.map(p => {
         // A project without a prototype (such as a data migration) skips that step in its progress line.
@@ -1018,11 +1029,89 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
             h('a', { class: 'admin-link', href: p.live_url, target: '_blank', rel: 'noopener' }, 'Production'))));
       })); }),
       systemStatus(),
+      photoStrip(),
       // Goodwill, not work: the donated total sits near the foot of the home page, out of the way of the lists.
       donatedTotal(state.items, null),
       // The list below leaves out the lead only, so it stays put while the card above steps through the queue.
       waitingCard(queue),
-      supportLine());
+      supportLine(),
+      viewer().role === 'pt' && !state.preview && photoAdmin());
+  }
+
+  // ---- Client photos (src/photos.js): served only through the hub's API, so only this client's people and Positive Tribes
+  // see them. Loaded once per page as blobs (shotImg), so background redraws don't fetch them again.
+  const photoSrc = id => '/api/c/' + state.slug + '/photos/' + id;
+  const FOCI = [['top', 'Top'], ['upper', 'Upper third'], ['center', 'Middle'], ['lower', 'Lower third'], ['bottom', 'Bottom']];
+  function photoImg(p) { const img = shotImg(photoSrc(p.id), p.alt); img.className = 'pf-' + p.focus; return img; }
+  function photoBanner() {
+    const banner = state.photos.find(p => p.role === 'banner');
+    return banner && h('figure', { class: 'ws-banner' }, photoImg(banner));
+  }
+  function photoStrip() {
+    const strip = state.photos.filter(p => p.role === 'strip').slice(0, 3);
+    return strip.length > 0 && h('ul', { class: 'photo-strip', 'aria-label': 'Photos from ' + state.client.name }, strip.map(p => h('li', {}, photoImg(p))));
+  }
+  // Re-draws a photo in the browser before upload: at most 2000 pixels wide, JPEG. Re-drawing drops hidden photo data such
+  // as location; the server strips any metadata left as well.
+  async function shrinkPhoto(file) {
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); } catch { throw new Error('This browser cannot read that image. Try a JPEG or PNG photo.'); }
+    const scale = Math.min(1, 2000 / bitmap.width, 2000 / bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(done => canvas.toBlob(done, 'image/jpeg', 0.85));
+    if (!blob || blob.size > 3900000) throw new Error('That photo is too large. Try a smaller one.');
+    return blob;
+  }
+  async function photoCall(path, options) {
+    showError('');
+    try { const data = await api(path, options); state.photos = data.photos || state.photos; render(); }
+    catch (e) { showError(e.message); }
+  }
+  // Positive Tribes only (the server refuses everyone else): add, describe, place and remove the client's photos.
+  function photoAdmin() {
+    const roleSelect = (value, label) => h('select', { 'aria-label': label }, h('option', { value: 'banner', ...(value === 'banner' ? { selected: '' } : {}) }, 'Banner'), h('option', { value: 'strip', ...(value === 'strip' ? { selected: '' } : {}) }, 'Strip'));
+    const focusSelect = (value, label) => h('select', { 'aria-label': label }, FOCI.map(([v, t]) => h('option', { value: v, ...(v === value ? { selected: '' } : {}) }, 'Keep in view: ' + t)));
+    const rows = state.photos.map(p => {
+      const role = roleSelect(p.role, 'Where photo ' + p.id + ' shows');
+      const focus = focusSelect(p.focus, 'Which part of photo ' + p.id + ' to keep in view');
+      const alt = h('input', { type: 'text', value: p.alt, maxlength: '200', 'aria-label': 'Description of photo ' + p.id });
+      return h('li', {}, photoImg(p), h('div', { class: 'stack', style: 'gap:6px' },
+        h('div', { class: 'row' }, role, focus, alt),
+        h('p', { class: 'meta' }, 'Permission: ' + p.consent + ' \u00b7 added ' + longDate(String(p.created_at || '').slice(0, 10))),
+        h('div', { class: 'row' },
+          h('button', { type: 'button', class: 'btn small', onclick: () => photoCall(base() + '/photos/' + p.id, patch({ role: role.value, focus: focus.value, alt: alt.value })) }, 'Save'),
+          h('button', { type: 'button', class: 'btn ghost small', onclick: () => { if (confirm('Remove this photo from ' + state.client.name + '\u2019s hub? The stored file is deleted too.')) photoCall(base() + '/photos/' + p.id, { method: 'DELETE' }); } }, 'Remove'))));
+    });
+    const file = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', 'aria-label': 'Photo file' });
+    const role = roleSelect(state.photos.some(p => p.role === 'banner') ? 'strip' : 'banner', 'Where the new photo shows');
+    const focus = focusSelect('center', 'Which part of the new photo to keep in view');
+    const alt = h('input', { type: 'text', maxlength: '200', placeholder: 'What the photo shows, e.g. A climber smiling on the rope', 'aria-label': 'Description of the new photo' });
+    const consent = h('input', { type: 'text', maxlength: '300', placeholder: 'Who gave permission, and when', 'aria-label': 'Who gave permission to use it, and when' });
+    const add = async e => {
+      e.preventDefault();
+      showError('');
+      if (!file.files[0]) return showError('Choose a photo to add.');
+      if (!alt.value.trim() || !consent.value.trim()) return showError('Add a description and who gave permission.');
+      try {
+        const blob = await shrinkPhoto(file.files[0]);
+        const q = new URLSearchParams({ role: role.value, focus: focus.value, alt: alt.value, consent: consent.value });
+        const r = await fetch('/api/c/' + state.slug + '/photos?' + q, { method: 'POST', headers: devHeaders({ 'content-type': 'image/jpeg' }), body: blob });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || 'Could not add the photo. Please try again.');
+        state.photos = data.photos; render();
+      } catch (err) { showError(err.message); }
+    };
+    return h('div', { class: 'card photo-admin' },
+      h('h2', {}, 'Photos'),
+      h('p', { class: 'meta' }, 'Only Positive Tribes sees this panel. Use only photos the client said we may use. One banner shows at the top of this page; the first three strip photos show above the donated total.'),
+      rows.length > 0 && h('ul', {}, rows),
+      h('form', { class: 'stack', style: 'gap:8px;margin-top:14px', onsubmit: add },
+        h('div', { class: 'row' }, file, role, focus),
+        h('div', { class: 'row' }, alt),
+        h('div', { class: 'row' }, consent),
+        h('div', {}, h('button', { type: 'submit', class: 'btn small' }, 'Add photo'))));
   }
 
   // "Your next step" with Back and Next. Stepping updates this card in place rather than redrawing the page, so focus stays on
