@@ -88,9 +88,15 @@ h1{font-size:clamp(30px,6vw,44px);margin-top:4px}
 .hero.ws{padding:12px 0 16px}.hero.ws h1{font-size:clamp(26px,4.5vw,36px)}
 /* The client's logo mark sits on a white tile so dark marks stay visible in dark mode. */
 .ws-name{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:4px}.ws-name input.search{margin-left:auto}.ws-name h1{margin-top:0}
-/* Client photos (src/photos.js): a banner at the top of the home page and a strip of up to three near its foot. */
-.ws-banner{margin:0;border-radius:16px;overflow:hidden;background:var(--line);height:clamp(150px,24vw,260px)}
+/* Client photos (src/photos.js): banner photos that take turns at the top of the home page, and a strip of up to three
+   near its foot. */
+.ws-banner{margin:0;border-radius:16px;overflow:hidden;background:var(--line);height:clamp(150px,24vw,260px);position:relative}
 .ws-banner img,.photo-strip img{display:block;width:100%;height:100%;object-fit:cover}
+.ws-banner img{position:absolute;inset:0;opacity:0}.ws-banner img.on{opacity:1}
+@media (prefers-reduced-motion:no-preference){.ws-banner img{transition:opacity 1.2s ease}}
+.ws-banner .banner-pause{position:absolute;right:10px;bottom:10px;width:34px;height:34px;padding:0;border-radius:50%;border:0;
+  background:rgba(0,0,0,.45);color:#fff;font-size:13px;line-height:34px;cursor:pointer;opacity:.75}
+.ws-banner .banner-pause:hover,.ws-banner .banner-pause:focus-visible{opacity:1}
 .photo-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0;padding:0;list-style:none}
 .photo-strip li{height:210px;border-radius:12px;overflow:hidden;background:var(--line)}
 .pf-top{object-position:center 0}.pf-upper{object-position:center 25%}.pf-center{object-position:center 50%}.pf-lower{object-position:center 75%}.pf-bottom{object-position:center 100%}
@@ -1059,9 +1065,51 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
   const photoSrc = id => '/api/c/' + state.slug + '/photos/' + id;
   const FOCI = [['top', 'Top'], ['upper', 'Upper third'], ['center', 'Middle'], ['lower', 'Lower third'], ['bottom', 'Bottom']];
   function photoImg(p) { const img = shotImg(photoSrc(p.id), p.alt); img.className = 'pf-' + p.focus; return img; }
+  // Banner photos take turns: a slow crossfade every BANNER_SECONDS, starting from a random one on each visit. One timer for
+  // the page changes the shown photo in place, so background redraws don't restart it. Each photo is fetched only when it
+  // is next up. It never moves for people who ask for reduced motion (they get a different photo each visit), stops while
+  // the pointer or focus is on it or the tab is hidden, and has a pause button (kept in this browser).
+  const BANNER_SECONDS = 8;
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const bannerPaused = () => localStorage.getItem('hub-banner-paused') === '1';
+  let bannerTimer = null;
+  function loadBanner(img) {
+    if (!img || img.dataset.loaded) return;
+    img.dataset.loaded = '1';
+    shotImg(img.dataset.src, ''); // fills shotCache, which every later redraw reuses
+    shotCache.get(img.dataset.src)?.then(url => { img.src = url; }, () => {});
+  }
+  function showBanner(fig, at) {
+    const imgs = [...fig.querySelectorAll('img')];
+    imgs.forEach((img, i) => { const on = i === at; img.classList.toggle('on', on); img.toggleAttribute('aria-hidden', !on); if (on) loadBanner(img); });
+    loadBanner(imgs[(at + 1) % imgs.length]);
+  }
+  function stepBanner() {
+    const fig = document.getElementById('ws-banner');
+    if (!fig) { clearInterval(bannerTimer); bannerTimer = null; return; }
+    const count = fig.querySelectorAll('img').length;
+    if (count < 2 || document.hidden || bannerPaused() || reducedMotion() || fig.matches(':hover, :focus-within')) return;
+    state.bannerAt = (state.bannerAt + 1) % count;
+    showBanner(fig, state.bannerAt);
+  }
   function photoBanner() {
-    const banner = state.photos.find(p => p.role === 'banner');
-    return banner && h('figure', { class: 'ws-banner' }, photoImg(banner));
+    const banners = state.photos.filter(p => p.role === 'banner');
+    if (!banners.length) return null;
+    if (state.bannerAt == null || state.bannerAt >= banners.length) state.bannerAt = Math.floor(Math.random() * banners.length);
+    const imgs = banners.map(p => h('img', { alt: p.alt, class: 'pf-' + p.focus, 'data-src': photoSrc(p.id) }));
+    const pause = banners.length > 1 && !reducedMotion() && h('button', {
+      type: 'button', class: 'banner-pause', 'aria-pressed': String(bannerPaused()), title: bannerPaused() ? 'Play the photos' : 'Pause the photos',
+      'aria-label': 'Pause the photos', onclick: e => {
+        const paused = !bannerPaused();
+        localStorage.setItem('hub-banner-paused', paused ? '1' : '0');
+        e.currentTarget.setAttribute('aria-pressed', String(paused));
+        e.currentTarget.title = paused ? 'Play the photos' : 'Pause the photos';
+        e.currentTarget.textContent = paused ? '\u25B6' : '\u275A\u275A';
+      } }, bannerPaused() ? '\u25B6' : '\u275A\u275A');
+    const fig = h('figure', { class: 'ws-banner', id: 'ws-banner' }, imgs, pause);
+    showBanner(fig, state.bannerAt);
+    if (banners.length > 1 && !bannerTimer) bannerTimer = setInterval(stepBanner, BANNER_SECONDS * 1000);
+    return fig;
   }
   function photoStrip() {
     const strip = state.photos.filter(p => p.role === 'strip').slice(0, 3);
@@ -1121,7 +1169,7 @@ select.client-switch:focus-visible{outline:2px solid var(--muted);outline-offset
     };
     return h('div', { class: 'card photo-admin' },
       h('h2', {}, 'Photos'),
-      h('p', { class: 'meta' }, 'Only Positive Tribes sees this panel. Use only photos the client said we may use. One banner shows at the top of this page; the first three strip photos show above the donated total.'),
+      h('p', { class: 'meta' }, 'Only Positive Tribes sees this panel. Use only photos the client said we may use. Banner photos take turns at the top of this page (up to 15, a new one every ' + BANNER_SECONDS + ' seconds, in the order listed); the first three strip photos show above the donated total.'),
       rows.length > 0 && h('ul', {}, rows),
       h('form', { class: 'stack', style: 'gap:8px;margin-top:14px', onsubmit: add },
         h('div', { class: 'row' }, file, role, focus),
