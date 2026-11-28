@@ -18,7 +18,7 @@ function bucket() {
 
 function setup() {
   const { sqlite, db } = database();
-  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql', '0026_change_estimates.sql', '0027_donated_changes.sql', '0028_estimate_lines.sql', '0029_agreement_ref.sql', '0031_item_proposal.sql', '0033_timeline.sql', '0037_item_images.sql', '0041_item_asks_back.sql', '0043_client_email.sql', '0044_client_photos.sql', '0045_item_files.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
+  for (const file of ['0001_init.sql', '0002_legacy_ids.sql', '0003_releases.sql', '0004_release_url.sql', '0005_release_script.sql', '0006_release_window.sql', '0007_project_live_url.sql', '0008_documents.sql', '0009_hub_ideas.sql', '0010_hub_idea_images.sql', '0011_documents_for_everyone.sql', '0012_notifications.sql', '0013_notification_clear.sql', '0014_last_seen.sql', '0015_care_plans.sql', '0016_patch_triage.sql', '0017_document_date.sql', '0018_client_salesforce_url.sql', '0019_project_has_prototype.sql', '0020_client_logo.sql', '0021_client_logo_soberaf.sql', '0022_project_next_note.sql', '0023_item_status.sql', '0024_patch_replies.sql', '0025_item_releases.sql', '0026_change_estimates.sql', '0027_donated_changes.sql', '0028_estimate_lines.sql', '0029_agreement_ref.sql', '0031_item_proposal.sql', '0033_timeline.sql', '0037_item_images.sql', '0041_item_asks_back.sql', '0043_client_email.sql', '0044_client_photos.sql', '0045_item_files.sql', '0046_rotating_banners.sql']) sqlite.exec(readFileSync(new URL('../migrations/' + file, import.meta.url), 'utf8'));
   sqlite.exec(`
     INSERT INTO clients (slug, name) VALUES ('uep', 'UEP'), ('safe', 'Sober AF');
     INSERT INTO projects (client_id, slug, name) VALUES (1, 'scheduler', 'Scheduler');
@@ -92,15 +92,18 @@ test('client photos: only Positive Tribes adds them, only the client and Positiv
   assert.equal((await call('dana@safe.org', '/api/c/safe/photos/' + photo.id)).status, 404);
   assert.deepEqual((await (await call('dana@safe.org', '/api/c/safe/projects')).json()).photos, []);
 
-  // A second banner replaces the first, which moves to the strip.
+  // A second banner joins the first: banners take turns on the home page, in position order.
   const second = (await (await send('eric@positivetribes.org', { ...meta, alt: 'Four climbers arm in arm' }, jpeg)).json()).photos;
-  assert.deepEqual(second.map(p => [p.alt, p.role]), [['Four climbers arm in arm', 'banner'], [meta.alt, 'strip']]);
+  assert.deepEqual(second.map(p => [p.alt, p.role, p.position]), [[meta.alt, 'banner', 1], ['Four climbers arm in arm', 'banner', 2]]);
+  const secondId = second[1].id;
+  assert.equal((await call('eric@positivetribes.org', '/api/c/uep/photos/' + secondId, 'PATCH', { role: 'strip' })).status, 200);
   // Clients cannot edit or remove; Positive Tribes can.
   assert.equal((await call('molly@uep.org', '/api/c/uep/photos/' + photo.id, 'PATCH', { alt: 'x' })).status, 403);
   assert.equal((await call('molly@uep.org', '/api/c/uep/photos/' + photo.id, 'DELETE')).status, 403);
   const moved = (await (await call('eric@positivetribes.org', '/api/c/uep/photos/' + photo.id, 'PATCH', { role: 'banner', focus: 'top' })).json()).photos;
   assert.deepEqual(moved.map(p => [p.id, p.role, p.focus]).find(p => p[0] === photo.id), [photo.id, 'banner', 'top']);
   assert.equal(moved.filter(p => p.role === 'banner').length, 1);
+  assert.equal(moved.find(p => p.id === secondId).role, 'strip');
   assert.equal((await call('eric@positivetribes.org', '/api/c/uep/photos/' + photo.id, 'PATCH', { focus: 'sideways' })).status, 400);
   assert.equal((await call('eric@positivetribes.org', '/api/c/uep/photos/' + photo.id, 'DELETE')).status, 200);
   assert.equal(PHOTOS.files.size, 1);
@@ -108,9 +111,14 @@ test('client photos: only Positive Tribes adds them, only the client and Positiv
   assert.equal((await call('molly@uep.org', '/api/c/uep/photos/' + photo.id)).status, 404);
 });
 
-test('client photos: at most nine per client', async () => {
-  const { send } = setup();
-  const meta = { role: 'strip', alt: 'Climbers', consent: 'Molly, Nov 27, 2026' };
-  for (let n = 0; n < 9; n++) assert.equal((await send('eric@positivetribes.org', meta, jpeg)).status, 201);
+test('client photos: at most 15 banners and 30 photos per client', async () => {
+  const { send, call } = setup();
+  const meta = { role: 'banner', alt: 'Climbers', consent: 'Molly, Nov 27, 2026' };
+  for (let n = 0; n < 15; n++) assert.equal((await send('eric@positivetribes.org', meta, jpeg)).status, 201);
   assert.equal((await send('eric@positivetribes.org', meta, jpeg)).status, 400);
+  for (let n = 0; n < 15; n++) assert.equal((await send('eric@positivetribes.org', { ...meta, role: 'strip' }, jpeg)).status, 201);
+  assert.equal((await send('eric@positivetribes.org', { ...meta, role: 'strip' }, jpeg)).status, 400);
+  // A strip photo can't become a sixteenth banner either.
+  const strip = (await (await call('eric@positivetribes.org', '/api/c/uep/photos')).json()).photos.find(p => p.role === 'strip');
+  assert.equal((await call('eric@positivetribes.org', '/api/c/uep/photos/' + strip.id, 'PATCH', { role: 'banner' })).status, 400);
 });

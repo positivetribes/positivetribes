@@ -1,11 +1,12 @@
-// Client photos: a banner on the client's home page and a strip of up to three photos near its foot (migration 0044).
+// Client photos: banner photos that take turns at the top of the client's home page, and a strip of up to three photos
+// near its foot (migration 0044).
 // Bytes live in the private R2 bucket bound as PHOTOS, keyed <client_id>/<uuid>.jpg; rows in client_photos.
 // Anyone who can see the client sees the photos (scope() in index.js checks that before any call here); only Positive
 // Tribes adds, edits or removes them, and only Positive Tribes sees the consent note. JPEG only: the browser re-draws
 // each photo before upload, and stripJpeg() below drops any metadata (location, camera, captions) that is left.
 import { InputError } from './triage.js';
 
-export const MAX_PHOTO_BYTES = 4000000, MAX_PHOTOS = 9, STRIP_SHOWN = 3;
+export const MAX_PHOTO_BYTES = 4000000, MAX_PHOTOS = 30, MAX_BANNERS = 15, STRIP_SHOWN = 3;
 const ROLES = ['banner', 'strip'];
 const FOCUS = ['top', 'upper', 'center', 'lower', 'bottom'];
 
@@ -59,6 +60,12 @@ export async function listPhotos(db, clientId, user) {
   return results.map(({ consent, added_email, created_at, ...p }) => (isPt(user) ? { ...p, consent, added_email, created_at } : p));
 }
 
+// Banner photos take turns on the home page, in position order; a client can have up to MAX_BANNERS of them.
+async function roomForBanner(db, clientId) {
+  const banners = await db.prepare("SELECT COUNT(*) AS n FROM client_photos WHERE client_id = ? AND role = 'banner'").bind(clientId).first();
+  if (banners.n >= MAX_BANNERS) throw new InputError(`A client can have at most ${MAX_BANNERS} banner photos. Move one to the strip or remove one first.`);
+}
+
 async function requirePhoto(db, clientId, value) {
   const id = Number(value);
   const photo = Number.isSafeInteger(id) && id > 0 && await db.prepare('SELECT * FROM client_photos WHERE id = ? AND client_id = ?').bind(id, clientId).first();
@@ -102,13 +109,12 @@ export async function handlePhotos({ db, env, request, url, user, client, photoI
     if (!clean) throw new InputError('Photos must be JPEG images.');
     const count = await db.prepare('SELECT COUNT(*) AS n FROM client_photos WHERE client_id = ?').bind(client.id).first();
     if (count.n >= MAX_PHOTOS) throw new InputError(`A client can have at most ${MAX_PHOTOS} photos. Remove one first.`);
+    if (role === 'banner') await roomForBanner(db, client.id);
     const key = `${client.id}/${crypto.randomUUID()}.jpg`;
     await env.PHOTOS.put(key, clean, { httpMetadata: { contentType: 'image/jpeg' } });
     const next = await db.prepare('SELECT COALESCE(MAX(position), 0) + 1 AS n FROM client_photos WHERE client_id = ? AND role = ?').bind(client.id, role).first();
     try {
       await db.batch([
-        // A new banner replaces the old one, which moves to the end of the strip.
-        ...(role === 'banner' ? [db.prepare("UPDATE client_photos SET role = 'strip', position = (SELECT COALESCE(MAX(position), 0) + 1 FROM client_photos WHERE client_id = ?1 AND role = 'strip') WHERE client_id = ?1 AND role = 'banner'").bind(client.id)] : []),
         db.prepare('INSERT INTO client_photos (client_id, r2_key, type, bytes, role, alt, focus, position, consent, added_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
           .bind(client.id, key, 'image/jpeg', clean.length, role, alt, focus, next.n, consent, user.email)
       ]);
@@ -127,10 +133,8 @@ export async function handlePhotos({ db, env, request, url, user, client, photoI
     const position = b.position === undefined ? photo.position : Number(b.position);
     if (!Number.isSafeInteger(position) || position < 0 || position > 1000) throw new InputError('Choose a position from 0 to 1000.');
     const role = b.role === undefined ? photo.role : roleOf(b.role);
-    await db.batch([
-      ...(role === 'banner' && photo.role !== 'banner' ? [db.prepare("UPDATE client_photos SET role = 'strip', position = (SELECT COALESCE(MAX(position), 0) + 1 FROM client_photos WHERE client_id = ?1 AND role = 'strip') WHERE client_id = ?1 AND role = 'banner'").bind(client.id)] : []),
-      db.prepare('UPDATE client_photos SET role = ?, alt = ?, focus = ?, position = ? WHERE id = ? AND client_id = ?').bind(role, alt, focus, position, photo.id, client.id)
-    ]);
+    if (role === 'banner' && photo.role !== 'banner') await roomForBanner(db, client.id);
+    await db.prepare('UPDATE client_photos SET role = ?, alt = ?, focus = ?, position = ? WHERE id = ? AND client_id = ?').bind(role, alt, focus, position, photo.id, client.id).run();
     return { json: { ok: true, photos: await listPhotos(db, client.id, user) } };
   }
   if (photo && method === 'DELETE') {
